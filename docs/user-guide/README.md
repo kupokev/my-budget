@@ -72,3 +72,23 @@ IHG/Hilton status) and focus on *this app's* specific workflow for each.
   the per-month figure. Plan allocates spend to goals in priority order and shows gaps with the
   other paths. Bills says card or bank per bill, weighing the bank-autopay discount. Earnings shows
   points and dollars per card net of fees. Use the year arrows to see next year's plan from zero.
+
+## Phase 4: import and history
+
+- **Import.** Pick the account or card the statement belongs to, leave the layout on "detect",
+  choose the CSV/OFX/QFX file. The preview shows every line with a suggested category, bill, or
+  transfer flag and why. Fix anything, untick "skip" lines you don't want, then Import. Lines
+  already imported are marked as duplicates and left out. A line matched to a bill sets that
+  month's actual on the Bills grid; card lines feed the Rewards card-spend figures. Undo removes a
+  whole file's lines.
+- **Transactions.** Browse by month or year, filter to uncategorized, search, edit a line's
+  category/bill/transfer. Tick "always" when saving to create a rule that files every line with
+  that merchant the same way, now and in future imports. The Rules panel lists and edits them.
+- **Spending.** This month vs last, year to date, money in, uncategorized. Per-category table with
+  drill-down to merchants and lines, and a month-over-month matrix.
+- **Goals.** Financial goals read their current value from a metric (net worth, chosen account
+  balances, HSA contributed, 401(k) deferrals, category totals, a loan balance) or a typed value.
+  The on-track target is prorated by date; the bar is progress and the tick is elapsed time.
+  Non-financial goals just carry a status.
+- **Reports.** Year over year by category and by bill, net worth with 24 months of history, and
+  CSV export (transactions, bills grid, accounts) through a save dialog.

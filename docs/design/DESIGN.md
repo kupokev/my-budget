@@ -9,6 +9,7 @@ works. Add a row and a DD when a new subsystem gets its own design.
 | [DD-0002](./DD-0002-core-ledger.md) | Core ledger: income, accounts, bills, cards, transfer needs, home view (Phase 1) | Active |
 | [DD-0003](./DD-0003-calculators.md) | Calculators: paycheck estimator, HSA planner, amortization, reference tables (Phase 2) | Active |
 | [DD-0004](./DD-0004-rewards-optimizer.md) | Rewards and status optimizer: programs, paths, thresholds, spend plan, card catalog (Phase 3) | Active |
+| [DD-0005](./DD-0005-import-and-history.md) | Import and history: statement import, transactions, spending dashboard, goals, year-over-year, export (Phase 4) | Active |
 
 ## Decision records
 

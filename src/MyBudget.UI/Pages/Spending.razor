@@ -1,0 +1,105 @@
+@page "/spending"
+@inject ApiClient Api
+
+<h1>Spending</h1>
+<ErrorBanner @bind-Message="error" />
+
+@if (summary is null || matrix is null)
+{
+    <p class="muted">Loading…</p>
+}
+else
+{
+    <div class="toolbar">
+        <span class="year-nav"><button class="secondary" type="button" @onclick="() => Shift(-1)">‹</button><strong>@(new DateOnly(year, month, 1).ToString("MMMM yyyy"))</strong><button class="secondary" type="button" @onclick="() => Shift(1)">›</button></span>
+        <span class="muted">Money out on statements, excluding transfers and card payments.</span>
+    </div>
+
+    <div class="row">
+        <section class="panel"><h3>This month</h3><p class="big"><Money Value="summary.ThisMonth" /></p><p class="muted">last month <Money Value="summary.LastMonth" /> · <Money Value="summary.Delta" Signed="true" /></p></section>
+        <section class="panel"><h3>Year to date</h3><p class="big"><Money Value="summary.YearToDate" /></p><p class="muted">≈ <Money Value="summary.YearToDate / Math.Max(1, month)" /> / month</p></section>
+        <section class="panel"><h3>Money in this month</h3><p class="big"><Money Value="summary.IncomeThisMonth" /></p></section>
+        @if (summary.UncategorizedCount > 0)
+        {
+            <section class="panel"><h3>Uncategorized</h3><p class="big"><Money Value="summary.UncategorizedAmount" /></p><p class="muted">@summary.UncategorizedCount lines · <a href="transactions">fix on Transactions</a></p></section>
+        }
+    </div>
+
+    <section class="panel">
+        <h2>By category · this month vs last</h2>
+        <table>
+            <thead><tr><th>Category</th><th class="money">This month</th><th class="money">Last month</th><th class="money">Change</th><th class="money">Year to date</th><th class="money">Avg / month</th><th></th></tr></thead>
+            <tbody>
+            @foreach (var c in summary.Categories)
+            {
+                <tr>
+                    <td>@c.Name</td><td><Money Value="c.ThisMonth" /></td><td><Money Value="c.LastMonth" /></td>
+                    <td><span class="money @(c.Delta > 0 ? "neg" : c.Delta < 0 ? "pos" : "")">@(c.Delta > 0 ? "+" : "")@Fmt.Money(c.Delta)</span></td>
+                    <td><Money Value="c.YearToDate" /></td><td><Money Value="c.MonthlyAverage" /></td>
+                    <td><button class="secondary" type="button" @onclick="() => Drill(c.CategoryId, true)">This month</button> <button class="secondary" type="button" @onclick="() => Drill(c.CategoryId, false)">Year</button></td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </section>
+
+    @if (drill is { } d)
+    {
+        <section class="panel">
+            <h2>@d.Name · @(d.Month is { } m ? new DateOnly(d.Year, m, 1).ToString("MMMM yyyy") : d.Year.ToString()) · <Money Value="d.Total" /></h2>
+            <div class="row">
+                <div class="grow">
+                    <h3>By merchant</h3>
+                    <table><thead><tr><th>Merchant</th><th>Lines</th><th class="money">Total</th></tr></thead>
+                        <tbody>@foreach (var mt in d.Merchants) { <tr><td>@mt.Merchant</td><td>@mt.Count</td><td><Money Value="mt.Total" /></td></tr> }</tbody></table>
+                </div>
+                <div class="grow">
+                    <h3>Lines</h3>
+                    <table><thead><tr><th>Date</th><th>Description</th><th>Source</th><th class="money">Amount</th></tr></thead>
+                        <tbody>@foreach (var t in d.Transactions) { <tr><td>@Fmt.Date(t.Date)</td><td>@t.Description</td><td class="muted">@t.SourceName</td><td><Money Value="-t.Amount" /></td></tr> }</tbody></table>
+                </div>
+            </div>
+            <button class="secondary" type="button" @onclick="() => drill = null">Close</button>
+        </section>
+    }
+
+    <section class="panel">
+        <h2>Month over month · @matrix.Year</h2>
+        <div class="scroll-x">
+        <table class="grid">
+            <thead><tr><th>Category</th>@for (var m = 1; m <= 12; m++) { <th class="money">@Fmt.Month(new DateOnly(matrix.Year, m, 1))</th> }<th class="money">Total</th></tr></thead>
+            <tbody>
+            @foreach (var r in matrix.Rows)
+            {
+                <tr><td>@r.Name</td>@foreach (var v in r.Months) { <td class="money">@(v == 0 ? "" : Fmt.Money(v))</td> }<td><Money Value="r.Total" /></td></tr>
+            }
+            </tbody>
+            <tfoot><tr><th>Total</th>@foreach (var v in matrix.MonthTotals) { <th><Money Value="v" /></th> }<th><Money Value="matrix.Total" /></th></tr></tfoot>
+        </table>
+        </div>
+    </section>
+}
+
+@code {
+    private int year = DateTime.Today.Year, month = DateTime.Today.Month;
+    private SpendingSummaryDto? summary;
+    private SpendingMatrixDto? matrix;
+    private CategoryDrilldownDto? drill;
+    private string? error;
+
+    protected override Task OnInitializedAsync() => Load();
+
+    private async Task Load()
+    {
+        try { summary = await Api.GetSpendingSummaryAsync(year, month); matrix = await Api.GetSpendingMatrixAsync(year); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task Shift(int delta) { var d = new DateOnly(year, month, 1).AddMonths(delta); year = d.Year; month = d.Month; drill = null; await Load(); }
+
+    private async Task Drill(int? categoryId, bool thisMonth)
+    {
+        try { drill = await Api.GetCategoryDrilldownAsync(categoryId, year, thisMonth ? month : null); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+}

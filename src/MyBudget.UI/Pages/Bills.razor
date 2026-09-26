@@ -69,7 +69,7 @@ else
             </tr>
         </thead>
         <tbody>
-        @foreach (var b in bills.Where(b => showInactive || b.IsActive))
+        @foreach (var b in bills.Where(b => (showInactive || b.IsActive) && (categoryFilter is null || b.CategoryId == categoryFilter)))
         {
             var h = history.FirstOrDefault(x => x.BillId == b.Id);
             <tr class="@(b.IsActive ? "" : "muted")">
@@ -212,13 +212,32 @@ else
     }
 
     <section class="panel">
-        <h3>Categories</h3>
+        <h3>Categories <span class="muted">· click one to filter the grid, ✎ to edit. Bills, imported transactions, rewards earn rules and planned spend all use these buckets.</span></h3>
         <div class="row">
-            @foreach (var c in categories) { <span class="chip">@c.Name</span> }
+            @foreach (var c in categories.Where(c => c.IsActive || showInactive))
+            {
+                var cat = c;
+                <span class="chip @(categoryFilter == cat.Id ? "chip-on" : "") @(cat.IsActive ? "" : "muted")">
+                    <button type="button" class="link" @onclick="() => categoryFilter = categoryFilter == cat.Id ? null : cat.Id">@cat.Name</button>
+                    <span class="muted">@(bills.Count(b => b.CategoryId == cat.Id))</span>
+                    <button type="button" class="link" title="Edit" @onclick="() => categoryEdit = Clone(cat)">✎</button>
+                </span>
+            }
+            @if (categoryFilter is not null) { <button class="secondary" type="button" @onclick="() => categoryFilter = null">Show all</button> }
             <EditForm Model="newCategory" OnValidSubmit="AddCategory">
                 <InputText @bind-Value="newCategory.Name" placeholder="New category" /> <button type="submit" class="secondary">Add</button>
             </EditForm>
         </div>
+        @if (categoryEdit is { } ce)
+        {
+            <div class="row" style="margin-top:10px">
+                <div class="field"><label>Name</label><input type="text" @bind="ce.Name" /></div>
+                <div class="field"><label>Planned variable spend / month</label><input type="number" step="1" class="narrow-money" @bind="ce.PlannedMonthly" /></div>
+                <div class="field"><label class="inline"><input type="checkbox" @bind="ce.IsCardEligible" /> Can go on a card</label></div>
+                <div class="field"><label class="inline"><input type="checkbox" @bind="ce.IsActive" /> Active</label></div>
+                <div class="field"><label>&nbsp;</label><button type="button" @onclick="SaveCategory">Save</button> <button class="secondary" type="button" @onclick="() => categoryEdit = null">Cancel</button></div>
+            </div>
+        }
     </section>
 }
 
@@ -235,6 +254,8 @@ else
     private readonly HashSet<string> shown = [];
     private BillDto? editing;
     private CategoryDto newCategory = new();
+    private CategoryDto? categoryEdit;
+    private int? categoryFilter;
     private MonthEdit? monthEdit;
     private ElementReference actualInput;
     private string? error;
@@ -267,7 +288,7 @@ else
     private void Toggle(string col, ChangeEventArgs e) { if (e.Value is true) shown.Add(col); else shown.Remove(col); }
 
     private decimal MonthSum(DateOnly period, Func<BillMonthDto, decimal> pick)
-        => history!.Where(h => bills!.Any(b => b.Id == h.BillId && (showInactive || b.IsActive)))
+        => history!.Where(h => bills!.Any(b => b.Id == h.BillId && (showInactive || b.IsActive) && (categoryFilter is null || b.CategoryId == categoryFilter)))
                    .SelectMany(h => h.Months).Where(m => m.Period == period).Sum(pick);
 
     private string DueText(BillDto b) => b.Frequency switch
@@ -315,6 +336,15 @@ else
     private async Task DeleteEditing()
     {
         try { await Api.DeleteBillAsync(editing!.Id); editing = null; await Load(); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private static CategoryDto Clone(CategoryDto c) => new() { Id = c.Id, Name = c.Name, IsActive = c.IsActive, PlannedMonthly = c.PlannedMonthly, IsCardEligible = c.IsCardEligible };
+
+    private async Task SaveCategory()
+    {
+        if (categoryEdit is null || string.IsNullOrWhiteSpace(categoryEdit.Name)) return;
+        try { await Api.SaveCategoryAsync(categoryEdit); categoryEdit = null; categories = await Api.GetCategoriesAsync(); }
         catch (Exception ex) { error = ex.Message; }
     }
 

@@ -7,6 +7,7 @@
     <Project Path="src/MyBudget.Domain/MyBudget.Domain.csproj" />
     <Project Path="src/MyBudget.Engines.Amortization/MyBudget.Engines.Amortization.csproj" />
     <Project Path="src/MyBudget.Engines.Hsa/MyBudget.Engines.Hsa.csproj" />
+    <Project Path="src/MyBudget.Engines.Import/MyBudget.Engines.Import.csproj" />
     <Project Path="src/MyBudget.Engines.Ledger/MyBudget.Engines.Ledger.csproj" />
     <Project Path="src/MyBudget.Engines.Paycheck/MyBudget.Engines.Paycheck.csproj" />
     <Project Path="src/MyBudget.Engines.Rewards/MyBudget.Engines.Rewards.csproj" />

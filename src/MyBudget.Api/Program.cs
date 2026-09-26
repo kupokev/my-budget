@@ -8,6 +8,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddBudgetData(builder.Configuration);
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<PaycheckService>();
+builder.Services.AddScoped<ImportService>();
 builder.Services.AddOpenApi();
 builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter()));
 
@@ -42,7 +43,12 @@ app.MapGroup("/api")
     .MapReference()
     .MapHsa()
     .MapLoans()
-    .MapRewards();
+    .MapRewards()
+    .MapImport()
+    .MapTransactions()
+    .MapSpending()
+    .MapGoals()
+    .MapReports();
 
 app.Run();
 

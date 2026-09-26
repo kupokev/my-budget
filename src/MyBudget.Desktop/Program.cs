@@ -19,6 +19,8 @@ var apiOptions = new ApiClientOptions
     ApiKey = Environment.GetEnvironmentVariable("MYBUDGET_API_KEY") ?? "dev",
 };
 builder.Services.AddMyBudgetUI(apiOptions);
+var fileSaver = new MyBudget.Desktop.PhotinoFileSaver();
+builder.Services.AddSingleton<MyBudget.UI.Services.IFileSaver>(fileSaver);
 builder.Services.AddLogging(logging =>
 {
     logging.AddConsole();
@@ -29,6 +31,7 @@ builder.Services.AddLogging(logging =>
 builder.RootComponents.Add<App>("app");
 
 var app = builder.Build();
+fileSaver.Attach(app.MainWindow);
 
 app.MainWindow
     .SetLogVerbosity(0)

@@ -92,6 +92,46 @@ public sealed class ApiClient(HttpClient http)
     public Task<CategoryDto> SaveCategoryPlanAsync(CategoryDto c) => Put($"api/categories/{c.Id}/plan", c);
     public Task<RewardsReportDto> GetRewardsReportAsync(int year) => Get<RewardsReportDto>($"api/rewards/report?year={year}");
 
+    // Import & history (Phase 4)
+    public Task<List<ImportProfileDto>> GetImportProfilesAsync() => Get<List<ImportProfileDto>>("api/import/profiles");
+    public async Task<ImportPreviewDto> PreviewImportAsync(string fileName, Stream file, int? accountId, int? cardId, string? profile)
+    {
+        using var form = new MultipartFormDataContent();
+        form.Add(new StreamContent(file), "file", fileName);
+        if (accountId is { } a) form.Add(new StringContent(a.ToString()), "accountId");
+        if (cardId is { } c) form.Add(new StringContent(c.ToString()), "cardId");
+        if (!string.IsNullOrEmpty(profile)) form.Add(new StringContent(profile), "profile");
+        var r = await http.PostAsync("api/import/preview", form);
+        await ThrowIfFailed(r);
+        return (await r.Content.ReadFromJsonAsync<ImportPreviewDto>(Json))!;
+    }
+    public Task<ImportResultDto> CommitImportAsync(ImportCommitRequest req) => Post<ImportCommitRequest, ImportResultDto>("api/import/commit", req);
+    public Task<List<ImportBatchDto>> GetImportBatchesAsync() => Get<List<ImportBatchDto>>("api/import/batches");
+    public Task DeleteImportBatchAsync(int id) => Delete($"api/import/batches/{id}");
+    public Task<List<TransactionDto>> GetTransactionsAsync(int? year = null, int? month = null, int? categoryId = null, bool? uncategorized = null, string? search = null, int? accountId = null, int? cardId = null, int? billId = null)
+        => Get<List<TransactionDto>>(Q("api/transactions", ("year", year), ("month", month), ("categoryId", categoryId), ("uncategorized", uncategorized == true ? "true" : null), ("search", string.IsNullOrWhiteSpace(search) ? null : search), ("accountId", accountId), ("cardId", cardId), ("billId", billId)));
+    public Task<TransactionDto> UpdateTransactionAsync(int id, TransactionUpdateDto u) => Put<TransactionUpdateDto, TransactionDto>($"api/transactions/{id}", u);
+    public Task DeleteTransactionAsync(int id) => Delete($"api/transactions/{id}");
+    public Task<List<CategoryRuleDto>> GetCategoryRulesAsync() => Get<List<CategoryRuleDto>>("api/category-rules");
+    public Task<CategoryRuleDto> SaveCategoryRuleAsync(CategoryRuleDto r) => r.Id == 0 ? Post("api/category-rules", r) : Put($"api/category-rules/{r.Id}", r);
+    public Task DeleteCategoryRuleAsync(int id) => Delete($"api/category-rules/{id}");
+    public Task ApplyCategoryRulesAsync() => Post<object, object>("api/category-rules/apply", new { });
+    public Task<SpendingSummaryDto> GetSpendingSummaryAsync(int year, int month) => Get<SpendingSummaryDto>($"api/spending/summary?year={year}&month={month}");
+    public Task<SpendingMatrixDto> GetSpendingMatrixAsync(int year) => Get<SpendingMatrixDto>($"api/spending/matrix?year={year}");
+    public Task<CategoryDrilldownDto> GetCategoryDrilldownAsync(int? categoryId, int year, int? month) => Get<CategoryDrilldownDto>(Q($"api/spending/category/{categoryId ?? 0}", ("year", year), ("month", month)));
+    public Task<List<GoalDto>> GetGoalsAsync() => Get<List<GoalDto>>("api/goals");
+    public Task<GoalDto> SaveGoalAsync(GoalDto g) => g.Id == 0 ? Post("api/goals", g) : Put($"api/goals/{g.Id}", g);
+    public Task DeleteGoalAsync(int id) => Delete($"api/goals/{id}");
+    public Task<List<GoalProgressDto>> GetGoalProgressAsync() => Get<List<GoalProgressDto>>("api/goals/progress");
+    public Task<YearOverYearDto> GetYearOverYearAsync(int year) => Get<YearOverYearDto>($"api/reports/year-over-year?year={year}");
+    public Task<NetWorthDto> GetNetWorthAsync() => Get<NetWorthDto>("api/reports/net-worth");
+    public async Task<string> ExportCsvAsync(string name, int? year = null)
+    {
+        var r = await http.GetAsync(Q($"api/export/{name}.csv", ("year", year)));
+        await ThrowIfFailed(r);
+        return await r.Content.ReadAsStringAsync();
+    }
+
     // Views
     public Task<TransferNeedsDto> GetTransferNeedsAsync(DateOnly? asOf = null)
         => Get<TransferNeedsDto>(asOf is { } d ? $"api/transfer-needs?asOf={d:yyyy-MM-dd}" : "api/transfer-needs");
@@ -116,11 +156,13 @@ public sealed class ApiClient(HttpClient http)
         return (await r.Content.ReadFromJsonAsync<TOut>(Json))!;
     }
 
-    private async Task<T> Put<T>(string url, T body)
+    private Task<T> Put<T>(string url, T body) => Put<T, T>(url, body);
+
+    private async Task<TOut> Put<TIn, TOut>(string url, TIn body)
     {
         var r = await http.PutAsJsonAsync(url, body, Json);
         await ThrowIfFailed(r);
-        return (await r.Content.ReadFromJsonAsync<T>(Json))!;
+        return (await r.Content.ReadFromJsonAsync<TOut>(Json))!;
     }
 
     private async Task Delete(string url)

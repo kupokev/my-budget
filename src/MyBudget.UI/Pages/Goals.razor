@@ -1,0 +1,123 @@
+@page "/goals"
+@inject ApiClient Api
+@using MyBudget.Domain
+
+<h1>Goals</h1>
+<ErrorBanner @bind-Message="error" />
+
+@if (progress is null || accounts is null || categories is null || loans is null)
+{
+    <p class="muted">Loading…</p>
+}
+else
+{
+    <div class="toolbar"><button type="button" @onclick="() => Edit(new GoalDto { StartDate = new DateOnly(DateTime.Today.Year, 1, 1), EndDate = new DateOnly(DateTime.Today.Year, 12, 31) })">New goal</button></div>
+
+    <section class="panel">
+        <table>
+            <thead><tr><th>Goal</th><th>Status</th><th class="money">Current</th><th class="money">On-track target</th><th class="money">Target</th><th class="money">Missing</th><th>Progress</th><th>By</th><th></th></tr></thead>
+            <tbody>
+            @foreach (var p in progress)
+            {
+                <tr title="@p.Formula">
+                    <td>@p.Goal.Name <span class="muted">@(p.Goal.Kind == GoalKind.NonFinancial ? "" : Fmt.Words(p.Goal.Metric))</span></td>
+                    <td class="@(p.StatusText is "On Track" or "Exceeded" or "Done" ? "pos" : p.StatusText == "Not On Track" ? "neg" : "")">@p.StatusText</td>
+                    @if (p.Goal.Kind == GoalKind.Financial)
+                    {
+                        <td><Money Value="p.Current" /></td><td><Money Value="p.ProratedTarget" /></td><td><Money Value="p.Goal.TargetAmount" /></td>
+                        <td>@(p.MissingAmount > 0 ? Fmt.Money(p.MissingAmount) : "")</td>
+                    }
+                    else { <td colspan="4" class="muted">status only</td> }
+                    <td><div class="bar"><div class="bar-fill @(p.StatusText == "Not On Track" ? "bad" : "")" style="width:@((int)(p.ProgressFraction * 100))%"></div><div class="bar-mark" style="left:@((int)(p.ElapsedFraction * 100))%"></div></div></td>
+                    <td>@Fmt.Date(p.Goal.EndDate)</td>
+                    <td><button class="secondary" type="button" @onclick="() => Edit(p.Goal)">Edit</button></td>
+                </tr>
+            }
+            </tbody>
+        </table>
+        <p class="muted">The bar is progress toward the target; the tick is how much of the time has elapsed. Hover a row for the formula and where "current" comes from.</p>
+    </section>
+
+    @if (editing is { } g)
+    {
+        <section class="panel">
+            <h2>@(g.Id == 0 ? "New goal" : g.Name)</h2>
+            <div class="row">
+                <div class="field grow"><label>Name</label><input type="text" @bind="g.Name" /></div>
+                <div class="field"><label>Kind</label><select @bind="g.Kind"><option value="@GoalKind.Financial">Financial</option><option value="@GoalKind.NonFinancial">Non-financial</option></select></div>
+                <div class="field"><label>Start</label><input type="date" @bind="g.StartDate" /></div>
+                <div class="field"><label>By</label><input type="date" @bind="g.EndDate" /></div>
+                <div class="field"><label class="inline"><input type="checkbox" @bind="g.IsActive" /> Active</label></div>
+            </div>
+            @if (g.Kind == GoalKind.Financial)
+            {
+                <div class="row">
+                    <div class="field"><label>Current comes from</label><select @bind="g.Metric">@foreach (var m in Enum.GetValues<GoalMetric>()) { <option value="@m">@Fmt.Words(m)</option> }</select></div>
+                    <div class="field"><label>Target</label><input type="number" step="0.01" @bind="g.TargetAmount" /></div>
+                    <div class="field"><label>Starting value <span class="muted">(where you were on the start date)</span></label><input type="number" step="0.01" @bind="g.StartValue" /></div>
+                    <div class="field"><label class="inline"><input type="checkbox" @bind="g.LowerIsBetter" /> Lower is better</label></div>
+                    @if (g.Metric == GoalMetric.Manual) { <div class="field"><label>Current</label><input type="number" step="0.01" @bind="g.ManualCurrent" /></div> }
+                    @if (g.Metric is GoalMetric.CategoryInflow or GoalMetric.CategoryOutflow) { <div class="field"><label>Category</label><select @bind="g.CategoryId"><option value="">—</option>@foreach (var c in categories) { <option value="@c.Id">@c.Name</option> }</select></div> }
+                    @if (g.Metric == GoalMetric.LoanBalance) { <div class="field"><label>Loan</label><select @bind="g.LoanId"><option value="">—</option>@foreach (var l in loans) { <option value="@l.Id">@l.Name</option> }</select></div> }
+                </div>
+                @if (g.Metric == GoalMetric.AccountBalances)
+                {
+                    <div class="field"><label>Accounts</label>
+                        <div class="row">@foreach (var a in accounts.Where(a => a.IsActive)) { var id = a.Id; <label class="inline"><input type="checkbox" checked="@g.AccountIds.Contains(id)" @onchange="e => ToggleAccount(g, id, e)" /> @a.Name</label> }</div>
+                    </div>
+                }
+            }
+            else
+            {
+                <div class="field"><label>Status</label><select @bind="g.Status">@foreach (var s in Enum.GetValues<GoalStatus>()) { <option value="@s">@Fmt.Words(s)</option> }</select></div>
+            }
+            <div class="field"><label>Notes</label><input type="text" @bind="g.Notes" /></div>
+            <div class="toolbar">
+                <button type="button" @onclick="Save">Save</button>
+                <button class="secondary" type="button" @onclick="() => editing = null">Cancel</button>
+                @if (g.Id != 0) { <button class="secondary danger" type="button" @onclick="Delete">Delete</button> }
+            </div>
+        </section>
+    }
+}
+
+@code {
+    private List<GoalProgressDto>? progress;
+    private List<AccountDto>? accounts;
+    private List<CategoryDto>? categories;
+    private List<LoanDto>? loans;
+    private GoalDto? editing;
+    private string? error;
+
+    protected override Task OnInitializedAsync() => Load();
+
+    private async Task Load()
+    {
+        try
+        {
+            accounts ??= await Api.GetAccountsAsync(); categories ??= await Api.GetCategoriesAsync(); loans ??= await Api.GetLoansAsync();
+            progress = await Api.GetGoalProgressAsync();
+        }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private void Edit(GoalDto g) => editing = new()
+    {
+        Id = g.Id, Name = g.Name, Kind = g.Kind, Metric = g.Metric, TargetAmount = g.TargetAmount, StartValue = g.StartValue, StartDate = g.StartDate, EndDate = g.EndDate,
+        ManualCurrent = g.ManualCurrent, AccountIds = g.AccountIds.ToList(), CategoryId = g.CategoryId, LoanId = g.LoanId, LowerIsBetter = g.LowerIsBetter, Status = g.Status, Notes = g.Notes, IsActive = g.IsActive,
+    };
+
+    private static void ToggleAccount(GoalDto g, int id, ChangeEventArgs e) { if (e.Value is true) { if (!g.AccountIds.Contains(id)) g.AccountIds.Add(id); } else g.AccountIds.Remove(id); }
+
+    private async Task Save()
+    {
+        try { await Api.SaveGoalAsync(editing!); editing = null; await Load(); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task Delete()
+    {
+        try { await Api.DeleteGoalAsync(editing!.Id); editing = null; await Load(); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+}

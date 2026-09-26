@@ -40,11 +40,13 @@ public sealed class ApiFixture : IDisposable
         return (await r.Content.ReadFromJsonAsync<TOut>(Json))!;
     }
 
-    public async Task<T> Put<T>(string url, T body)
+    public Task<T> Put<T>(string url, T body) => Put<T, T>(url, body);
+
+    public async Task<TOut> Put<TIn, TOut>(string url, TIn body)
     {
         var r = await Client.PutAsJsonAsync(url, body, Json);
         r.EnsureSuccessStatusCode();
-        return (await r.Content.ReadFromJsonAsync<T>(Json))!;
+        return (await r.Content.ReadFromJsonAsync<TOut>(Json))!;
     }
 
     public void Dispose() => _factory.Dispose();

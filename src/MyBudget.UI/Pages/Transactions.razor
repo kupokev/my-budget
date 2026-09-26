@@ -1,0 +1,151 @@
+@page "/transactions"
+@inject ApiClient Api
+@using MyBudget.Domain
+
+<h1>Transactions</h1>
+<ErrorBanner @bind-Message="error" />
+
+@if (categories is null || bills is null || accounts is null || cards is null)
+{
+    <p class="muted">Loading…</p>
+}
+else
+{
+    <div class="toolbar">
+        <span class="year-nav"><button class="secondary" type="button" @onclick="() => Shift(-1)">‹</button><strong>@(new DateOnly(year, month, 1).ToString("MMM yyyy"))</strong><button class="secondary" type="button" @onclick="() => Shift(1)">›</button></span>
+        <label class="inline"><input type="checkbox" @bind="wholeYear" @bind:after="Load" /> Whole year</label>
+        <label class="inline"><input type="checkbox" @bind="onlyUncategorized" @bind:after="Load" /> Uncategorized only</label>
+        <label class="inline">Source <select @bind="sourceFilter" @bind:after="Load"><option value="">all</option>
+            @foreach (var a in accounts) { <option value="account:@a.Id">@a.Name</option> }
+            @foreach (var c in cards) { <option value="card:@c.Id">@c.Name</option> }</select></label>
+        <input type="search" placeholder="Search description" @bind="search" @bind:after="Load" />
+        <span class="muted">@(rows?.Count ?? 0) lines · <Money Value="rows?.Where(r => r.Amount < 0 && !r.IsTransfer).Sum(r => r.Amount) ?? 0" Signed="true" /> out</span>
+        <button class="secondary" type="button" @onclick="ShowRules">Rules</button>
+    </div>
+
+    @if (rulesOpen)
+    {
+        <section class="panel">
+            <h3>Categorization rules <span class="muted">(run in priority order; a match sets category, bill, transfer)</span></h3>
+            <table class="compact">
+                <thead><tr><th>Priority</th><th>Match</th><th>Pattern</th><th>Category</th><th>Bill</th><th>Transfer</th><th>Active</th><th></th></tr></thead>
+                <tbody>
+                @foreach (var r in rules)
+                {
+                    <tr>
+                        <td><input type="number" class="narrow" @bind="r.Priority" /></td>
+                        <td><select @bind="r.Match">@foreach (var m in Enum.GetValues<RuleMatch>()) { <option value="@m">@Fmt.Words(m)</option> }</select></td>
+                        <td><input type="text" @bind="r.Pattern" /></td>
+                        <td><select @bind="r.CategoryId"><option value="">—</option>@foreach (var c in categories) { <option value="@c.Id">@c.Name</option> }</select></td>
+                        <td><select @bind="r.BillId"><option value="">—</option>@foreach (var b in bills) { <option value="@b.Id">@b.Name</option> }</select></td>
+                        <td><input type="checkbox" @bind="r.MarkAsTransfer" /></td>
+                        <td><input type="checkbox" @bind="r.IsActive" /></td>
+                        <td><button class="secondary" type="button" @onclick="() => SaveRule(r)">Save</button> <button class="secondary" type="button" @onclick="() => DeleteRule(r)">✕</button></td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+            <div class="toolbar">
+                <button class="secondary" type="button" @onclick="() => rules.Add(new CategoryRuleDto())">Add rule</button>
+                <button class="secondary" type="button" @onclick="ApplyRules">Re-run all rules on uncategorized lines</button>
+                <button class="secondary" type="button" @onclick="() => rulesOpen = false">Close</button>
+            </div>
+        </section>
+    }
+
+    @if (rows is null) { <p class="muted">Loading…</p> }
+    else
+    {
+        <div class="scroll-x">
+        <table class="grid">
+            <thead><tr><th>Date</th><th>Source</th><th>Description</th><th class="money">Amount</th><th>Category</th><th>Bill</th><th>Transfer</th><th></th></tr></thead>
+            <tbody>
+            @foreach (var t in rows)
+            {
+                var isEditing = edit?.Id == t.Id;
+                <tr class="@(t.IsTransfer ? "muted" : "") @(isEditing ? "editing" : "")">
+                    <td>@Fmt.Date(t.Date)</td>
+                    <td class="muted">@t.SourceName</td>
+                    <td title="@t.Description">@(t.Merchant ?? t.Description) <span class="muted">@(t.IsManuallyCategorized ? "✎" : "")</span></td>
+                    <td><Money Value="t.Amount" Signed="true" /></td>
+                    @if (isEditing)
+                    {
+                        <td><select @bind="editDto.CategoryId"><option value="">—</option>@foreach (var c in categories) { <option value="@c.Id">@c.Name</option> }</select></td>
+                        <td><select @bind="editDto.BillId"><option value="">—</option>@foreach (var b in bills) { <option value="@b.Id">@b.Name</option> }</select></td>
+                        <td><input type="checkbox" @bind="editDto.IsTransfer" /></td>
+                        <td class="actions">
+                            <label class="inline" title="Create a rule so every line containing this merchant gets the same category/bill"><input type="checkbox" @bind="editDto.CreateRule" /> always</label>
+                            <button type="button" @onclick="SaveEdit">Save</button>
+                            <button class="secondary" type="button" @onclick="() => edit = null">Cancel</button>
+                        </td>
+                    }
+                    else
+                    {
+                        <td>@(t.CategoryName ?? (t.IsTransfer ? "" : "—"))</td>
+                        <td>@t.BillName</td>
+                        <td>@(t.IsTransfer ? "transfer" : "")</td>
+                        <td class="actions"><button class="secondary" type="button" @onclick="() => StartEdit(t)">Edit</button> <button class="secondary" type="button" @onclick="() => Remove(t)">✕</button></td>
+                    }
+                </tr>
+            }
+            </tbody>
+        </table>
+        </div>
+    }
+}
+
+@code {
+    private int year = DateTime.Today.Year, month = DateTime.Today.Month;
+    private bool wholeYear, onlyUncategorized, rulesOpen;
+    private string sourceFilter = "", search = "";
+    private List<TransactionDto>? rows;
+    private List<CategoryDto>? categories;
+    private List<BillDto>? bills;
+    private List<AccountDto>? accounts;
+    private List<CardDto>? cards;
+    private List<CategoryRuleDto> rules = [];
+    private TransactionDto? edit;
+    private TransactionUpdateDto editDto = new();
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try { categories = await Api.GetCategoriesAsync(); bills = await Api.GetBillsAsync(); accounts = await Api.GetAccountsAsync(); cards = await Api.GetCardsAsync(); }
+        catch (Exception ex) { error = ex.Message; }
+        await Load();
+    }
+
+    private async Task Shift(int delta)
+    {
+        if (wholeYear) year += delta; else { var d = new DateOnly(year, month, 1).AddMonths(delta); year = d.Year; month = d.Month; }
+        await Load();
+    }
+
+    private async Task Load()
+    {
+        var parts = sourceFilter.Split(':');
+        int? accountId = parts.Length == 2 && parts[0] == "account" ? int.Parse(parts[1]) : null;
+        int? cardId = parts.Length == 2 && parts[0] == "card" ? int.Parse(parts[1]) : null;
+        try { rows = await Api.GetTransactionsAsync(year, wholeYear ? null : month, null, onlyUncategorized, search, accountId, cardId); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private void StartEdit(TransactionDto t) { edit = t; editDto = new() { CategoryId = t.CategoryId, BillId = t.BillId, IsTransfer = t.IsTransfer, Notes = t.Notes }; }
+
+    private async Task SaveEdit()
+    {
+        try { await Api.UpdateTransactionAsync(edit!.Id, editDto); edit = null; await Load(); if (rulesOpen) rules = await Api.GetCategoryRulesAsync(); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task Remove(TransactionDto t)
+    {
+        try { await Api.DeleteTransactionAsync(t.Id); await Load(); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task ShowRules() { rulesOpen = !rulesOpen; if (rulesOpen) { try { rules = await Api.GetCategoryRulesAsync(); } catch (Exception ex) { error = ex.Message; } } }
+    private async Task SaveRule(CategoryRuleDto r) { try { await Api.SaveCategoryRuleAsync(r); rules = await Api.GetCategoryRulesAsync(); } catch (Exception ex) { error = ex.Message; } }
+    private async Task DeleteRule(CategoryRuleDto r) { try { if (r.Id != 0) await Api.DeleteCategoryRuleAsync(r.Id); rules.Remove(r); } catch (Exception ex) { error = ex.Message; } }
+    private async Task ApplyRules() { try { await Api.ApplyCategoryRulesAsync(); await Load(); } catch (Exception ex) { error = ex.Message; } }
+}

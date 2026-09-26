@@ -1,0 +1,24 @@
+<div class="scroll-x">
+<table class="grid">
+    <thead><tr><th></th><th class="money">@Year</th><th class="money">@(Year - 1)</th><th class="money">Change</th><th class="money">%</th>@for (var m = 1; m <= 12; m++) { <th class="money">@Fmt.Month(new DateOnly(Year, m, 1))</th> }</tr></thead>
+    <tbody>
+    @foreach (var r in Rows)
+    {
+        <tr>
+            <td>@r.Name</td><td><Money Value="r.ThisYear" /></td><td><Money Value="r.LastYear" /></td>
+            <td><span class="money @(r.Delta > 0 ? "neg" : r.Delta < 0 ? "pos" : "")">@(r.Delta > 0 ? "+" : "")@Fmt.Money(r.Delta)</span></td>
+            <td class="money">@(r.DeltaPercent is { } p ? p.ToString("+0%;-0%") : "")</td>
+            @for (var m = 0; m < 12; m++) { <td class="money" title="@(Year - 1): @Fmt.Money(r.LastMonths[m])">@(r.ThisMonths[m] == 0 ? "" : Fmt.Money(r.ThisMonths[m]))</td> }
+        </tr>
+    }
+    </tbody>
+    <tfoot><tr><th>Total</th><th><Money Value="ThisTotal" /></th><th><Money Value="LastTotal" /></th><th><Money Value="ThisTotal - LastTotal" Signed="true" /></th><th colspan="13"></th></tr></tfoot>
+</table>
+</div>
+
+@code {
+    [Parameter] public IReadOnlyList<YoyRowDto> Rows { get; set; } = [];
+    [Parameter] public decimal ThisTotal { get; set; }
+    [Parameter] public decimal LastTotal { get; set; }
+    [Parameter] public int Year { get; set; }
+}

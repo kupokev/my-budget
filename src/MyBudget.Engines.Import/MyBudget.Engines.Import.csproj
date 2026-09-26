@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>Pure statement parsing: CSV with institution profiles and header auto-detect, OFX/QFX, merchant normalization, de-duplication ids. No UI or DB.</Description>
+  </PropertyGroup>
+</Project>

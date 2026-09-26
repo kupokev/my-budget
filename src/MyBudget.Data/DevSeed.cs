@@ -134,6 +134,17 @@ public static class DevSeed
             Balances = [new LoanBalance { AsOf = new(2026, 9, 1), Balance = 283_000m }],
         });
 
+        db.CategoryRules.AddRange(
+            new CategoryRule { Pattern = "HULU", CategoryId = subscriptions.Id, Priority = 10 },
+            new CategoryRule { Pattern = "AMEREN", Priority = 10 },
+            new CategoryRule { Pattern = "PAYMENT THANK YOU", MarkAsTransfer = true, Priority = 1 });
+        db.Goals.AddRange(
+            new Goal { Name = "Net worth +$25K this year", Kind = GoalKind.Financial, Metric = GoalMetric.NetWorth, StartValue = 120_000m, TargetAmount = 145_000m, StartDate = new(2026, 1, 1), EndDate = new(2026, 12, 31) },
+            new Goal { Name = "Max the HSA", Kind = GoalKind.Financial, Metric = GoalMetric.HsaContributed, TargetAmount = 8_020.83m, StartDate = new(2026, 1, 1), EndDate = new(2026, 12, 31) },
+            new Goal { Name = "Rainy-day fund to $30K", Kind = GoalKind.Financial, Metric = GoalMetric.AccountBalances, StartValue = 18_000m, TargetAmount = 30_000m, StartDate = new(2026, 1, 1), EndDate = new(2027, 6, 30), AccountIds = $"{tBill.Id},{wealthfront.Id}" },
+            new Goal { Name = "Restaurants under $6K", Kind = GoalKind.Financial, Metric = GoalMetric.CategoryOutflow, CategoryId = restaurants.Id, TargetAmount = 6_000m, LowerIsBetter = true, StartDate = new(2026, 1, 1), EndDate = new(2026, 12, 31) },
+            new Goal { Name = "Read 12 books", Kind = GoalKind.NonFinancial, Status = GoalStatus.InProgress, StartDate = new(2026, 1, 1), EndDate = new(2026, 12, 31) });
+
         db.AccountBalances.AddRange(
             new AccountBalance { Account = pnc, AsOf = new(2026, 9, 1), Balance = 2_450m },
             new AccountBalance { Account = automatedBills, AsOf = new(2026, 9, 1), Balance = 610m },

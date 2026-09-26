@@ -1,0 +1,158 @@
+@page "/import"
+@inject ApiClient Api
+@using MyBudget.Domain
+
+<h1>Import a statement</h1>
+<ErrorBanner @bind-Message="error" />
+
+@if (accounts is null || cards is null || profiles is null || categories is null || bills is null)
+{
+    <p class="muted">Loading…</p>
+}
+else
+{
+    <section class="panel">
+        <div class="row">
+            <div class="field"><label>This statement belongs to</label>
+                <select @bind="source">
+                    <option value="">—</option>
+                    <optgroup label="Bank accounts">@foreach (var a in accounts.Where(a => a.IsActive)) { <option value="account:@a.Id">@a.Name</option> }</optgroup>
+                    <optgroup label="Cards">@foreach (var c in cards.Where(c => c.IsActive)) { <option value="card:@c.Id">@c.Name</option> }</optgroup>
+                </select></div>
+            <div class="field"><label>Layout</label>
+                <select @bind="profile"><option value="auto">Detect from the file</option>@foreach (var p in profiles) { <option value="@p.Key">@p.Name</option> }</select></div>
+            <div class="field"><label>File (.csv, .ofx, .qfx)</label><InputFile OnChange="OnFile" accept=".csv,.ofx,.qfx,.txt" /></div>
+        </div>
+        @if (busy) { <p class="muted">Reading…</p> }
+    </section>
+
+    @if (preview is { } pv)
+    {
+        <section class="panel">
+            <h2>@fileName · @pv.SourceName · @pv.ProfileName</h2>
+            <p class="muted">@pv.Rows.Count lines from @Fmt.Date(pv.FirstDate) to @Fmt.Date(pv.LastDate): <strong>@pv.NewCount new</strong>, @pv.DuplicateCount already imported. Fix categories here or later on Transactions; a match to a bill fills that month's actual.</p>
+            <Warnings Items="pv.Warnings" />
+            <div class="toolbar">
+                <button type="button" @onclick="Commit" disabled="@(pv.NewCount == 0)">Import @pv.Rows.Count(r => !r.IsDuplicate && !r.Skip) lines</button>
+                <label class="inline"><input type="checkbox" @bind="hideDupes" /> Hide duplicates</label>
+            </div>
+            <div class="scroll-x">
+            <table class="grid">
+                <thead><tr><th>Date</th><th>Description</th><th>Merchant</th><th class="money">Amount</th><th>Category</th><th>Bill</th><th>Transfer</th><th>Skip</th><th>Why</th></tr></thead>
+                <tbody>
+                @foreach (var r in pv.Rows.Where(r => !hideDupes || !r.IsDuplicate))
+                {
+                    <tr class="@(r.IsDuplicate ? "muted" : "")">
+                        <td>@Fmt.Date(r.Date)</td>
+                        <td title="@r.Memo">@r.Description</td>
+                        <td class="muted">@r.Merchant</td>
+                        <td><Money Value="r.Amount" Signed="true" /></td>
+                        <td>@if (!r.IsDuplicate) { <select @bind="r.CategoryId"><option value="">—</option>@foreach (var c in categories.Where(c => c.IsActive)) { <option value="@c.Id">@c.Name</option> }</select> }</td>
+                        <td>@if (!r.IsDuplicate) { <select @bind="r.BillId"><option value="">—</option>@foreach (var b in bills.Where(b => b.IsActive)) { <option value="@b.Id">@b.Name</option> }</select> }</td>
+                        <td>@if (!r.IsDuplicate) { <input type="checkbox" @bind="r.IsTransfer" /> }</td>
+                        <td>@if (r.IsDuplicate) { <span class="muted">dup</span> } else { <input type="checkbox" @bind="r.Skip" /> }</td>
+                        <td class="muted">@r.SuggestionSource</td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+            </div>
+        </section>
+    }
+
+    @if (result is { } res)
+    {
+        <section class="panel">
+            <h2>Imported</h2>
+            <p>@res.Imported lines imported, @res.Duplicates duplicates skipped, @res.Skipped skipped by you. @res.BillMonthsUpdated bill-month actuals and @res.CardMonthsUpdated card-month spend figures updated.</p>
+        </section>
+    }
+
+    <section class="panel">
+        <h2>Previous imports</h2>
+        @if (batches is { Count: > 0 })
+        {
+            <table>
+                <thead><tr><th>When</th><th>File</th><th>Source</th><th>Layout</th><th>Lines</th><th>Imported</th><th>Dupes</th><th>Range</th><th></th></tr></thead>
+                <tbody>
+                @foreach (var b in batches)
+                {
+                    <tr><td>@b.ImportedAt.ToString("MMM d, yyyy HH:mm")</td><td>@b.FileName</td><td>@b.SourceName</td><td>@b.Profile</td><td>@b.RowCount</td><td>@b.ImportedCount</td><td>@b.DuplicateCount</td>
+                        <td>@Fmt.Date(b.FirstDate) – @Fmt.Date(b.LastDate)</td>
+                        <td><button class="secondary danger" type="button" @onclick="() => Undo(b)">Undo</button></td></tr>
+                }
+                </tbody>
+            </table>
+        }
+        else { <p class="muted">None yet.</p> }
+    </section>
+}
+
+@code {
+    private List<AccountDto>? accounts;
+    private List<CardDto>? cards;
+    private List<ImportProfileDto>? profiles;
+    private List<CategoryDto>? categories;
+    private List<BillDto>? bills;
+    private List<ImportBatchDto>? batches;
+    private string source = "";
+    private string profile = "auto";
+    private string fileName = "";
+    private bool busy, hideDupes = true;
+    private ImportPreviewDto? preview;
+    private ImportResultDto? result;
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            accounts = await Api.GetAccountsAsync(); cards = await Api.GetCardsAsync(); profiles = await Api.GetImportProfilesAsync();
+            categories = await Api.GetCategoriesAsync(); bills = await Api.GetBillsAsync(); batches = await Api.GetImportBatchesAsync();
+        }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private (int? accountId, int? cardId) Source()
+    {
+        var parts = source.Split(':');
+        if (parts.Length != 2) return (null, null);
+        var id = int.Parse(parts[1]);
+        return parts[0] == "account" ? (id, null) : (null, id);
+    }
+
+    private async Task OnFile(InputFileChangeEventArgs e)
+    {
+        error = null; result = null; preview = null;
+        var (accountId, cardId) = Source();
+        if (accountId is null && cardId is null) { error = "Pick the account or card first."; return; }
+        busy = true;
+        try
+        {
+            fileName = e.File.Name;
+            await using var stream = e.File.OpenReadStream(20 * 1024 * 1024);
+            preview = await Api.PreviewImportAsync(fileName, stream, accountId, cardId, profile);
+        }
+        catch (Exception ex) { error = ex.Message; }
+        finally { busy = false; }
+    }
+
+    private async Task Commit()
+    {
+        if (preview is null) return;
+        var (accountId, cardId) = Source();
+        try
+        {
+            result = await Api.CommitImportAsync(new ImportCommitRequest { FileName = fileName, Profile = preview.Profile, AccountId = accountId, CardId = cardId, Rows = preview.Rows.Where(r => !r.IsDuplicate).ToList() });
+            preview = null;
+            batches = await Api.GetImportBatchesAsync();
+        }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task Undo(ImportBatchDto b)
+    {
+        try { await Api.DeleteImportBatchAsync(b.Id); batches = await Api.GetImportBatchesAsync(); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+}

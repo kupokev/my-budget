@@ -12,6 +12,7 @@
     <ProjectReference Include="../MyBudget.Engines.Hsa/MyBudget.Engines.Hsa.csproj" />
     <ProjectReference Include="../MyBudget.Engines.Amortization/MyBudget.Engines.Amortization.csproj" />
     <ProjectReference Include="../MyBudget.Engines.Rewards/MyBudget.Engines.Rewards.csproj" />
+    <ProjectReference Include="../MyBudget.Engines.Import/MyBudget.Engines.Import.csproj" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" />

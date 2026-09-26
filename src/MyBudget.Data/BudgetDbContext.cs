@@ -27,6 +27,10 @@ public sealed class BudgetDbContext(DbContextOptions<BudgetDbContext> options) :
     public DbSet<EarnRule> EarnRules => Set<EarnRule>();
     public DbSet<SpendThreshold> SpendThresholds => Set<SpendThreshold>();
     public DbSet<CardSpend> CardSpend => Set<CardSpend>();
+    public DbSet<ImportBatch> ImportBatches => Set<ImportBatch>();
+    public DbSet<Transaction> Transactions => Set<Transaction>();
+    public DbSet<CategoryRule> CategoryRules => Set<CategoryRule>();
+    public DbSet<Goal> Goals => Set<Goal>();
 
     protected override void OnModelCreating(ModelBuilder mb)
     {
@@ -137,6 +141,38 @@ public sealed class BudgetDbContext(DbContextOptions<BudgetDbContext> options) :
         });
         mb.Entity<StatusPath>().HasOne(x => x.Card).WithMany().HasForeignKey(x => x.CardId).OnDelete(DeleteBehavior.SetNull);
         mb.Entity<LoyaltyProgress>().HasIndex(x => new { x.ProgramId, x.Year }).IsUnique();
+
+        mb.Entity<ImportBatch>(e =>
+        {
+            e.Property(x => x.FileName).HasMaxLength(260);
+            e.Property(x => x.Profile).HasMaxLength(60);
+            e.HasOne(x => x.Account).WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.SetNull);
+            e.HasOne(x => x.Card).WithMany().HasForeignKey(x => x.CardId).OnDelete(DeleteBehavior.SetNull);
+        });
+        mb.Entity<Transaction>(e =>
+        {
+            e.Property(x => x.Description).HasMaxLength(400);
+            e.Property(x => x.Merchant).HasMaxLength(120);
+            e.Property(x => x.ExternalId).HasMaxLength(120);
+            e.HasOne(x => x.Account).WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Card).WithMany().HasForeignKey(x => x.CardId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Category).WithMany().HasForeignKey(x => x.CategoryId).OnDelete(DeleteBehavior.SetNull);
+            e.HasOne(x => x.Bill).WithMany().HasForeignKey(x => x.BillId).OnDelete(DeleteBehavior.SetNull);
+            e.HasOne(x => x.ImportBatch).WithMany().HasForeignKey(x => x.ImportBatchId).OnDelete(DeleteBehavior.SetNull);
+            e.HasIndex(x => new { x.AccountId, x.CardId, x.ExternalId }).IsUnique();
+            e.HasIndex(x => x.Date);
+        });
+        mb.Entity<CategoryRule>(e =>
+        {
+            e.Property(x => x.Pattern).HasMaxLength(200);
+            e.HasOne(x => x.Category).WithMany().HasForeignKey(x => x.CategoryId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Bill).WithMany().HasForeignKey(x => x.BillId).OnDelete(DeleteBehavior.Cascade);
+        });
+        mb.Entity<Goal>(e =>
+        {
+            e.Property(x => x.Name).HasMaxLength(120);
+            e.Property(x => x.AccountIds).HasMaxLength(200);
+        });
         mb.Entity<CardBalance>().HasIndex(x => new { x.CardId, x.AsOf }).IsUnique();
 
         mb.Entity<Category>(e =>

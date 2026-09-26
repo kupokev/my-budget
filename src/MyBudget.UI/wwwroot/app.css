@@ -140,3 +140,15 @@ button.link:hover { text-decoration: underline; }
 
 tr.planned td { background: color-mix(in srgb, var(--accent) 8%, transparent); }
 tr.pos td { color: var(--ok); }
+
+/* goals */
+.bar { position: relative; height: 10px; width: 160px; background: color-mix(in srgb, var(--fg) 10%, transparent); border-radius: 5px; }
+.bar-fill { height: 100%; background: var(--ok); border-radius: 5px; }
+.bar-fill.bad { background: var(--danger); }
+.bar-mark { position: absolute; top: -3px; width: 2px; height: 16px; background: var(--fg-muted); }
+input[type=search] { min-width: 200px; }
+
+.chip { display: inline-flex; align-items: center; gap: 6px; }
+.chip.chip-on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.chip button.link { color: var(--fg); font-size: 13px; }
+.chip.chip-on button.link:first-child { color: var(--accent); font-weight: 600; }

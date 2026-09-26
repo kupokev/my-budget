@@ -1,0 +1,104 @@
+@page "/reports"
+@inject ApiClient Api
+@inject IFileSaver Files
+
+<h1>Reports</h1>
+<ErrorBanner @bind-Message="error" />
+
+<div class="toolbar">
+    <span class="year-nav"><button class="secondary" type="button" @onclick="() => ChangeYear(year - 1)">‹</button><strong>@year</strong><button class="secondary" type="button" @onclick="() => ChangeYear(year + 1)">›</button></span>
+    <span class="tabs">
+        <button type="button" class="@(tab == "yoy" ? "" : "secondary")" @onclick="@(() => tab = "yoy")">Year over year</button>
+        <button type="button" class="@(tab == "nw" ? "" : "secondary")" @onclick="@(() => tab = "nw")">Net worth</button>
+        <button type="button" class="@(tab == "export" ? "" : "secondary")" @onclick="@(() => tab = "export")">Export</button>
+    </span>
+</div>
+
+@if (tab == "yoy")
+{
+    @if (yoy is null) { <p class="muted">Loading…</p> }
+    else
+    {
+        <section class="panel">
+            <h2>Spending by category · @yoy.Year vs @yoy.PriorYear</h2>
+            <YoyTable Rows="yoy.Categories" ThisTotal="yoy.CategoriesThisYear" LastTotal="yoy.CategoriesLastYear" Year="yoy.Year" />
+        </section>
+        <section class="panel">
+            <h2>Bills (actuals) · @yoy.Year vs @yoy.PriorYear</h2>
+            <YoyTable Rows="yoy.Bills" ThisTotal="yoy.BillsThisYear" LastTotal="yoy.BillsLastYear" Year="yoy.Year" />
+        </section>
+    }
+}
+else if (tab == "nw")
+{
+    @if (nw is null) { <p class="muted">Loading…</p> }
+    else
+    {
+        <div class="row">
+            <section class="panel"><h3>Net worth</h3><p class="big"><Money Value="nw.Total" Signed="true" /></p><p class="muted" title="@nw.Formula">accounts <Money Value="nw.Assets" /> · cards <Money Value="nw.Cards" /> · loans <Money Value="nw.Loans" /></p></section>
+            <section class="panel grow">
+                <h3>Last 24 months</h3>
+                <div class="scroll-x">
+                <table>
+                    <thead><tr><th>Month</th><th class="money">Accounts</th><th class="money">Cards</th><th class="money">Loans</th><th class="money">Net worth</th><th class="money">Change</th></tr></thead>
+                    <tbody>
+                    @{ decimal? prev = null; }
+                    @foreach (var p in nw.History)
+                    {
+                        <tr><td>@p.Period.ToString("MMM yyyy")</td><td><Money Value="p.Assets" /></td><td><Money Value="p.Cards" /></td><td><Money Value="p.Loans" /></td><td><Money Value="p.Total" Signed="true" /></td>
+                            <td>@if (prev is { } pv) { <Money Value="p.Total - pv" Signed="true" /> }</td></tr>
+                        prev = p.Total;
+                    }
+                    </tbody>
+                </table>
+                </div>
+            </section>
+        </div>
+        <section class="panel">
+            <h3>Lines</h3>
+            <table><thead><tr><th>Name</th><th>Kind</th><th class="money">Balance</th><th>As of</th></tr></thead>
+                <tbody>@foreach (var l in nw.Lines) { <tr><td>@l.Name</td><td class="muted">@l.Kind</td><td><Money Value="l.Balance" Signed="true" /></td><td>@Fmt.Date(l.AsOf)</td></tr> }</tbody></table>
+        </section>
+    }
+}
+else
+{
+    <section class="panel">
+        <h2>Export to CSV</h2>
+        <div class="toolbar">
+            <button type="button" @onclick="@(() => Export("transactions", year))">Transactions @year</button>
+            <button type="button" @onclick="@(() => Export("bills", year))">Bills grid @year</button>
+            <button type="button" @onclick="@(() => Export("accounts", null))">Accounts</button>
+        </div>
+        @if (saved is not null) { <p class="pos">Saved to @saved</p> }
+    </section>
+}
+
+@code {
+    private int year = DateTime.Today.Year;
+    private string tab = "yoy";
+    private YearOverYearDto? yoy;
+    private NetWorthDto? nw;
+    private string? saved, error;
+
+    protected override Task OnInitializedAsync() => Load();
+
+    private async Task Load()
+    {
+        try { yoy = await Api.GetYearOverYearAsync(year); nw = await Api.GetNetWorthAsync(); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task ChangeYear(int y) { year = y; yoy = null; await Load(); }
+
+    private async Task Export(string name, int? y)
+    {
+        saved = null;
+        try
+        {
+            var csv = await Api.ExportCsvAsync(name, y);
+            saved = await Files.SaveTextAsync($"mybudget-{name}{(y is { } yy ? "-" + yy : "")}.csv", csv);
+        }
+        catch (Exception ex) { error = ex.Message; }
+    }
+}
