@@ -1,0 +1,170 @@
+@page "/income"
+@inject ApiClient Api
+@using MyBudget.Domain
+
+<h1>Income</h1>
+<ErrorBanner @bind-Message="error" />
+
+@if (sources is null || calendar is null)
+{
+    <p class="muted">Loading…</p>
+}
+else
+{
+    <div class="toolbar">
+        <button type="button" @onclick="() => Edit(new IncomeSourceDto())">New income source</button>
+        <label class="inline">Year <InputNumber TValue="int" Value="year" ValueChanged="ChangeYear" ValueExpression="() => year" /></label>
+    </div>
+
+    <div class="row">
+        <section class="panel grow">
+            <table>
+                <thead><tr><th>Source</th><th>Type</th><th class="money">Current salary</th><th>Pay schedule</th><th></th></tr></thead>
+                <tbody>
+                @foreach (var s in sources)
+                {
+                    var rate = s.SalaryRates.Where(r => r.EffectiveDate <= today).OrderByDescending(r => r.EffectiveDate).FirstOrDefault();
+                    var sched = s.PaySchedules.Where(p => p.EffectiveDate <= today).OrderByDescending(p => p.EffectiveDate).FirstOrDefault();
+                    <tr class="@(s.IsActive ? "" : "muted")">
+                        <td>@s.Name</td>
+                        <td>@Fmt.Words(s.Type)</td>
+                        <td>@Fmt.Money(rate?.AnnualAmount)</td>
+                        <td>@(sched is null ? "—" : $"{Fmt.Words(sched.Frequency)} since {Fmt.Date(sched.EffectiveDate)}")</td>
+                        <td><button class="secondary" type="button" @onclick="() => Edit(s)">Edit</button></td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </section>
+        <section class="panel">
+            <h2>Pay dates @calendar.Year</h2>
+            @if (calendar.ThreePaycheckMonths.Count > 0)
+            {
+                <p><strong>Three-check months:</strong> @string.Join(", ", calendar.ThreePaycheckMonths)</p>
+            }
+            <div class="paydates">
+            @foreach (var g in calendar.PayDates.GroupBy(d => d.Date.Month))
+            {
+                <div class="paymonth">
+                    <strong>@Fmt.Month(new DateOnly(calendar.Year, g.Key, 1))</strong>
+                    @foreach (var d in g) { <span class="@(d.ThirdCheckOfMonth ? "third" : "") @(d.Date < today ? "past" : "")" title="@d.IncomeSource">@d.Date.Day</span> }
+                </div>
+            }
+            </div>
+        </section>
+    </div>
+
+    @if (editing is not null)
+    {
+        <section class="panel">
+            <h2>@(editing.Id == 0 ? "New income source" : editing.Name)</h2>
+            <EditForm Model="editing" OnValidSubmit="Save">
+                <DataAnnotationsValidator />
+                <div class="row">
+                    <div class="field"><label>Name</label><InputText @bind-Value="editing.Name" /><ValidationMessage For="() => editing.Name" /></div>
+                    <div class="field"><label>Type</label><InputSelect @bind-Value="editing.Type">
+                        @foreach (var t in Enum.GetValues<IncomeSourceType>()) { <option value="@t">@Fmt.Words(t)</option> }
+                    </InputSelect></div>
+                    <div class="field"><label class="inline"><InputCheckbox @bind-Value="editing.IsActive" /> Active</label></div>
+                </div>
+                <div class="field"><label>Notes</label><InputTextArea @bind-Value="editing.Notes" rows="2" /></div>
+
+                <h3>Salary history <span class="muted">(a raise is a new row)</span></h3>
+                <table>
+                    <thead><tr><th>Effective</th><th class="money">Annual amount</th><th></th></tr></thead>
+                    <tbody>
+                    @foreach (var r in editing.SalaryRates)
+                    {
+                        <tr>
+                            <td><InputDate @bind-Value="r.EffectiveDate" /></td>
+                            <td><InputNumber @bind-Value="r.AnnualAmount" step="0.01" /></td>
+                            <td><button class="secondary" type="button" @onclick="() => editing.SalaryRates.Remove(r)">✕</button></td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+                <button class="secondary" type="button" @onclick="() => editing.SalaryRates.Add(new SalaryRateDto { EffectiveDate = today })">Add salary row</button>
+
+                <h3>Pay schedules <span class="muted">(effective-dated; the 24 → 26 switch is two rows)</span></h3>
+                <table>
+                    <thead><tr><th>Effective</th><th>Frequency</th><th>Known pay date</th><th>Semi-monthly days</th><th>Weekend → Friday</th><th></th></tr></thead>
+                    <tbody>
+                    @foreach (var p in editing.PaySchedules)
+                    {
+                        <tr>
+                            <td><InputDate @bind-Value="p.EffectiveDate" /></td>
+                            <td><InputSelect @bind-Value="p.Frequency">
+                                @foreach (var f in Enum.GetValues<PayFrequency>()) { <option value="@f">@Fmt.Words(f)</option> }
+                            </InputSelect></td>
+                            <td><InputDate @bind-Value="p.AnchorPayDate" /></td>
+                            <td>
+                                @if (p.Frequency == PayFrequency.SemiMonthly)
+                                {
+                                    <InputNumber @bind-Value="p.FirstPayDay" class="narrow" /> <span>&amp;</span> <InputNumber @bind-Value="p.SecondPayDay" class="narrow" />
+                                }
+                            </td>
+                            <td><InputCheckbox @bind-Value="p.PayOnPriorBusinessDay" /></td>
+                            <td><button class="secondary" type="button" @onclick="() => editing.PaySchedules.Remove(p)">✕</button></td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+                <button class="secondary" type="button" @onclick="AddSchedule">Add schedule row</button>
+
+                <div class="toolbar">
+                    <button type="submit">Save</button>
+                    <button class="secondary" type="button" @onclick="() => editing = null">Cancel</button>
+                    @if (editing.Id != 0) { <button class="secondary danger" type="button" @onclick="DeleteEditing">Delete</button> }
+                </div>
+            </EditForm>
+        </section>
+    }
+}
+
+@code {
+    private List<IncomeSourceDto>? sources;
+    private PayCalendarDto? calendar;
+    private IncomeSourceDto? editing;
+    private int year = DateTime.Today.Year;
+    private readonly DateOnly today = DateOnly.FromDateTime(DateTime.Today);
+    private string? error;
+
+    protected override Task OnInitializedAsync() => Load();
+
+    private async Task Load()
+    {
+        try
+        {
+            sources = await Api.GetIncomeSourcesAsync();
+            calendar = await Api.GetPayCalendarAsync(year);
+        }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task ChangeYear(int y) { year = y; await Load(); }
+
+    private void Edit(IncomeSourceDto s) => editing = new()
+    {
+        Id = s.Id, Name = s.Name, Type = s.Type, Notes = s.Notes, IsActive = s.IsActive,
+        SalaryRates = s.SalaryRates.Select(r => new SalaryRateDto { Id = r.Id, IncomeSourceId = r.IncomeSourceId, AnnualAmount = r.AnnualAmount, EffectiveDate = r.EffectiveDate }).ToList(),
+        PaySchedules = s.PaySchedules.Select(p => new PayScheduleDto
+        {
+            Id = p.Id, IncomeSourceId = p.IncomeSourceId, Frequency = p.Frequency, EffectiveDate = p.EffectiveDate, AnchorPayDate = p.AnchorPayDate,
+            PayOnPriorBusinessDay = p.PayOnPriorBusinessDay, FirstPayDay = p.FirstPayDay, SecondPayDay = p.SecondPayDay,
+        }).ToList(),
+    };
+
+    private void AddSchedule() => editing!.PaySchedules.Add(new PayScheduleDto { EffectiveDate = today, AnchorPayDate = today, Frequency = PayFrequency.BiWeekly });
+
+    private async Task Save()
+    {
+        try { await Api.SaveIncomeSourceAsync(editing!); editing = null; await Load(); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task DeleteEditing()
+    {
+        try { await Api.DeleteIncomeSourceAsync(editing!.Id); editing = null; await Load(); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+}

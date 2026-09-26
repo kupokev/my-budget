@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <Description>ASP.NET Core minimal APIs. Runs under systemd on the home network in production.</Description>
+    <UserSecretsId>mybudget-api</UserSecretsId>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../MyBudget.Domain/MyBudget.Domain.csproj" />
+    <ProjectReference Include="../MyBudget.Contracts/MyBudget.Contracts.csproj" />
+    <ProjectReference Include="../MyBudget.Data/MyBudget.Data.csproj" />
+    <ProjectReference Include="../MyBudget.Engines.Ledger/MyBudget.Engines.Ledger.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+    <PackageReference Include="Microsoft.OpenApi" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+</Project>

@@ -1,0 +1,15 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/MyBudget.Api/MyBudget.Api.csproj" />
+    <Project Path="src/MyBudget.Contracts/MyBudget.Contracts.csproj" />
+    <Project Path="src/MyBudget.Data/MyBudget.Data.csproj" />
+    <Project Path="src/MyBudget.Desktop/MyBudget.Desktop.csproj" />
+    <Project Path="src/MyBudget.Domain/MyBudget.Domain.csproj" />
+    <Project Path="src/MyBudget.Engines.Ledger/MyBudget.Engines.Ledger.csproj" />
+    <Project Path="src/MyBudget.UI/MyBudget.UI.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/MyBudget.Api.Tests/MyBudget.Api.Tests.csproj" />
+    <Project Path="tests/MyBudget.Engines.Tests/MyBudget.Engines.Tests.csproj" />
+  </Folder>
+</Solution>

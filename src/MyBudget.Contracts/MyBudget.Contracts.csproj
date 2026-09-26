@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>DTOs shared by the API and the UI.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../MyBudget.Domain/MyBudget.Domain.csproj" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>Entities and value objects. No dependencies.</Description>
+  </PropertyGroup>
+</Project>

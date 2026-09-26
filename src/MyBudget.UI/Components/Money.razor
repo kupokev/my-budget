@@ -1,0 +1,7 @@
+<span class="money @(Value < 0 ? "neg" : Value > 0 && Signed ? "pos" : "")">@Fmt.Money(Value)</span>
+
+@code {
+    [Parameter] public decimal Value { get; set; }
+    /// <summary>Color positive values too (for Long/Short style numbers).</summary>
+    [Parameter] public bool Signed { get; set; }
+}

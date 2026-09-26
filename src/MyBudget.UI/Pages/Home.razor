@@ -1,0 +1,83 @@
+@page "/"
+@inject ApiClient Api
+
+<h1>Home</h1>
+<ErrorBanner @bind-Message="error" />
+
+@if (home is null)
+{
+    <p class="muted">Loading…</p>
+}
+else
+{
+    <div class="row">
+        <section class="panel grow">
+            <h2>Due in the next 14 days</h2>
+            @if (home.UpcomingBills.Count == 0)
+            {
+                <p class="muted">Nothing due.</p>
+            }
+            else
+            {
+                <table>
+                    <thead><tr><th>Due</th><th>Bill</th><th class="money">Amount</th><th>Paid via</th><th>Funded from</th><th></th></tr></thead>
+                    <tbody>
+                    @foreach (var b in home.UpcomingBills)
+                    {
+                        <tr>
+                            <td>@Fmt.Date(b.DueDate)</td><td>@b.BillName</td>
+                            <td><Money Value="b.Amount" /></td>
+                            <td>@b.PaidVia</td><td>@b.FundingAccount</td>
+                            <td class="muted">@(b.IsAutopay ? "auto" : "")</td>
+                        </tr>
+                    }
+                    </tbody>
+                    <tfoot><tr><th></th><th>Total</th><th><Money Value="home.UpcomingBills.Sum(b => b.Amount)" /></th><th colspan="3"></th></tr></tfoot>
+                </table>
+            }
+        </section>
+        <section class="panel">
+            <h2>Next paycheck</h2>
+            @if (home.NextPayDate is { } p)
+            {
+                <p class="big">@Fmt.Date(p.Date)</p>
+                <p class="muted">@p.IncomeSource @(p.ThirdCheckOfMonth ? "· third check this month" : "")</p>
+            }
+            else
+            {
+                <p class="muted">No pay schedule set up. Add one under Income.</p>
+            }
+        </section>
+    </div>
+
+    <section class="panel">
+        <h2>Transfer needs</h2>
+        <table>
+            <thead><tr><th>Account</th><th class="money">Per month</th><th class="money">Per paycheck</th><th class="money">Moved this month</th><th class="money">Long / short</th></tr></thead>
+            <tbody>
+            @foreach (var n in home.NeedsThisPayPeriod)
+            {
+                <tr>
+                    <td>@n.AccountName <span class="muted">(@Fmt.Words(n.Cadence))</span></td>
+                    <td><Money Value="n.MonthlyNeed" /></td>
+                    <td><Money Value="n.PerPaycheckNeed" /></td>
+                    <td><Money Value="n.TransferredThisMonth" /></td>
+                    <td><Money Value="n.LongShort" Signed="true" /></td>
+                </tr>
+            }
+            </tbody>
+        </table>
+        <p class="muted">Full breakdown with formulas under Accounts.</p>
+    </section>
+}
+
+@code {
+    private HomeDto? home;
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try { home = await Api.GetHomeAsync(); }
+        catch (Exception ex) { error = "Could not reach the API: " + ex.Message; }
+    }
+}

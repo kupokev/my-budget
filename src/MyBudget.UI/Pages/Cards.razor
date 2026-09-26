@@ -1,0 +1,148 @@
+@page "/cards"
+@inject ApiClient Api
+
+<h1>Cards</h1>
+<ErrorBanner @bind-Message="error" />
+
+@if (cards is null || summary is null || accounts is null)
+{
+    <p class="muted">Loading…</p>
+}
+else
+{
+    <div class="toolbar"><button type="button" @onclick="() => Edit(new CardDto())">New card</button></div>
+
+    <table>
+        <thead><tr><th>Card</th><th>Bills on card</th><th class="money">Monthly bill spend</th><th class="money">Balance</th><th>As of</th><th class="money">Utilization</th><th>Stmt / due</th><th>Paid by</th><th></th></tr></thead>
+        <tbody>
+        @foreach (var s in summary)
+        {
+            <tr>
+                <td>@s.CardName</td>
+                <td class="muted">@(s.Bills.Count == 0 ? "—" : string.Join(", ", s.Bills))</td>
+                <td><Money Value="s.MonthlyBillSpend" /></td>
+                <td>@Fmt.Money(s.LatestBalance)</td>
+                <td>@Fmt.Date(s.LatestBalanceAsOf)</td>
+                <td class="money">@Fmt.Pct(s.Utilization)</td>
+                <td>@s.StatementDay / @s.DueDay</td>
+                <td>@(s.PayingAccount ?? "—")</td>
+                <td class="actions">
+                    <button class="secondary" type="button" @onclick="() => Edit(cards.First(c => c.Id == s.CardId))">Edit</button>
+                    <button class="secondary" type="button" @onclick="() => OpenBalance(s.CardId)">Balance</button>
+                </td>
+            </tr>
+        }
+        </tbody>
+    </table>
+
+    @if (balanceFor is { } cid)
+    {
+        <section class="panel">
+            <h3>Record balance · @cards.First(c => c.Id == cid).Name</h3>
+            <EditForm Model="newBalance" OnValidSubmit="SaveBalance">
+                <div class="row">
+                    <div class="field"><label>As of</label><InputDate @bind-Value="newBalance.AsOf" /></div>
+                    <div class="field"><label>Balance</label><InputNumber @bind-Value="newBalance.Balance" step="0.01" /></div>
+                    <div class="field"><label>&nbsp;</label><button type="submit">Save</button> <button class="secondary" type="button" @onclick="() => balanceFor = null">Close</button></div>
+                </div>
+            </EditForm>
+        </section>
+    }
+
+    @if (editing is not null)
+    {
+        <section class="panel">
+            <h2>@(editing.Id == 0 ? "New card" : editing.Name)</h2>
+            <EditForm Model="editing" OnValidSubmit="Save">
+                <DataAnnotationsValidator />
+                <div class="row">
+                    <div class="field"><label>Name</label><InputText @bind-Value="editing.Name" /><ValidationMessage For="() => editing.Name" /></div>
+                    <div class="field"><label>Issuer</label><InputText @bind-Value="editing.Issuer" /></div>
+                    <div class="field"><label>Network</label><InputText @bind-Value="editing.Network" /></div>
+                    <div class="field"><label>Last four</label><InputText @bind-Value="editing.LastFour" maxlength="4" /></div>
+                </div>
+                <div class="row">
+                    <div class="field"><label>APR %</label><InputNumber @bind-Value="editing.Apr" step="0.01" /></div>
+                    <div class="field"><label>Promo APR %</label><InputNumber @bind-Value="editing.PromoApr" step="0.01" /></div>
+                    <div class="field"><label>Promo expires</label><InputDate @bind-Value="editing.PromoAprExpires" /></div>
+                    <div class="field"><label>Credit limit</label><InputNumber @bind-Value="editing.CreditLimit" step="0.01" /></div>
+                </div>
+                <div class="row">
+                    <div class="field"><label>Statement day</label><InputNumber @bind-Value="editing.StatementDay" /></div>
+                    <div class="field"><label>Due day</label><InputNumber @bind-Value="editing.DueDay" /></div>
+                    <div class="field"><label>Annual fee</label><InputNumber @bind-Value="editing.AnnualFee" step="0.01" /></div>
+                    <div class="field"><label>Fee month (1–12)</label><InputNumber @bind-Value="editing.AnnualFeeMonth" /></div>
+                    <div class="field"><label>Paid from account</label><InputSelect @bind-Value="editing.PayingAccountId">
+                        <option value="">—</option>
+                        @foreach (var a in accounts.Where(a => a.IsActive)) { <option value="@a.Id">@a.Name</option> }
+                    </InputSelect></div>
+                </div>
+                <div class="field"><label>Notes</label><InputTextArea @bind-Value="editing.Notes" rows="2" /></div>
+                <div class="field"><label class="inline"><InputCheckbox @bind-Value="editing.IsActive" /> Active</label></div>
+                <div class="toolbar">
+                    <button type="submit">Save</button>
+                    <button class="secondary" type="button" @onclick="() => editing = null">Cancel</button>
+                    @if (editing.Id != 0) { <button class="secondary danger" type="button" @onclick="DeleteEditing">Delete</button> }
+                </div>
+            </EditForm>
+        </section>
+    }
+}
+
+@code {
+    private List<CardDto>? cards;
+    private List<CardSummaryDto>? summary;
+    private List<AccountDto>? accounts;
+    private CardDto? editing;
+    private int? balanceFor;
+    private CardBalanceDto newBalance = new();
+    private string? error;
+
+    protected override Task OnInitializedAsync() => Load();
+
+    private async Task Load()
+    {
+        try
+        {
+            cards = await Api.GetCardsAsync();
+            summary = await Api.GetCardSummaryAsync();
+            accounts = await Api.GetAccountsAsync();
+        }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private void Edit(CardDto c)
+    {
+        balanceFor = null;
+        editing = new()
+        {
+            Id = c.Id, Name = c.Name, Issuer = c.Issuer, Network = c.Network, LastFour = c.LastFour, Apr = c.Apr, PromoApr = c.PromoApr,
+            PromoAprExpires = c.PromoAprExpires, StatementDay = c.StatementDay, DueDay = c.DueDay, CreditLimit = c.CreditLimit,
+            AnnualFee = c.AnnualFee, AnnualFeeMonth = c.AnnualFeeMonth, PayingAccountId = c.PayingAccountId, Notes = c.Notes, IsActive = c.IsActive,
+        };
+    }
+
+    private void OpenBalance(int cardId)
+    {
+        editing = null; balanceFor = cardId;
+        newBalance = new() { CardId = cardId, AsOf = DateOnly.FromDateTime(DateTime.Today) };
+    }
+
+    private async Task SaveBalance()
+    {
+        try { await Api.SaveCardBalanceAsync(balanceFor!.Value, newBalance); balanceFor = null; await Load(); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task Save()
+    {
+        try { await Api.SaveCardAsync(editing!); editing = null; await Load(); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task DeleteEditing()
+    {
+        try { await Api.DeleteCardAsync(editing!.Id); editing = null; await Load(); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+}

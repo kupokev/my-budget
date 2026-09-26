@@ -1,0 +1,264 @@
+@page "/bills"
+@inject ApiClient Api
+@using MyBudget.Domain
+
+<h1>Bills</h1>
+<ErrorBanner @bind-Message="error" />
+
+@if (bills is null || accounts is null || cards is null || categories is null || history is null)
+{
+    <p class="muted">Loading…</p>
+}
+else
+{
+    <div class="toolbar">
+        <button type="button" @onclick="() => Edit(new BillDto())">New bill</button>
+        <label class="inline">Year <InputNumber TValue="int" Value="year" ValueChanged="ChangeYear" ValueExpression="() => year" /></label>
+        <label class="inline"><input type="checkbox" @bind="showInactive" /> Show inactive</label>
+        <span class="muted">Click a month cell to enter the actual amount. Variance = actual − projected.</span>
+    </div>
+
+    <div class="scroll-x">
+    <table class="grid">
+        <thead>
+            <tr>
+                <th>Bill</th><th>Category</th><th>Due</th><th>Paid via</th><th>Funded from</th><th class="money">Projected</th>
+                @for (var m = 1; m <= 12; m++) { <th class="money">@Fmt.Month(new DateOnly(year, m, 1))</th> }
+                <th class="money">Avg actual</th><th></th>
+            </tr>
+        </thead>
+        <tbody>
+        @foreach (var b in bills.Where(b => showInactive || b.IsActive))
+        {
+            var h = history.FirstOrDefault(x => x.BillId == b.Id);
+            <tr class="@(b.IsActive ? "" : "muted")">
+                <td>@b.Name @(b.IsAutopay ? "" : "✍")</td>
+                <td>@(categories.FirstOrDefault(c => c.Id == b.CategoryId)?.Name)</td>
+                <td>@DueText(b)</td>
+                <td>@PaidVia(b)</td>
+                <td>@accounts.FirstOrDefault(a => a.Id == b.FundingAccountId)?.Name</td>
+                <td><Money Value="b.ProjectedAmount" /></td>
+                @if (h is not null)
+                {
+                    @foreach (var mo in h.Months)
+                    {
+                        var isEditing = actualEdit is { } e && e.BillId == b.Id && e.Period == mo.Period;
+                        <td class="cell @(mo.Projected == 0 && mo.Actual is null ? "dim" : "") @(mo.Variance > 0 ? "over" : "")" @onclick="() => StartActual(b, mo)" title="@Title(mo)">
+                            @if (isEditing)
+                            {
+                                <input class="cell-input" type="number" step="0.01" @bind="actualEdit!.Amount" @bind:event="oninput"
+                                       @onkeydown="OnActualKey" @onclick:stopPropagation="true" @ref="actualInput" />
+                            }
+                            else if (mo.Actual is { } a)
+                            {
+                                <Money Value="a" />
+                            }
+                            else if (mo.Projected != 0)
+                            {
+                                <span class="muted money">(@Fmt.Money(mo.Projected))</span>
+                            }
+                        </td>
+                    }
+                    <td>@Fmt.Money(h.AverageActual)</td>
+                }
+                else
+                {
+                    <td colspan="13"></td>
+                }
+                <td><button class="secondary" type="button" @onclick="() => Edit(b)">Edit</button></td>
+            </tr>
+        }
+        </tbody>
+        <tfoot>
+            <tr>
+                <th colspan="5">Total projected (monthly bills)</th>
+                <th><Money Value="bills.Where(b => b.IsActive && b.Frequency == BillFrequency.Monthly).Sum(b => b.ProjectedAmount)" /></th>
+                @for (var m = 1; m <= 12; m++)
+                {
+                    var period = new DateOnly(year, m, 1);
+                    <th><Money Value="history.SelectMany(x => x.Months).Where(x => x.Period == period && x.Actual is not null).Sum(x => x.Actual!.Value)" /></th>
+                }
+                <th colspan="2"></th>
+            </tr>
+        </tfoot>
+    </table>
+    </div>
+
+    @if (editing is not null)
+    {
+        <section class="panel">
+            <h2>@(editing.Id == 0 ? "New bill" : editing.Name)</h2>
+            <EditForm Model="editing" OnValidSubmit="Save">
+                <DataAnnotationsValidator />
+                <div class="row">
+                    <div class="field"><label>Name</label><InputText @bind-Value="editing.Name" /><ValidationMessage For="() => editing.Name" /></div>
+                    <div class="field"><label>Category</label><InputSelect @bind-Value="editing.CategoryId">
+                        <option value="">—</option>
+                        @foreach (var c in categories.Where(c => c.IsActive)) { <option value="@c.Id">@c.Name</option> }
+                    </InputSelect></div>
+                    <div class="field"><label>Projected amount</label><InputNumber @bind-Value="editing.ProjectedAmount" step="0.01" /></div>
+                    <div class="field"><label>Frequency</label><InputSelect @bind-Value="editing.Frequency">
+                        @foreach (var f in Enum.GetValues<BillFrequency>()) { <option value="@f">@Fmt.Words(f)</option> }
+                    </InputSelect></div>
+                    <div class="field"><label>Due day (31 = last)</label><InputNumber @bind-Value="editing.DueDay" /></div>
+                    @if (editing.Frequency != BillFrequency.Monthly)
+                    {
+                        <div class="field"><label>@(editing.Frequency == BillFrequency.OneOff ? "Due date" : "A known due date")</label><InputDate @bind-Value="editing.AnchorDueDate" /></div>
+                    }
+                </div>
+                <div class="row">
+                    <div class="field"><label>Paid via</label><InputSelect @bind-Value="editing.PaymentMethod">
+                        <option value="@PaymentMethodKind.Account">Bank account</option>
+                        <option value="@PaymentMethodKind.Card">Credit card</option>
+                    </InputSelect></div>
+                    @if (editing.PaymentMethod == PaymentMethodKind.Account)
+                    {
+                        <div class="field"><label>Paying account</label><InputSelect @bind-Value="editing.PaymentAccountId">
+                            <option value="">—</option>
+                            @foreach (var a in accounts.Where(a => a.IsActive)) { <option value="@a.Id">@a.Name</option> }
+                        </InputSelect></div>
+                    }
+                    else
+                    {
+                        <div class="field"><label>Paying card</label><InputSelect @bind-Value="editing.PaymentCardId">
+                            <option value="">—</option>
+                            @foreach (var c in cards.Where(c => c.IsActive)) { <option value="@c.Id">@c.Name</option> }
+                        </InputSelect></div>
+                    }
+                    <div class="field"><label>Funded from (always the real source)</label><InputSelect @bind-Value="editing.FundingAccountId">
+                        <option value="0">—</option>
+                        @foreach (var a in accounts.Where(a => a.IsActive)) { <option value="@a.Id">@a.Name</option> }
+                    </InputSelect><ValidationMessage For="() => editing.FundingAccountId" /></div>
+                    <div class="field"><label>Bank-autopay discount / mo</label><InputNumber @bind-Value="editing.BankAutopayDiscount" step="0.01" /></div>
+                </div>
+                <div class="row">
+                    <div class="field"><label class="inline"><InputCheckbox @bind-Value="editing.IsAutopay" /> Autopay</label></div>
+                    <div class="field"><label>Start</label><InputDate @bind-Value="editing.StartDate" /></div>
+                    <div class="field"><label>End</label><InputDate @bind-Value="editing.EndDate" /></div>
+                    <div class="field"><label class="inline"><InputCheckbox @bind-Value="editing.IsActive" /> Active</label></div>
+                </div>
+                <div class="field"><label>Notes</label><InputTextArea @bind-Value="editing.Notes" rows="2" /></div>
+                <div class="toolbar">
+                    <button type="submit">Save</button>
+                    <button class="secondary" type="button" @onclick="() => editing = null">Cancel</button>
+                    @if (editing.Id != 0) { <button class="secondary danger" type="button" @onclick="DeleteEditing">Delete</button> }
+                </div>
+            </EditForm>
+        </section>
+    }
+
+    <section class="panel">
+        <h3>Categories</h3>
+        <div class="row">
+            @foreach (var c in categories) { <span class="chip">@c.Name</span> }
+            <EditForm Model="newCategory" OnValidSubmit="AddCategory">
+                <InputText @bind-Value="newCategory.Name" placeholder="New category" /> <button type="submit" class="secondary">Add</button>
+            </EditForm>
+        </div>
+    </section>
+}
+
+@code {
+    private List<BillDto>? bills;
+    private List<AccountDto>? accounts;
+    private List<CardDto>? cards;
+    private List<CategoryDto>? categories;
+    private List<BillHistoryDto>? history;
+    private int year = DateTime.Today.Year;
+    private bool showInactive;
+    private BillDto? editing;
+    private CategoryDto newCategory = new();
+    private ActualEdit? actualEdit;
+    private ElementReference actualInput;
+    private string? error;
+
+    private sealed class ActualEdit { public int BillId; public DateOnly Period; public decimal? Amount; }
+
+    protected override Task OnInitializedAsync() => Load();
+
+    private async Task Load()
+    {
+        try
+        {
+            bills = await Api.GetBillsAsync();
+            accounts = await Api.GetAccountsAsync();
+            cards = await Api.GetCardsAsync();
+            categories = await Api.GetCategoriesAsync();
+            history = await Api.GetBillHistoryAsync(year);
+        }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task ChangeYear(int y) { year = y; await Load(); }
+
+    private string DueText(BillDto b) => b.Frequency switch
+    {
+        BillFrequency.Monthly => $"{b.DueDay}th",
+        BillFrequency.OneOff => Fmt.Date(b.AnchorDueDate),
+        _ => $"{Fmt.Words(b.Frequency)} from {Fmt.Date(b.AnchorDueDate)}",
+    };
+
+    private string PaidVia(BillDto b) => b.PaymentMethod == PaymentMethodKind.Card
+        ? "💳 " + cards!.FirstOrDefault(c => c.Id == b.PaymentCardId)?.Name
+        : accounts!.FirstOrDefault(a => a.Id == b.PaymentAccountId)?.Name ?? "—";
+
+    private static string Title(BillMonthDto m) => m.Actual is { } a
+        ? $"actual {Fmt.Money(a)} vs projected {Fmt.Money(m.Projected)} → {Fmt.Money(m.Variance)}"
+        : $"projected {Fmt.Money(m.Projected)}";
+
+    private void Edit(BillDto b)
+    {
+        actualEdit = null;
+        editing = new()
+        {
+            Id = b.Id, Name = b.Name, CategoryId = b.CategoryId, Frequency = b.Frequency, DueDay = b.DueDay == 0 ? 1 : b.DueDay, AnchorDueDate = b.AnchorDueDate,
+            IsAutopay = b.IsAutopay, ProjectedAmount = b.ProjectedAmount, PaymentMethod = b.PaymentMethod, PaymentAccountId = b.PaymentAccountId,
+            PaymentCardId = b.PaymentCardId, FundingAccountId = b.FundingAccountId, BankAutopayDiscount = b.BankAutopayDiscount,
+            StartDate = b.StartDate, EndDate = b.EndDate, Notes = b.Notes, IsActive = b.IsActive,
+        };
+    }
+
+    private async Task Save()
+    {
+        try { await Api.SaveBillAsync(editing!); editing = null; await Load(); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task DeleteEditing()
+    {
+        try { await Api.DeleteBillAsync(editing!.Id); editing = null; await Load(); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task AddCategory()
+    {
+        if (string.IsNullOrWhiteSpace(newCategory.Name)) return;
+        try { await Api.SaveCategoryAsync(newCategory); newCategory = new(); categories = await Api.GetCategoriesAsync(); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task StartActual(BillDto b, BillMonthDto m)
+    {
+        if (actualEdit is { } e && e.BillId == b.Id && e.Period == m.Period) return;
+        actualEdit = new ActualEdit { BillId = b.Id, Period = m.Period, Amount = m.Actual ?? (m.Projected == 0 ? null : m.Projected) };
+        await Task.Yield();
+        try { await actualInput.FocusAsync(); } catch { }
+    }
+
+    private async Task OnActualKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape") { actualEdit = null; return; }
+        if (e.Key != "Enter" || actualEdit is null) return;
+        try
+        {
+            if (actualEdit.Amount is { } amt)
+                await Api.SaveBillActualAsync(actualEdit.BillId, actualEdit.Period, new BillActualDto { BillId = actualEdit.BillId, Period = actualEdit.Period, Amount = amt });
+            else
+                await Api.DeleteBillActualAsync(actualEdit.BillId, actualEdit.Period);
+            actualEdit = null;
+            history = await Api.GetBillHistoryAsync(year);
+        }
+        catch (ApiException ex) when (ex.Status == 404) { actualEdit = null; }
+        catch (Exception ex) { error = ex.Message; }
+    }
+}

@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>MyBudget.Desktop</RootNamespace>
+    <Description>Photino.Blazor desktop host for Linux (ADR-0004).</Description>
+    <StaticWebAssetProjectMode>Default</StaticWebAssetProjectMode>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Photino.Blazor" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../MyBudget.UI/MyBudget.UI.csproj" />
+  </ItemGroup>
+  <!-- Photino serves from a real wwwroot folder next to the binary. -->
+  <Target Name="CopyWwwroot" AfterTargets="Build">
+    <ItemGroup>
+      <WwwrootFiles Include="wwwroot/**/*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(WwwrootFiles)" DestinationFolder="$(OutputPath)wwwroot/%(RecursiveDir)" SkipUnchangedFiles="true" />
+  </Target>
+</Project>

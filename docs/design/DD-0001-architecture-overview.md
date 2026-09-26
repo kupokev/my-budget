@@ -1,0 +1,77 @@
+# DD-0001: Architecture overview
+
+> **Status:** Active
+> **Last updated:** 2026-09-26
+> **Related ADRs:** ADR-0001, ADR-0002, ADR-0003, ADR-0004, ADR-0005, ADR-0006, ADR-0007
+
+## Context / Problem
+
+MyBudget replaces a 2013–2026 spreadsheet budget with a single-user, self-hosted budget app. It
+needs a paycheck estimator, an HSA planner, a credit-card rewards optimizer, and lightweight
+investment tracking, on top of the usual bills/accounts/cards/debts. It's a personal project, not a
+Fact Foundry product, hosted on the user's own home lab, and it should avoid paid integrations
+wherever a free or manual alternative exists.
+
+## Design
+
+### Layers
+
+| Layer | Choice | Why |
+| --- | --- | --- |
+| UI | Razor class library `MyBudget.UI`; Photino.Blazor desktop host on Linux; MAUI Android host later | One shared Razor UI, host-agnostic. MAUI has no Linux desktop target and Kevin only uses Linux, so Photino hosts the desktop (ADR-0004). |
+| API | ASP.NET Core minimal APIs | Straightforward, matches the .NET background. |
+| Calculation engines | Separate libraries (PaycheckEngine, HsaPlanner, RewardsOptimizer, Amortization) | No UI or DB dependencies; unit-tested against real pay stubs and real HSA/rewards numbers so a wrong number is caught as a failing test, not discovered live. |
+| Data | EF Core; in-memory provider in Development, PostgreSQL (existing network server) in Production, chosen by config (ADR-0005) | Dev model can churn without migrations; reference tables for tax brackets and contribution limits are keyed by year so rule changes don't need code changes. |
+| Charts | FactFoundry.Blazor.Charts | Existing library, avoid pulling in a second charting dependency. |
+| Styling | Hand-written CSS + QuickGrid, no component framework | Lighter and lower maintenance than MudBlazor/Bootstrap (ADR-0007). |
+| Auth | LAN-only, single shared API key, HTTPS, no MFA | Single user on a home network; tunnel (cloudflared) if ever used remotely (ADR-0006). |
+| Import | CSV/OFX per institution | No paid aggregator (see ADR-0001). |
+| Local AI | Ollama + Open WebUI (an instance you already run), tool-calling model | Private, free, and avoids the accuracy problems of an LLM writing its own database queries (see ADR-0003). |
+| Hosting | `dotnet publish` + systemd on a Linux server on the home network | Self-hosted, no Docker by preference (ADR-0005). |
+
+### Sequencing
+
+Desktop app first (Photino on Linux). The Razor class library is host-agnostic, so the Android
+host is additive later, not a rewrite — don't build phone-only code paths ahead of that phase.
+
+### Solution layout
+
+```
+MyBudget.slnx
+src/
+  MyBudget.Domain          entities and value objects, no dependencies
+  MyBudget.Engines.Ledger  pure calculations for Phase 1 (pay dates, sinking-fund accrual, transfer needs)
+  MyBudget.Contracts       DTOs shared by API and UI
+  MyBudget.Data            EF Core DbContext, provider switch, seed data
+  MyBudget.Api             ASP.NET Core minimal APIs
+  MyBudget.UI              Razor class library: pages, components, API client, stylesheet
+  MyBudget.Desktop         Photino.Blazor host (Linux)
+tests/
+  MyBudget.Engines.Tests   engine tests against real numbers
+  MyBudget.Api.Tests       endpoint tests over the in-memory provider
+```
+
+Later engines (PaycheckEngine, HsaPlanner, RewardsOptimizer, Amortization) each get their own
+`MyBudget.Engines.*` project with the same no-UI/no-DB rule.
+
+### Data model shape
+
+Every fact carries an effective date or period rather than living in a year-specific table — there
+is no "2026 tab" equivalent. Tax brackets, HSA limits, and 401(k)/IRA limits live in reference
+tables keyed by year so they update without a code change each January.
+
+## Open Questions
+
+- Hostname/credentials of the existing PostgreSQL server and which Linux server hosts the API.
+- Whether the in-memory dev provider should move to SQLite once the model stabilizes (ADR-0005).
+
+## Status
+
+Architecture decided. Solution skeleton and Phase 1 core ledger built 2026-09-26 (see DD-0002). This DD will be superseded/expanded as subsystem DDs are
+written for the paycheck engine, HSA planner, rewards optimizer, and investment tracking.
+
+## References
+
+- ADR-0001: No paid account aggregation
+- ADR-0002: MAUI Blazor Hybrid for shared desktop/phone UI
+- ADR-0003: Local AI restricted to tool-calling
