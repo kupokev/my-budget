@@ -25,7 +25,10 @@ IHG/Hilton status) and focus on *this app's* specific workflow for each.
   bill name. "Paid via" is the account or card that pays; "Funded from" is where the money really
   comes from (for a card-paid bill, the account that covers it).
 - **Cards:** the summary shows which bills sit on each card, their monthly total, the latest
-  balance and utilization. "Balance" records a statement or month-end balance.
+  balance and utilization. "Balance" records a statement or month-end balance. "Yearly cost vs
+  value" ranks cards by annual fee plus interest (if the latest balance were carried at the APR)
+  against the rewards value recorded this year, worst first, so a card that costs more than it
+  returns stands out.
 - **Home:** bills due in the next 14 days, the next pay date, and per-account transfer needs.
 
 ## Phase 2: calculators
@@ -52,3 +55,20 @@ IHG/Hilton status) and focus on *this app's* specific workflow for each.
   previous year forward, update the figures from Pub 15-T, the SSA wage base, the Missouri
   withholding formula and the IRS limit notices, then tick Verified. Until then the Paycheck page
   shows an "unverified" warning.
+
+## Phase 3: rewards
+
+- **Cards → Add from catalog.** Pick a card; it arrives with its earn rules, spend thresholds, and
+  its program's status paths. Then open *Rewards* on the card to correct anything against the
+  issuer's current terms. Any card can have rules: a 2% cash-back card is one rule at 2× and 1¢.
+- **Rewards → Programs.** Set each program's priority (1 = chase first), current and target tier,
+  point value, and this year's nights / stays / program spend. Paths list every way to each tier.
+- **Rewards → Card spend.** Type each card's monthly spend by category from statements. This is
+  the year-to-date figure every threshold and card-spend path uses.
+- **Rewards → Planned spend.** Monthly variable spend per category (restaurants, groceries…). With
+  card-eligible bills this is the spend the plan allocates. Untick "can go on a card" for things
+  that can't.
+- **Rewards → Progress / Plan / Bills / Earnings.** Progress shows every path and threshold with
+  the per-month figure. Plan allocates spend to goals in priority order and shows gaps with the
+  other paths. Bills says card or bank per bill, weighing the bank-autopay discount. Earnings shows
+  points and dollars per card net of fees. Use the year arrows to see next year's plan from zero.

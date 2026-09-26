@@ -196,6 +196,7 @@ else
                 </div>
                 <div class="row">
                     <div class="field"><label class="inline"><InputCheckbox @bind-Value="editing.IsAutopay" /> Autopay</label></div>
+                    <div class="field"><label class="inline"><InputCheckbox @bind-Value="editing.IsCardEligible" /> Can go on a card</label></div>
                     <div class="field"><label>Start</label><InputDate @bind-Value="editing.StartDate" /></div>
                     <div class="field"><label>End <span class="muted">(last month it's owed)</span></label><InputDate @bind-Value="editing.EndDate" /></div>
                     <div class="field"><label class="inline"><InputCheckbox @bind-Value="editing.IsActive" /> Active</label></div>
@@ -300,7 +301,7 @@ else
         {
             Id = b.Id, Name = b.Name, CategoryId = b.CategoryId, AccountNumber = b.AccountNumber, Frequency = b.Frequency, DueDay = b.DueDay == 0 ? 1 : b.DueDay, AnchorDueDate = b.AnchorDueDate,
             IsAutopay = b.IsAutopay, ProjectedAmount = b.ProjectedAmount, PaymentMethod = b.PaymentMethod, PaymentAccountId = b.PaymentAccountId,
-            PaymentCardId = b.PaymentCardId, FundingAccountId = b.FundingAccountId, BankAutopayDiscount = b.BankAutopayDiscount,
+            PaymentCardId = b.PaymentCardId, FundingAccountId = b.FundingAccountId, BankAutopayDiscount = b.BankAutopayDiscount, IsCardEligible = b.IsCardEligible,
             StartDate = b.StartDate, EndDate = b.EndDate, Notes = b.Notes, IsActive = b.IsActive,
         };
     }

@@ -24,7 +24,17 @@ public class Card
     public string? Notes { get; set; }
     public bool IsActive { get; set; } = true;
 
+    /// <summary>Co-branded program whose points this card earns, if any.</summary>
+    public int? LoyaltyProgramId { get; set; }
+    public LoyaltyProgram? LoyaltyProgram { get; set; }
+    /// <summary>Cents per point for this card's currency when it isn't a program (cash back = 1.0); overrides the program's value if set.</summary>
+    public decimal? PointValueCents { get; set; }
+    /// <summary>Which built-in catalog entry this card was created from, so the catalog can be refreshed later.</summary>
+    public string? CatalogKey { get; set; }
+
     public List<CardBalance> Balances { get; set; } = [];
+    public List<EarnRule> EarnRules { get; set; } = [];
+    public List<SpendThreshold> Thresholds { get; set; } = [];
 }
 
 /// <summary>Statement or month-end balance snapshot (CC-3, CC-4).</summary>

@@ -19,7 +19,7 @@ public sealed class ApiClient(HttpClient http)
     public Task<List<AccountBalanceDto>> GetAccountBalancesAsync(int id) => Get<List<AccountBalanceDto>>($"api/accounts/{id}/balances");
     public Task<AccountBalanceDto> SaveAccountBalanceAsync(int id, AccountBalanceDto b) => Post($"api/accounts/{id}/balances", b);
     public Task<List<TransferDto>> GetTransfersAsync(int id, int? year = null, int? month = null)
-        => Get<List<TransferDto>>($"api/accounts/{id}/transfers?year={year}&month={month}");
+        => Get<List<TransferDto>>(Q($"api/accounts/{id}/transfers", ("year", year), ("month", month)));
     public Task<TransferDto> AddTransferAsync(int id, TransferDto t) => Post($"api/accounts/{id}/transfers", t);
     public Task DeleteTransferAsync(int accountId, int transferId) => Delete($"api/accounts/{accountId}/transfers/{transferId}");
 
@@ -52,7 +52,7 @@ public sealed class ApiClient(HttpClient http)
     public Task<YearEstimateDto> GetPaycheckYearAsync(int sourceId, int year) => Get<YearEstimateDto>($"api/paycheck/year?sourceId={sourceId}&year={year}");
     public Task<WhatIfResponse> WhatIfAsync(WhatIfRequest req) => Post<WhatIfRequest, WhatIfResponse>("api/paycheck/what-if", req);
     public Task<PaycheckEstimateDto> SupplementalAsync(SupplementalRequest req) => Post<SupplementalRequest, PaycheckEstimateDto>("api/paycheck/supplemental", req);
-    public Task<List<PaycheckDto>> GetPaychecksAsync(int? sourceId = null, int? year = null) => Get<List<PaycheckDto>>($"api/paychecks?sourceId={sourceId}&year={year}");
+    public Task<List<PaycheckDto>> GetPaychecksAsync(int? sourceId = null, int? year = null) => Get<List<PaycheckDto>>(Q("api/paychecks", ("sourceId", sourceId), ("year", year)));
     public Task<PaycheckDto> SavePaycheckAsync(PaycheckDto p) => p.Id == 0 ? Post("api/paychecks", p) : Put($"api/paychecks/{p.Id}", p);
     public Task DeletePaycheckAsync(int id) => Delete($"api/paychecks/{id}");
     public Task<PaycheckCompareDto> ComparePaycheckAsync(int id) => Get<PaycheckCompareDto>($"api/paychecks/{id}/compare");
@@ -79,10 +79,30 @@ public sealed class ApiClient(HttpClient http)
     public Task<LoanBalanceDto> SaveLoanBalanceAsync(int id, LoanBalanceDto b) => Post($"api/loans/{id}/balances", b);
     public Task<LoanProjectionDto> GetLoanProjectionAsync(int id, decimal? extra = null) => Get<LoanProjectionDto>(extra is { } e ? $"api/loans/{id}/projection?extra={e}" : $"api/loans/{id}/projection");
 
+    // Rewards (Phase 3)
+    public Task<List<CatalogEntryDto>> GetCardCatalogAsync() => Get<List<CatalogEntryDto>>("api/card-catalog");
+    public Task<CardDto> AddCardFromCatalogAsync(string key, int? payingAccountId) => Post<object, CardDto>(Q($"api/cards/from-catalog/{key}", ("payingAccountId", payingAccountId)), new { });
+    public Task<CardRewardsDto> GetCardRewardsAsync(int cardId) => Get<CardRewardsDto>($"api/cards/{cardId}/rewards");
+    public Task<CardRewardsDto> SaveCardRewardsAsync(CardRewardsDto r) => Put($"api/cards/{r.CardId}/rewards", r);
+    public Task<List<LoyaltyProgramDto>> GetLoyaltyProgramsAsync() => Get<List<LoyaltyProgramDto>>("api/loyalty-programs");
+    public Task<LoyaltyProgramDto> SaveLoyaltyProgramAsync(LoyaltyProgramDto p) => p.Id == 0 ? Post("api/loyalty-programs", p) : Put($"api/loyalty-programs/{p.Id}", p);
+    public Task DeleteLoyaltyProgramAsync(int id) => Delete($"api/loyalty-programs/{id}");
+    public Task<List<CardSpendDto>> GetCardSpendAsync(int year, int? cardId = null) => Get<List<CardSpendDto>>(Q("api/card-spend", ("year", year), ("cardId", cardId)));
+    public Task SaveCardSpendAsync(CardSpendDto s) => http.PutAsJsonAsync("api/card-spend", s, Json).ContinueWith(t => ThrowIfFailed(t.Result)).Unwrap();
+    public Task<CategoryDto> SaveCategoryPlanAsync(CategoryDto c) => Put($"api/categories/{c.Id}/plan", c);
+    public Task<RewardsReportDto> GetRewardsReportAsync(int year) => Get<RewardsReportDto>($"api/rewards/report?year={year}");
+
     // Views
     public Task<TransferNeedsDto> GetTransferNeedsAsync(DateOnly? asOf = null)
         => Get<TransferNeedsDto>(asOf is { } d ? $"api/transfer-needs?asOf={d:yyyy-MM-dd}" : "api/transfer-needs");
     public Task<HomeDto> GetHomeAsync() => Get<HomeDto>("api/home");
+
+    /// <summary>Builds a query string, leaving out null values (an empty "cardId=" fails nullable binding on the API).</summary>
+    private static string Q(string path, params (string Name, object? Value)[] args)
+    {
+        var parts = args.Where(a => a.Value is not null).Select(a => $"{a.Name}={Uri.EscapeDataString(a.Value!.ToString()!)}").ToList();
+        return parts.Count == 0 ? path : path + "?" + string.Join("&", parts);
+    }
 
     private async Task<T> Get<T>(string url)
         => await http.GetFromJsonAsync<T>(url, Json) ?? throw new InvalidOperationException($"Empty response from {url}");

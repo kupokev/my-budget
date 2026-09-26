@@ -6,6 +6,10 @@ public class Category
     public int Id { get; set; }
     public required string Name { get; set; }
     public bool IsActive { get; set; } = true;
+    /// <summary>Planned variable spend per month in this category (restaurants, groceries), for the rewards spend plan.</summary>
+    public decimal? PlannedMonthly { get; set; }
+    /// <summary>False for categories that can never go on a card (mortgage, car payment).</summary>
+    public bool IsCardEligible { get; set; } = true;
 }
 
 /// <summary>A recurring or one-off obligation (BIL-1, BIL-2).</summary>
@@ -42,8 +46,10 @@ public class Bill
     public int FundingAccountId { get; set; }
     public Account? FundingAccount { get; set; }
 
-    /// <summary>Optional monthly discount for paying from a bank account instead of a card (RWD-4a). Stored now, used in Phase 3.</summary>
+    /// <summary>Optional monthly discount for paying from a bank account instead of a card (RWD-4a).</summary>
     public decimal? BankAutopayDiscount { get; set; }
+    /// <summary>False when the biller won't take a card (mortgage, HELOC, car loan).</summary>
+    public bool IsCardEligible { get; set; } = true;
 
     public DateOnly? StartDate { get; set; }
     public DateOnly? EndDate { get; set; }

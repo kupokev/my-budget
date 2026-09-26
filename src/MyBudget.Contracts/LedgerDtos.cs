@@ -60,6 +60,8 @@ public sealed class CardDto
     public bool IsActive { get; set; } = true;
     public decimal? LatestBalance { get; set; }
     public DateOnly? LatestBalanceAsOf { get; set; }
+    public int? LoyaltyProgramId { get; set; }
+    public string? CatalogKey { get; set; }
 }
 
 public sealed class CardBalanceDto
@@ -75,6 +77,9 @@ public sealed class CategoryDto
     public int Id { get; set; }
     [Required, StringLength(60)] public string Name { get; set; } = "";
     public bool IsActive { get; set; } = true;
+    /// <summary>Planned variable spend per month (feeds the rewards spend plan).</summary>
+    public decimal? PlannedMonthly { get; set; }
+    public bool IsCardEligible { get; set; } = true;
 }
 
 public sealed class BillDto
@@ -93,6 +98,7 @@ public sealed class BillDto
     public int? PaymentCardId { get; set; }
     [Range(1, int.MaxValue, ErrorMessage = "Pick the funding account.")] public int FundingAccountId { get; set; }
     [Range(0, 10_000)] public decimal? BankAutopayDiscount { get; set; }
+    public bool IsCardEligible { get; set; } = true;
     public DateOnly? StartDate { get; set; }
     public DateOnly? EndDate { get; set; }
     public string? Notes { get; set; }

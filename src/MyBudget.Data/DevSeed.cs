@@ -55,27 +55,58 @@ public static class DevSeed
             new IncomeSource { Name = "Alphanomix", Type = IncomeSourceType.Contract1099 },
             new IncomeSource { Name = "Robin (reimbursement)", Type = IncomeSourceType.Reimbursement });
 
-        Card C(string name, string issuer, string network, int statementDay, int dueDay, decimal fee = 0, int? feeMonth = null) =>
-            new() { Name = name, Issuer = issuer, Network = network, StatementDay = statementDay, DueDay = dueDay, AnnualFee = fee, AnnualFeeMonth = feeMonth, PayingAccount = chaseMain, Apr = 24.99m, CreditLimit = 10_000m };
-        var chaseIhg = C("Chase IHG Premier", "Chase", "Mastercard", 12, 9, 99m, 4);
-        var hiltonSurpass = C("Hilton Honors Surpass", "American Express", "Amex", 20, 15, 150m, 6);
-        db.Cards.AddRange(
-            C("Capital One 1", "Capital One", "Visa", 5, 2), C("Capital One 2", "Capital One", "Mastercard", 8, 5),
-            C("Citi", "Citi", "Mastercard", 10, 7), C("Chase Freedom", "Chase", "Visa", 14, 11),
-            C("Chase Sapphire", "Chase", "Visa", 16, 13, 95m, 3), chaseIhg, C("Wells Fargo", "Wells Fargo", "Visa", 18, 15),
-            C("Discover", "Discover", "Discover", 22, 19), C("AmEx", "American Express", "Amex", 25, 20),
-            C("HICV", "Comenity", "Visa", 27, 24), hiltonSurpass);
-
         var utilities = new Category { Name = "Utilities" };
-        var housing = new Category { Name = "Housing" };
+        var housing = new Category { Name = "Housing", IsCardEligible = false };
         var subscriptions = new Category { Name = "Subscriptions" };
         var insurance = new Category { Name = "Insurance" };
         var memberships = new Category { Name = "Memberships" };
-        db.Categories.AddRange(utilities, housing, subscriptions, insurance, memberships,
-            new Category { Name = "Restaurants" }, new Category { Name = "Groceries" }, new Category { Name = "Transportation" });
+        var restaurants = new Category { Name = "Restaurants", PlannedMonthly = 600m };
+        var groceries = new Category { Name = "Groceries", PlannedMonthly = 700m };
+        var gas = new Category { Name = "Gas", PlannedMonthly = 250m };
+        var travel = new Category { Name = "Travel", PlannedMonthly = 400m };
+        var other = new Category { Name = "Other spending", PlannedMonthly = 800m };
+        db.Categories.AddRange(utilities, housing, subscriptions, insurance, memberships, restaurants, groceries, gas, travel, other,
+            new Category { Name = "Transportation" }, new Category { Name = "Hotels (IHG)" }, new Category { Name = "Hotels (Hilton)" },
+            new Category { Name = "Online retail" }, new Category { Name = "Streaming" }, new Category { Name = "Drugstore" }, new Category { Name = "Entertainment" });
+        await db.SaveChangesAsync(ct);
+
+        // Programs and catalog cards, exactly as "Add from catalog" would create them.
+        foreach (var program in CardCatalog.Programs()) db.LoyaltyPrograms.Add(program);
+        await db.SaveChangesAsync(ct);
+        var chaseIhg = await CatalogService.AddCardAsync(db, "chase-ihg-premier", chaseMain, ct);
+        chaseIhg.StatementDay = 12; chaseIhg.DueDay = 9; chaseIhg.AnnualFeeMonth = 4;
+        var hiltonSurpass = await CatalogService.AddCardAsync(db, "amex-hilton-surpass", chaseMain, ct);
+        hiltonSurpass.StatementDay = 20; hiltonSurpass.DueDay = 15; hiltonSurpass.AnnualFeeMonth = 6;
+        var sapphire = await CatalogService.AddCardAsync(db, "chase-sapphire-preferred", chaseMain, ct);
+        var freedom = await CatalogService.AddCardAsync(db, "chase-freedom-unlimited", chaseMain, ct);
+        var citi = await CatalogService.AddCardAsync(db, "citi-double-cash", chaseMain, ct);
+        var quicksilver = await CatalogService.AddCardAsync(db, "capital-one-quicksilver", chaseMain, ct);
+        var savor = await CatalogService.AddCardAsync(db, "capital-one-savorone", chaseMain, ct);
+        var wf = await CatalogService.AddCardAsync(db, "wells-fargo-active-cash", chaseMain, ct);
+        var discover = await CatalogService.AddCardAsync(db, "discover-it", chaseMain, ct);
+        var amexBce = await CatalogService.AddCardAsync(db, "amex-blue-cash-everyday", chaseMain, ct);
+        db.Cards.Add(new Card { Name = "HICV", Issuer = "Comenity", Network = "Visa", StatementDay = 27, DueDay = 24, PayingAccount = chaseMain, Apr = 24.99m, CreditLimit = 10_000m });
+
+        // Placeholder year-to-date card spend (RWD-3) and program activity; replace from statements.
+        foreach (var m in Enumerable.Range(1, 9))
+        {
+            var period = new DateOnly(2026, m, 1);
+            db.CardSpend.AddRange(
+                new CardSpend { Card = chaseIhg, Period = period, Category = groceries, Amount = 650m },
+                new CardSpend { Card = chaseIhg, Period = period, Category = gas, Amount = 240m },
+                new CardSpend { Card = chaseIhg, Period = period, Category = other, Amount = 500m },
+                new CardSpend { Card = hiltonSurpass, Period = period, Category = restaurants, Amount = 550m },
+                new CardSpend { Card = hiltonSurpass, Period = period, Category = travel, Amount = 300m });
+        }
+        var ihgProgram = await db.LoyaltyPrograms.FirstAsync(p => p.Name == CardCatalog.Ihg, ct);
+        var hiltonProgram = await db.LoyaltyPrograms.FirstAsync(p => p.Name == CardCatalog.Hilton, ct);
+        ihgProgram.CurrentTier = "Platinum"; ihgProgram.PointsBalance = 85_000m;
+        ihgProgram.Progress.Add(new LoyaltyProgress { Year = 2026, Nights = 12, QualifyingPoints = 30_000m });
+        hiltonProgram.CurrentTier = "Gold"; hiltonProgram.PointsBalance = 120_000m;
+        hiltonProgram.Progress.Add(new LoyaltyProgress { Year = 2026, Nights = 18, Stays = 9, ProgramSpend = 4_200m });
 
         db.Bills.AddRange(
-            new Bill { Name = "Mortgage", Category = housing, DueDay = 1, ProjectedAmount = 2_100m, IsAutopay = true, PaymentMethod = PaymentMethodKind.Account, PaymentAccount = chaseMain, FundingAccount = chaseMain },
+            new Bill { Name = "Mortgage", Category = housing, DueDay = 1, ProjectedAmount = 2_100m, IsAutopay = true, PaymentMethod = PaymentMethodKind.Account, PaymentAccount = chaseMain, FundingAccount = chaseMain, IsCardEligible = false },
             new Bill { Name = "Water", Category = utilities, DueDay = 20, ProjectedAmount = 60m, IsAutopay = true, PaymentAccount = automatedBills, FundingAccount = automatedBills },
             new Bill { Name = "Sewer", Category = utilities, DueDay = 20, ProjectedAmount = 45m, IsAutopay = true, PaymentAccount = automatedBills, FundingAccount = automatedBills },
             new Bill { Name = "Electric", Category = utilities, DueDay = 18, ProjectedAmount = 140m, IsAutopay = true, PaymentAccount = automatedBills, FundingAccount = automatedBills },

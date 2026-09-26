@@ -1,0 +1,114 @@
+using System.ComponentModel.DataAnnotations;
+using MyBudget.Domain;
+
+namespace MyBudget.Contracts;
+
+// ---- Editable data -------------------------------------------------------------------------
+
+public sealed class EarnRuleDto
+{
+    public int Id { get; set; }
+    public int? CategoryId { get; set; }
+    [Range(0, 100)] public decimal PointsPerDollar { get; set; } = 1;
+    public decimal? AnnualSpendCap { get; set; }
+    public string? Notes { get; set; }
+}
+
+public sealed class SpendThresholdDto
+{
+    public int Id { get; set; }
+    [Range(0, 10_000_000)] public decimal Amount { get; set; }
+    public ThresholdRewardKind RewardKind { get; set; }
+    [Required, StringLength(200)] public string Description { get; set; } = "";
+    public decimal? ValueDollars { get; set; }
+    public string? TierName { get; set; }
+}
+
+/// <summary>Rewards side of a card, edited separately from the CC-1 basics.</summary>
+public sealed class CardRewardsDto
+{
+    public int CardId { get; set; }
+    public int? LoyaltyProgramId { get; set; }
+    public decimal? PointValueCents { get; set; }
+    public string? CatalogKey { get; set; }
+    public List<EarnRuleDto> EarnRules { get; set; } = [];
+    public List<SpendThresholdDto> Thresholds { get; set; } = [];
+}
+
+public sealed record CatalogEntryDto(string Key, string Name, string Issuer, string Network, decimal AnnualFee, string? Program, decimal PointValueCents, string Summary, string? Notes);
+
+public sealed class StatusPathDto
+{
+    public int Id { get; set; }
+    [Required] public string TierName { get; set; } = "";
+    public StatusPathKind Kind { get; set; }
+    public decimal Threshold { get; set; }
+    public int? CardId { get; set; }
+    public string? Notes { get; set; }
+}
+
+public sealed class LoyaltyProgressDto
+{
+    public int Year { get; set; }
+    public int Nights { get; set; }
+    public int Stays { get; set; }
+    public decimal ProgramSpend { get; set; }
+    public decimal QualifyingPoints { get; set; }
+}
+
+public sealed class LoyaltyProgramDto
+{
+    public int Id { get; set; }
+    [Required, StringLength(100)] public string Name { get; set; } = "";
+    [Range(0, 100)] public decimal PointValueCents { get; set; } = 1;
+    public decimal PointsBalance { get; set; }
+    public string? CurrentTier { get; set; }
+    public string? TargetTier { get; set; }
+    public int Priority { get; set; } = 99;
+    public bool IsActive { get; set; } = true;
+    public string? Notes { get; set; }
+    /// <summary>Tier names in ascending order.</summary>
+    public List<string> Tiers { get; set; } = [];
+    public List<StatusPathDto> Paths { get; set; } = [];
+    public List<LoyaltyProgressDto> Progress { get; set; } = [];
+}
+
+public sealed class CardSpendDto
+{
+    public int Id { get; set; }
+    public int CardId { get; set; }
+    public DateOnly Period { get; set; }
+    public int? CategoryId { get; set; }
+    public decimal Amount { get; set; }
+    public string? Notes { get; set; }
+}
+
+// ---- Optimizer report (RWD-3..6). Every number carries its formula. --------------------------
+
+public sealed record ThresholdProgressDto(int CardId, string CardName, int ThresholdId, decimal Amount, ThresholdRewardKind Kind, string Description,
+    decimal YtdSpend, decimal Remaining, decimal RequiredMonthly, decimal ProjectedYearEnd, bool Reached, bool OnPace, string Formula);
+
+public sealed record PathProgressDto(int PathId, string TierName, StatusPathKind Kind, decimal Threshold, decimal Current, decimal Remaining,
+    decimal? RequiredMonthly, bool Reached, string? CardName, string Formula);
+
+public sealed record ProgramStatusDto(int ProgramId, string Name, int Priority, string? CurrentTier, string? TargetTier, string? HeldTier,
+    bool TargetReached, string HowReached, PathProgressDto? PlannedPath, IReadOnlyList<PathProgressDto> Paths, decimal PointsBalance, decimal PointsValueDollars);
+
+public sealed record AllocationDto(int CardId, string CardName, decimal Monthly, string Reason);
+
+public sealed record GapDto(string Program, string Tier, decimal RequiredMonthly, decimal AllocatedMonthly, decimal ShortfallMonthly, IReadOnlyList<string> Alternatives);
+
+public sealed record CategoryRouteDto(int? CategoryId, string Category, decimal Monthly, int? CardId, string CardName, decimal PointsPerDollar, decimal CentsPerDollar, string Reason);
+
+public sealed record SpendPlanDto(int Year, DateOnly AsOf, int MonthsLeft, decimal ProjectedMonthly, string ProjectedMonthlySource,
+    IReadOnlyList<AllocationDto> Allocations, IReadOnlyList<CategoryRouteDto> Routing, IReadOnlyList<GapDto> Gaps, IReadOnlyList<string> Steps);
+
+public sealed record BillRecommendationDto(int BillId, string BillName, decimal Monthly, int? CardId, string Recommendation, decimal CardValue, decimal BankDiscount, string Formula);
+
+public sealed record MonthEarningsDto(DateOnly Period, decimal Spend, decimal Points, decimal Dollars);
+
+public sealed record CardEarningsDto(int CardId, string CardName, decimal PointValueCents, IReadOnlyList<MonthEarningsDto> Months,
+    decimal YtdSpend, decimal YtdPoints, decimal YtdDollars, decimal AnnualFee, decimal ThresholdRewardsValue, decimal NetValue, string Formula);
+
+public sealed record RewardsReportDto(int Year, DateOnly AsOf, IReadOnlyList<ThresholdProgressDto> Thresholds, IReadOnlyList<ProgramStatusDto> Programs,
+    SpendPlanDto Plan, IReadOnlyList<BillRecommendationDto> Bills, IReadOnlyList<CardEarningsDto> Earnings, IReadOnlyList<string> Warnings);

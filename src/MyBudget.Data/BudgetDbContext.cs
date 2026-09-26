@@ -23,6 +23,10 @@ public sealed class BudgetDbContext(DbContextOptions<BudgetDbContext> options) :
     public DbSet<ContributionLimits> ContributionLimits => Set<ContributionLimits>();
     public DbSet<HsaYear> HsaYears => Set<HsaYear>();
     public DbSet<Loan> Loans => Set<Loan>();
+    public DbSet<LoyaltyProgram> LoyaltyPrograms => Set<LoyaltyProgram>();
+    public DbSet<EarnRule> EarnRules => Set<EarnRule>();
+    public DbSet<SpendThreshold> SpendThresholds => Set<SpendThreshold>();
+    public DbSet<CardSpend> CardSpend => Set<CardSpend>();
 
     protected override void OnModelCreating(ModelBuilder mb)
     {
@@ -106,7 +110,33 @@ public sealed class BudgetDbContext(DbContextOptions<BudgetDbContext> options) :
             e.Property(x => x.PromoApr).HasPrecision(6, 3);
             e.HasOne(x => x.PayingAccount).WithMany().HasForeignKey(x => x.PayingAccountId).OnDelete(DeleteBehavior.SetNull);
             e.HasMany(x => x.Balances).WithOne(x => x.Card).HasForeignKey(x => x.CardId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.LoyaltyProgram).WithMany().HasForeignKey(x => x.LoyaltyProgramId).OnDelete(DeleteBehavior.SetNull);
+            e.Property(x => x.PointValueCents).HasPrecision(8, 4);
+            e.HasMany(x => x.EarnRules).WithOne(x => x.Card).HasForeignKey(x => x.CardId).OnDelete(DeleteBehavior.Cascade);
+            e.HasMany(x => x.Thresholds).WithOne(x => x.Card).HasForeignKey(x => x.CardId).OnDelete(DeleteBehavior.Cascade);
         });
+        mb.Entity<EarnRule>(e =>
+        {
+            e.Property(x => x.PointsPerDollar).HasPrecision(8, 3);
+            e.HasOne(x => x.Category).WithMany().HasForeignKey(x => x.CategoryId).OnDelete(DeleteBehavior.Cascade);
+        });
+        mb.Entity<SpendThreshold>().Property(x => x.Description).HasMaxLength(200);
+        mb.Entity<CardSpend>(e =>
+        {
+            e.HasOne(x => x.Card).WithMany().HasForeignKey(x => x.CardId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Category).WithMany().HasForeignKey(x => x.CategoryId).OnDelete(DeleteBehavior.SetNull);
+            e.HasIndex(x => new { x.CardId, x.Period, x.CategoryId }).IsUnique();
+        });
+        mb.Entity<LoyaltyProgram>(e =>
+        {
+            e.Property(x => x.Name).HasMaxLength(100);
+            e.Property(x => x.PointValueCents).HasPrecision(8, 4);
+            e.HasMany(x => x.Tiers).WithOne(x => x.Program).HasForeignKey(x => x.ProgramId).OnDelete(DeleteBehavior.Cascade);
+            e.HasMany(x => x.Paths).WithOne(x => x.Program).HasForeignKey(x => x.ProgramId).OnDelete(DeleteBehavior.Cascade);
+            e.HasMany(x => x.Progress).WithOne(x => x.Program).HasForeignKey(x => x.ProgramId).OnDelete(DeleteBehavior.Cascade);
+        });
+        mb.Entity<StatusPath>().HasOne(x => x.Card).WithMany().HasForeignKey(x => x.CardId).OnDelete(DeleteBehavior.SetNull);
+        mb.Entity<LoyaltyProgress>().HasIndex(x => new { x.ProgramId, x.Year }).IsUnique();
         mb.Entity<CardBalance>().HasIndex(x => new { x.CardId, x.AsOf }).IsUnique();
 
         mb.Entity<Category>(e =>

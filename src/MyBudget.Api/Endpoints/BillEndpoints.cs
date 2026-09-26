@@ -14,7 +14,7 @@ public static class BillEndpoints
         cats.MapGet("/", async (BudgetDbContext db) => (await db.Categories.OrderBy(c => c.Name).ToListAsync()).Select(c => c.ToDto()));
         cats.MapPost("/", async (CategoryDto dto, BudgetDbContext db) =>
         {
-            var c = new Category { Name = dto.Name.Trim(), IsActive = dto.IsActive };
+            var c = new Category { Name = dto.Name.Trim(), IsActive = dto.IsActive, PlannedMonthly = dto.PlannedMonthly, IsCardEligible = dto.IsCardEligible };
             db.Categories.Add(c);
             await db.SaveChangesAsync();
             return Results.Created($"/api/categories/{c.Id}", c.ToDto());
@@ -23,7 +23,7 @@ public static class BillEndpoints
         {
             var c = await db.Categories.FindAsync(id);
             if (c is null) return Results.NotFound();
-            c.Name = dto.Name.Trim(); c.IsActive = dto.IsActive;
+            c.Name = dto.Name.Trim(); c.IsActive = dto.IsActive; c.PlannedMonthly = dto.PlannedMonthly; c.IsCardEligible = dto.IsCardEligible;
             await db.SaveChangesAsync();
             return Results.Ok(c.ToDto());
         });

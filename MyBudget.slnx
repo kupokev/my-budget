@@ -9,6 +9,7 @@
     <Project Path="src/MyBudget.Engines.Hsa/MyBudget.Engines.Hsa.csproj" />
     <Project Path="src/MyBudget.Engines.Ledger/MyBudget.Engines.Ledger.csproj" />
     <Project Path="src/MyBudget.Engines.Paycheck/MyBudget.Engines.Paycheck.csproj" />
+    <Project Path="src/MyBudget.Engines.Rewards/MyBudget.Engines.Rewards.csproj" />
     <Project Path="src/MyBudget.UI/MyBudget.UI.csproj" />
   </Folder>
   <Folder Name="/tests/">

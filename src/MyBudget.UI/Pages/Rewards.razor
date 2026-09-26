@@ -1,0 +1,353 @@
+@page "/rewards"
+@inject ApiClient Api
+@using MyBudget.Domain
+
+<h1>Rewards</h1>
+<ErrorBanner @bind-Message="error" />
+
+@if (report is null || programs is null || cards is null || categories is null)
+{
+    <p class="muted">Loading…</p>
+}
+else
+{
+    <div class="toolbar">
+        <span class="year-nav">
+            <button class="secondary" type="button" @onclick="() => ChangeYear(year - 1)">‹</button><strong>@year</strong><button class="secondary" type="button" @onclick="() => ChangeYear(year + 1)">›</button>
+        </span>
+        <span class="muted">@(year > DateTime.Today.Year ? $"Plan for {year} from January 1 with zero year-to-date spend." : $"As of {Fmt.Date(report.AsOf)} · {report.Plan.MonthsLeft} months left.")</span>
+        <span class="tabs">
+            @foreach (var t in new[] { "Progress", "Plan", "Bills", "Earnings", "Programs", "Card spend", "Planned spend" })
+            {
+                <button type="button" class="@(tab == t ? "" : "secondary")" @onclick="() => tab = t">@t</button>
+            }
+        </span>
+    </div>
+    <Warnings Items="report.Warnings" />
+
+    @if (tab == "Progress")
+    {
+        <div class="row">
+            @foreach (var p in report.Programs)
+            {
+                <section class="panel grow">
+                    <h2>@p.Name <span class="muted">priority @p.Priority</span></h2>
+                    <p>Now <strong>@(p.CurrentTier ?? "—")</strong>@(p.HeldTier is not null ? $" (held: {p.HeldTier})" : "") · target <strong>@(p.TargetTier ?? "none")</strong> ·
+                        <span class="@(p.TargetReached ? "pos" : "")">@p.HowReached</span></p>
+                    <p class="muted">@p.PointsBalance.ToString("N0") points ≈ @Fmt.Money(p.PointsValueDollars)</p>
+                    <table>
+                        <thead><tr><th>Tier</th><th>Path</th><th class="money">Have</th><th class="money">Need</th><th class="money">Left</th><th class="money">Per month</th><th></th></tr></thead>
+                        <tbody>
+                        @foreach (var path in p.Paths.OrderBy(x => x.TierName == p.TargetTier ? 0 : 1).ThenBy(x => x.TierName))
+                        {
+                            <tr class="@(path.Reached ? "pos" : "") @(path == p.PlannedPath ? "planned" : "")" title="@path.Formula">
+                                <td>@path.TierName</td>
+                                <td>@Fmt.Words(path.Kind)@(path.CardName is not null ? $" · {path.CardName}" : "")</td>
+                                <td class="money">@Num(path.Kind, path.Current)</td>
+                                <td class="money">@Num(path.Kind, path.Threshold)</td>
+                                <td class="money">@Num(path.Kind, path.Remaining)</td>
+                                <td class="money">@(path.RequiredMonthly is { } rm ? Fmt.Money(rm) : "")</td>
+                                <td>@(path.Reached ? "✓" : path == p.PlannedPath ? "planned" : "")</td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                </section>
+            }
+        </div>
+        <section class="panel">
+            <h2>Card spend thresholds</h2>
+            <table>
+                <thead><tr><th>Card</th><th>Reward</th><th class="money">Threshold</th><th class="money">YTD</th><th class="money">Left</th><th class="money">Per month</th><th class="money">At YTD pace</th><th></th></tr></thead>
+                <tbody>
+                @foreach (var t in report.Thresholds)
+                {
+                    <tr title="@t.Formula" class="@(t.Reached ? "pos" : "")">
+                        <td>@t.CardName</td><td>@t.Description</td><td><Money Value="t.Amount" /></td><td><Money Value="t.YtdSpend" /></td>
+                        <td><Money Value="t.Remaining" /></td><td><Money Value="t.RequiredMonthly" /></td><td><Money Value="t.ProjectedYearEnd" /></td>
+                        <td>@(t.Reached ? "✓ reached" : t.OnPace ? "on pace" : "behind")</td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </section>
+    }
+    else if (tab == "Plan")
+    {
+        <section class="panel">
+            <h2>Spend plan · @Fmt.Money(report.Plan.ProjectedMonthly)/mo card-eligible</h2>
+            <p class="muted">@report.Plan.ProjectedMonthlySource. Goals are filled in priority order; what's left goes to the best value per category.</p>
+            @if (report.Plan.Gaps.Count > 0)
+            {
+                <div class="warnings">
+                    @foreach (var g in report.Plan.Gaps)
+                    {
+                        <div><strong>@g.Program @g.Tier is short @Fmt.Money(g.ShortfallMonthly)/mo</strong> (needs @Fmt.Money(g.RequiredMonthly), planned @Fmt.Money(g.AllocatedMonthly)).
+                            @(g.Alternatives.Count > 0 ? "Other ways: " + string.Join("; ", g.Alternatives) + "." : "No other path defined.")</div>
+                    }
+                </div>
+            }
+            <h3>Where the money goes</h3>
+            <table>
+                <thead><tr><th>Category</th><th class="money">Per month</th><th>Card</th><th class="money">Rate</th><th class="money">¢ / $</th><th>Why</th></tr></thead>
+                <tbody>
+                @foreach (var r in report.Plan.Routing)
+                {
+                    <tr><td>@r.Category</td><td><Money Value="r.Monthly" /></td><td>@r.CardName</td><td class="money">@r.PointsPerDollar.ToString("0.##")×</td><td class="money">@r.CentsPerDollar.ToString("0.##")</td><td class="muted">@r.Reason</td></tr>
+                }
+                </tbody>
+            </table>
+            @if (report.Plan.Allocations.Count > 0)
+            {
+                <h3>Goal allocations</h3>
+                <ul>@foreach (var a in report.Plan.Allocations) { <li><strong>@a.CardName</strong>: @Fmt.Money(a.Monthly)/mo · <span class="muted">@a.Reason</span></li> }</ul>
+            }
+            <Steps Items="report.Plan.Steps" />
+        </section>
+    }
+    else if (tab == "Bills")
+    {
+        <section class="panel">
+            <h2>Which card for each bill</h2>
+            <p class="muted">Card-eligible bills only. A bank-autopay discount wins unless the card is a status goal that is short.</p>
+            <table>
+                <thead><tr><th>Bill</th><th class="money">Monthly</th><th>Recommendation</th><th class="money">Card value</th><th class="money">Bank discount</th></tr></thead>
+                <tbody>
+                @foreach (var b in report.Bills)
+                {
+                    <tr title="@b.Formula"><td>@b.BillName</td><td><Money Value="b.Monthly" /></td><td>@b.Recommendation</td><td><Money Value="b.CardValue" /></td><td>@(b.BankDiscount > 0 ? Fmt.Money(b.BankDiscount) : "")</td></tr>
+                }
+                </tbody>
+            </table>
+        </section>
+    }
+    else if (tab == "Earnings")
+    {
+        <section class="panel">
+            <h2>Points earned @year</h2>
+            <table>
+                <thead><tr><th>Card</th><th class="money">Spend</th><th class="money">Points</th><th class="money">¢/pt</th><th class="money">Value</th><th class="money">Thresholds</th><th class="money">Fee</th><th class="money">Net</th></tr></thead>
+                <tbody>
+                @foreach (var e in report.Earnings)
+                {
+                    <tr title="@e.Formula">
+                        <td>@e.CardName</td><td><Money Value="e.YtdSpend" /></td><td class="money">@e.YtdPoints.ToString("N0")</td><td class="money">@e.PointValueCents.ToString("0.##")</td>
+                        <td><Money Value="e.YtdDollars" /></td><td><Money Value="e.ThresholdRewardsValue" /></td><td><Money Value="e.AnnualFee" /></td><td><Money Value="e.NetValue" Signed="true" /></td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+            @foreach (var e in report.Earnings.Where(e => e.Months.Count > 0))
+            {
+                <details>
+                    <summary>@e.CardName by month</summary>
+                    <table>
+                        <thead><tr><th>Month</th><th class="money">Spend</th><th class="money">Points</th><th class="money">Value</th></tr></thead>
+                        <tbody>@foreach (var m in e.Months) { <tr><td>@Fmt.Month(m.Period) @m.Period.Year</td><td><Money Value="m.Spend" /></td><td class="money">@m.Points.ToString("N0")</td><td><Money Value="m.Dollars" /></td></tr> }</tbody>
+                    </table>
+                </details>
+            }
+        </section>
+    }
+    else if (tab == "Programs")
+    {
+        <section class="panel">
+            <div class="toolbar"><button type="button" @onclick="() => programEdit = new LoyaltyProgramDto()">New program</button></div>
+            <table>
+                <thead><tr><th>Program</th><th>Priority</th><th>Now</th><th>Target</th><th class="money">¢/pt</th><th class="money">Points</th><th></th></tr></thead>
+                <tbody>
+                @foreach (var p in programs)
+                {
+                    <tr class="@(p.IsActive ? "" : "muted")"><td>@p.Name</td><td>@p.Priority</td><td>@p.CurrentTier</td><td>@p.TargetTier</td><td class="money">@p.PointValueCents.ToString("0.##")</td><td class="money">@p.PointsBalance.ToString("N0")</td>
+                        <td><button class="secondary" type="button" @onclick="() => EditProgram(p)">Edit</button></td></tr>
+                }
+                </tbody>
+            </table>
+        </section>
+        @if (programEdit is { } pe)
+        {
+            <section class="panel">
+                <h2>@(pe.Id == 0 ? "New program" : pe.Name)</h2>
+                <div class="row">
+                    <div class="field"><label>Name</label><input type="text" @bind="pe.Name" /></div>
+                    <div class="field"><label>Priority (1 = first)</label><input type="number" class="narrow" @bind="pe.Priority" /></div>
+                    <div class="field"><label>Current tier</label><input type="text" @bind="pe.CurrentTier" /></div>
+                    <div class="field"><label>Target tier</label><input type="text" @bind="pe.TargetTier" /></div>
+                    <div class="field"><label>Point value ¢</label><input type="number" step="0.01" class="narrow" @bind="pe.PointValueCents" /></div>
+                    <div class="field"><label>Points balance</label><input type="number" step="1" @bind="pe.PointsBalance" /></div>
+                    <div class="field"><label class="inline"><input type="checkbox" @bind="pe.IsActive" /> Active</label></div>
+                </div>
+                <div class="field"><label>Tiers, lowest first (comma-separated)</label><input type="text" value="@string.Join(", ", pe.Tiers)" @onchange="SetTiers" /></div>
+                <h3>Paths to each tier</h3>
+                <table>
+                    <thead><tr><th>Tier</th><th>How</th><th class="money">Threshold</th><th>Card</th><th>Notes</th><th></th></tr></thead>
+                    <tbody>
+                    @foreach (var x in pe.Paths)
+                    {
+                        <tr>
+                            <td><input type="text" class="narrow" @bind="x.TierName" /></td>
+                            <td><select @bind="x.Kind">@foreach (var k in Enum.GetValues<StatusPathKind>()) { <option value="@k">@Fmt.Words(k)</option> }</select></td>
+                            <td><input type="number" step="1" class="narrow-money" @bind="x.Threshold" /></td>
+                            <td>@if (x.Kind is StatusPathKind.CardSpend or StatusPathKind.HoldCard) { <select @bind="x.CardId"><option value="">—</option>@foreach (var c in cards) { <option value="@c.Id">@c.Name</option> }</select> }</td>
+                            <td><input type="text" @bind="x.Notes" /></td>
+                            <td><button class="secondary" type="button" @onclick="() => pe.Paths.Remove(x)">✕</button></td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+                <button class="secondary" type="button" @onclick="AddPath">Add path</button>
+                <h3>Year-to-date activity</h3>
+                <table>
+                    <thead><tr><th>Year</th><th>Nights</th><th>Stays</th><th class="money">Program spend</th><th class="money">Qualifying points</th><th></th></tr></thead>
+                    <tbody>
+                    @foreach (var g in pe.Progress)
+                    {
+                        <tr><td><input type="number" class="narrow" @bind="g.Year" /></td><td><input type="number" class="narrow" @bind="g.Nights" /></td><td><input type="number" class="narrow" @bind="g.Stays" /></td>
+                            <td><input type="number" step="0.01" class="narrow-money" @bind="g.ProgramSpend" /></td><td><input type="number" step="1" class="narrow-money" @bind="g.QualifyingPoints" /></td>
+                            <td><button class="secondary" type="button" @onclick="() => pe.Progress.Remove(g)">✕</button></td></tr>
+                    }
+                    </tbody>
+                </table>
+                <button class="secondary" type="button" @onclick="() => pe.Progress.Add(new LoyaltyProgressDto { Year = year })">Add year</button>
+                <div class="field"><label>Notes</label><input type="text" @bind="pe.Notes" /></div>
+                <div class="toolbar">
+                    <button type="button" @onclick="SaveProgram">Save</button>
+                    <button class="secondary" type="button" @onclick="() => programEdit = null">Cancel</button>
+                    @if (pe.Id != 0) { <button class="secondary danger" type="button" @onclick="DeleteProgram">Delete</button> }
+                </div>
+            </section>
+        }
+    }
+    else if (tab == "Card spend")
+    {
+        <section class="panel">
+            <h2>Card spend @year by month and category</h2>
+            <p class="muted">From statements, until import exists. Enter an amount and press Enter; 0 clears it.</p>
+            <div class="toolbar">
+                <label class="inline">Card <select @onchange="OnSpendCardChanged">@foreach (var c in cards.Where(c => c.IsActive)) { <option value="@c.Id" selected="@(c.Id == spendCardId)">@c.Name</option> }</select></label>
+            </div>
+            <div class="scroll-x">
+            <table class="grid">
+                <thead><tr><th>Category</th>@for (var m = 1; m <= 12; m++) { <th class="money">@Fmt.Month(new DateOnly(year, m, 1))</th> }<th class="money">YTD</th></tr></thead>
+                <tbody>
+                @foreach (var cat in categories.Where(c => c.IsActive && c.IsCardEligible).Append(new CategoryDto { Id = 0, Name = "Uncategorized" }))
+                {
+                    var catId = cat.Id == 0 ? (int?)null : cat.Id;
+                    <tr>
+                        <td>@cat.Name</td>
+                        @for (var m = 1; m <= 12; m++)
+                        {
+                            var period = new DateOnly(year, m, 1);
+                            var row = spend.FirstOrDefault(s => s.CardId == spendCardId && s.Period == period && s.CategoryId == catId);
+                            <td class="cell"><input class="cell-input" type="number" step="0.01" value="@(row?.Amount.ToString("0.00") ?? "")" @onchange="e => SaveSpend(period, catId, e)" /></td>
+                        }
+                        <td><Money Value="spend.Where(s => s.CardId == spendCardId && s.CategoryId == catId).Sum(s => s.Amount)" /></td>
+                    </tr>
+                }
+                </tbody>
+                <tfoot><tr><th>Total</th>@for (var m = 1; m <= 12; m++) { var period = new DateOnly(year, m, 1); <th><Money Value="spend.Where(s => s.CardId == spendCardId && s.Period == period).Sum(s => s.Amount)" /></th> }<th><Money Value="spend.Where(s => s.CardId == spendCardId).Sum(s => s.Amount)" /></th></tr></tfoot>
+            </table>
+            </div>
+        </section>
+    }
+    else if (tab == "Planned spend")
+    {
+        <section class="panel">
+            <h2>Planned variable spend per month</h2>
+            <p class="muted">What you expect to put on cards each month beyond tracked bills (restaurants, groceries, gas…). This plus card-eligible bills is the spend the plan allocates.</p>
+            <table>
+                <thead><tr><th>Category</th><th class="money">Planned / month</th><th>Can go on a card</th><th></th></tr></thead>
+                <tbody>
+                @foreach (var c in categories.Where(c => c.IsActive))
+                {
+                    <tr>
+                        <td>@c.Name</td>
+                        <td><input type="number" step="1" class="narrow-money" @bind="c.PlannedMonthly" /></td>
+                        <td><input type="checkbox" @bind="c.IsCardEligible" /></td>
+                        <td><button class="secondary" type="button" @onclick="() => SavePlan(c)">Save</button></td>
+                    </tr>
+                }
+                </tbody>
+                <tfoot><tr><th>Total planned</th><th><Money Value="categories.Where(c => c.IsActive && c.IsCardEligible).Sum(c => c.PlannedMonthly ?? 0)" /></th><th colspan="2"></th></tr></tfoot>
+            </table>
+        </section>
+    }
+}
+
+@code {
+    private int year = DateTime.Today.Year;
+    private string tab = "Progress";
+    private RewardsReportDto? report;
+    private List<LoyaltyProgramDto>? programs;
+    private List<CardDto>? cards;
+    private List<CategoryDto>? categories;
+    private List<CardSpendDto> spend = [];
+    private int spendCardId;
+    private LoyaltyProgramDto? programEdit;
+    private string? error;
+
+    protected override Task OnInitializedAsync() => Load();
+
+    private async Task Load()
+    {
+        try
+        {
+            cards = await Api.GetCardsAsync();
+            categories = await Api.GetCategoriesAsync();
+            programs = await Api.GetLoyaltyProgramsAsync();
+            spend = await Api.GetCardSpendAsync(year);
+            if (spendCardId == 0) spendCardId = cards.FirstOrDefault(c => c.IsActive)?.Id ?? 0;
+            report = await Api.GetRewardsReportAsync(year);
+        }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task ChangeYear(int y) { year = y; await Load(); }
+
+    private static string Num(StatusPathKind k, decimal v) => k is StatusPathKind.CardSpend or StatusPathKind.ProgramSpend ? Fmt.Money(v) : k == StatusPathKind.HoldCard ? (v >= 1 ? "held" : "—") : v.ToString("N0");
+
+    private void EditProgram(LoyaltyProgramDto p) => programEdit = new()
+    {
+        Id = p.Id, Name = p.Name, PointValueCents = p.PointValueCents, PointsBalance = p.PointsBalance, CurrentTier = p.CurrentTier, TargetTier = p.TargetTier, Priority = p.Priority, IsActive = p.IsActive, Notes = p.Notes,
+        Tiers = p.Tiers.ToList(),
+        Paths = p.Paths.Select(x => new StatusPathDto { Id = x.Id, TierName = x.TierName, Kind = x.Kind, Threshold = x.Threshold, CardId = x.CardId, Notes = x.Notes }).ToList(),
+        Progress = p.Progress.Select(x => new LoyaltyProgressDto { Year = x.Year, Nights = x.Nights, Stays = x.Stays, ProgramSpend = x.ProgramSpend, QualifyingPoints = x.QualifyingPoints }).ToList(),
+    };
+
+    private void SetTiers(ChangeEventArgs e)
+        => programEdit!.Tiers = ((string?)e.Value ?? string.Empty).Split(',').Select(t => t.Trim()).Where(t => t.Length > 0).ToList();
+
+    private void AddPath() => programEdit!.Paths.Add(new StatusPathDto { TierName = programEdit.TargetTier ?? string.Empty });
+
+    private async Task SaveProgram()
+    {
+        try { await Api.SaveLoyaltyProgramAsync(programEdit!); programEdit = null; await Load(); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task DeleteProgram()
+    {
+        try { await Api.DeleteLoyaltyProgramAsync(programEdit!.Id); programEdit = null; await Load(); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private void OnSpendCardChanged(ChangeEventArgs e) => spendCardId = int.Parse((string)e.Value!);
+
+    private async Task SaveSpend(DateOnly period, int? categoryId, ChangeEventArgs e)
+    {
+        var amount = decimal.TryParse((string?)e.Value, out var v) ? v : 0m;
+        try
+        {
+            await Api.SaveCardSpendAsync(new CardSpendDto { CardId = spendCardId, Period = period, CategoryId = categoryId, Amount = amount });
+            spend = await Api.GetCardSpendAsync(year);
+            report = await Api.GetRewardsReportAsync(year);
+        }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task SavePlan(CategoryDto c)
+    {
+        try { await Api.SaveCategoryPlanAsync(c); report = await Api.GetRewardsReportAsync(year); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+}

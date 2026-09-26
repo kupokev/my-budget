@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>Pure rewards optimizer: threshold and status progress, priority-ordered spend plan, per-bill card vs bank, monthly earnings. No UI or DB.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../MyBudget.Domain/MyBudget.Domain.csproj" />
+    <ProjectReference Include="../MyBudget.Contracts/MyBudget.Contracts.csproj" />
+  </ItemGroup>
+</Project>

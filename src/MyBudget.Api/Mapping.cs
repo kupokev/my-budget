@@ -35,6 +35,7 @@ internal static class Mapping
         PayingAccountId = c.PayingAccountId, Notes = c.Notes, IsActive = c.IsActive,
         LatestBalance = c.Balances.OrderByDescending(b => b.AsOf).FirstOrDefault()?.Balance,
         LatestBalanceAsOf = c.Balances.OrderByDescending(b => b.AsOf).FirstOrDefault()?.AsOf,
+        LoyaltyProgramId = c.LoyaltyProgramId, CatalogKey = c.CatalogKey,
     };
 
     public static void Apply(this Card c, CardDto d)
@@ -47,14 +48,14 @@ internal static class Mapping
 
     public static CardBalanceDto ToDto(this CardBalance b) => new() { Id = b.Id, CardId = b.CardId, AsOf = b.AsOf, Balance = b.Balance };
 
-    public static CategoryDto ToDto(this Category c) => new() { Id = c.Id, Name = c.Name, IsActive = c.IsActive };
+    public static CategoryDto ToDto(this Category c) => new() { Id = c.Id, Name = c.Name, IsActive = c.IsActive, PlannedMonthly = c.PlannedMonthly, IsCardEligible = c.IsCardEligible };
 
     public static BillDto ToDto(this Bill b) => new()
     {
         Id = b.Id, Name = b.Name, CategoryId = b.CategoryId, AccountNumber = b.AccountNumber, Frequency = b.Frequency, DueDay = b.DueDay,
         AnchorDueDate = b.AnchorDueDate, IsAutopay = b.IsAutopay, ProjectedAmount = b.ProjectedAmount,
         PaymentMethod = b.PaymentMethod, PaymentAccountId = b.PaymentAccountId, PaymentCardId = b.PaymentCardId,
-        FundingAccountId = b.FundingAccountId, BankAutopayDiscount = b.BankAutopayDiscount,
+        FundingAccountId = b.FundingAccountId, BankAutopayDiscount = b.BankAutopayDiscount, IsCardEligible = b.IsCardEligible,
         StartDate = b.StartDate, EndDate = b.EndDate, Notes = b.Notes, IsActive = b.IsActive,
     };
 
@@ -65,7 +66,7 @@ internal static class Mapping
         b.PaymentMethod = d.PaymentMethod;
         b.PaymentAccountId = d.PaymentMethod == PaymentMethodKind.Account ? d.PaymentAccountId : null;
         b.PaymentCardId = d.PaymentMethod == PaymentMethodKind.Card ? d.PaymentCardId : null;
-        b.FundingAccountId = d.FundingAccountId; b.BankAutopayDiscount = d.BankAutopayDiscount;
+        b.FundingAccountId = d.FundingAccountId; b.BankAutopayDiscount = d.BankAutopayDiscount; b.IsCardEligible = d.IsCardEligible;
         b.StartDate = d.StartDate; b.EndDate = d.EndDate; b.Notes = d.Notes; b.IsActive = d.IsActive;
     }
 

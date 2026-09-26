@@ -41,7 +41,8 @@ app.MapGroup("/api")
     .MapPaycheck()
     .MapReference()
     .MapHsa()
-    .MapLoans();
+    .MapLoans()
+    .MapRewards();
 
 app.Run();
 
