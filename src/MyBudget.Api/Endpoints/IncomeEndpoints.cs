@@ -88,7 +88,7 @@ public static class IncomeEndpoints
         return (n, $"{current.Source.Name}: {current.Schedule.Frequency} since {current.Schedule.EffectiveDate:yyyy-MM-dd} → {n} checks/year");
     }
 
-    private static IQueryable<IncomeSource> Query(BudgetDbContext db) => db.IncomeSources.Include(s => s.SalaryRates).Include(s => s.PaySchedules);
+    private static IQueryable<IncomeSource> Query(BudgetDbContext db) => db.IncomeSources.Include(s => s.SalaryRates).Include(s => s.PaySchedules).Include(s => s.Deductions).Include(s => s.Withholdings);
 
     private static IResult? Validate(IncomeSourceDto d)
     {

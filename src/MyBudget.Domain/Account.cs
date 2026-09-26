@@ -1,13 +1,13 @@
 namespace MyBudget.Domain;
 
-/// <summary>A place money sits (ACC-1). Never stores a full account number, last four only (ADR-0006).</summary>
+/// <summary>A place money sits (ACC-1). The account number is stored in full for matching statements later (ADR-0008).</summary>
 public class Account
 {
     public int Id { get; set; }
     public required string Name { get; set; }
     public string? Institution { get; set; }
     public AccountType Type { get; set; }
-    public string? LastFour { get; set; }
+    public string? AccountNumber { get; set; }
     public decimal MinimumBalance { get; set; }
     public TransferCadence TransferCadence { get; set; } = TransferCadence.Monthly;
     /// <summary>Counts toward the emergency fund regardless of type (ACC-5).</summary>

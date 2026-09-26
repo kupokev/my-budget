@@ -8,6 +8,9 @@
     <ProjectReference Include="../MyBudget.Contracts/MyBudget.Contracts.csproj" />
     <ProjectReference Include="../MyBudget.Data/MyBudget.Data.csproj" />
     <ProjectReference Include="../MyBudget.Engines.Ledger/MyBudget.Engines.Ledger.csproj" />
+    <ProjectReference Include="../MyBudget.Engines.Paycheck/MyBudget.Engines.Paycheck.csproj" />
+    <ProjectReference Include="../MyBudget.Engines.Hsa/MyBudget.Engines.Hsa.csproj" />
+    <ProjectReference Include="../MyBudget.Engines.Amortization/MyBudget.Engines.Amortization.csproj" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" />

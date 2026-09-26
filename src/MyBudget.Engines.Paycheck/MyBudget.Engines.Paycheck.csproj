@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>Pure paycheck estimator: Pub 15-T percentage method, FICA, Missouri withholding, deductions, supplemental pay. No UI or DB.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../MyBudget.Domain/MyBudget.Domain.csproj" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,24 @@
+@* Shows an account/card number as •••• 1234 with a reveal toggle. Full value is only in memory on this page. *@
+@if (string.IsNullOrWhiteSpace(Value))
+{
+    <span class="muted">@Empty</span>
+}
+else
+{
+    <span class="masked">
+        <span class="mono">@(show ? Value : Mask(Value))</span>
+        <button type="button" class="link" title="@(show ? "Hide" : "Reveal full number")" @onclick="() => show = !show">@(show ? "hide" : "show")</button>
+    </span>
+}
+
+@code {
+    [Parameter] public string? Value { get; set; }
+    [Parameter] public string Empty { get; set; } = "";
+    private bool show;
+
+    public static string Mask(string v)
+    {
+        var digits = v.Trim();
+        return digits.Length <= 4 ? "••••" : "•••• " + digits[^4..];
+    }
+}

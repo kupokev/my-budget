@@ -1,0 +1,10 @@
+@if (Items.Count > 0)
+{
+    <ul class="warnings">
+        @foreach (var w in Items) { <li>@w</li> }
+    </ul>
+}
+
+@code {
+    [Parameter] public IReadOnlyList<string> Items { get; set; } = [];
+}

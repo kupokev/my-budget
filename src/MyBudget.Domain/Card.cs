@@ -7,7 +7,7 @@ public class Card
     public required string Name { get; set; }
     public string? Issuer { get; set; }
     public string? Network { get; set; }
-    public string? LastFour { get; set; }
+    public string? AccountNumber { get; set; }
     public decimal Apr { get; set; }
     public decimal? PromoApr { get; set; }
     public DateOnly? PromoAprExpires { get; set; }

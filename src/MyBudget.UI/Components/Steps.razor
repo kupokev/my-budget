@@ -1,0 +1,12 @@
+@* Collapsible "show your work" list: every calculated number's inputs and formula. *@
+<details class="steps">
+    <summary>@Title</summary>
+    <ol>
+        @foreach (var s in Items) { <li>@s</li> }
+    </ol>
+</details>
+
+@code {
+    [Parameter] public string Title { get; set; } = "How this was calculated";
+    [Parameter] public IReadOnlyList<string> Items { get; set; } = [];
+}

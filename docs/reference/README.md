@@ -6,3 +6,5 @@ data model, and any glossary of domain terms (DRIP, FDX, etc.) worth having in o
 
 Add one file per reference topic as it's written, e.g. `paycheck-calculation.md`,
 `ai-tool-functions.md`, `data-model.md`.
+
+- [paycheck-calculation.md](./paycheck-calculation.md) — withholding formulas and the shipped 2025/2026 figures

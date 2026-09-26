@@ -111,6 +111,54 @@ else
                 </table>
                 <button class="secondary" type="button" @onclick="AddSchedule">Add schedule row</button>
 
+                <h3>Benefit elections <span class="muted">(per check, from a stub; use either an amount or a percent of gross)</span></h3>
+                <table>
+                    <thead><tr><th>Name</th><th>Kind</th><th>Tax treatment</th><th class="money">Amount / check</th><th class="money">% of gross</th><th>Effective</th><th>Ends</th><th></th></tr></thead>
+                    <tbody>
+                    @foreach (var d in editing.Deductions)
+                    {
+                        <tr>
+                            <td><InputText @bind-Value="d.Name" /></td>
+                            <td><InputSelect @bind-Value="d.Kind">@foreach (var k in Enum.GetValues<DeductionKind>()) { <option value="@k">@Fmt.Words(k)</option> }</InputSelect></td>
+                            <td><InputSelect @bind-Value="d.Treatment">
+                                <option value="@DeductionTreatment.PreTaxSection125">Pre-tax (Sec. 125: medical/dental/vision/HSA)</option>
+                                <option value="@DeductionTreatment.PreTaxRetirement">Pre-tax retirement (traditional 401k)</option>
+                                <option value="@DeductionTreatment.PostTax">Post-tax (Roth, life, after-tax)</option>
+                            </InputSelect></td>
+                            <td><InputNumber @bind-Value="d.AmountPerCheck" step="0.01" class="narrow-money" /></td>
+                            <td><InputNumber @bind-Value="d.PercentOfGross" step="0.5" class="narrow" /></td>
+                            <td><InputDate @bind-Value="d.EffectiveDate" /></td>
+                            <td><InputDate @bind-Value="d.EndDate" /></td>
+                            <td><button class="secondary" type="button" @onclick="() => editing.Deductions.Remove(d)">✕</button></td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+                <button class="secondary" type="button" @onclick="() => editing.Deductions.Add(new DeductionElectionDto { EffectiveDate = today, Treatment = DeductionTreatment.PreTaxSection125 })">Add election</button>
+
+                <h3>W-4 / MO W-4 <span class="muted">(effective-dated; a new W-4 is a new row)</span></h3>
+                <table>
+                    <thead><tr><th>Effective</th><th>Federal status</th><th>Step 2</th><th class="money">Step 3 credits/yr</th><th class="money">4(a) other income</th><th class="money">4(b) deductions</th><th class="money">4(c) extra/check</th><th>MO status</th><th class="money">MO extra/check</th><th></th></tr></thead>
+                    <tbody>
+                    @foreach (var w in editing.Withholdings)
+                    {
+                        <tr>
+                            <td><InputDate @bind-Value="w.EffectiveDate" /></td>
+                            <td><InputSelect @bind-Value="w.FederalStatus">@foreach (var f in Enum.GetValues<FederalFilingStatus>()) { <option value="@f">@Fmt.Words(f)</option> }</InputSelect></td>
+                            <td><InputCheckbox @bind-Value="w.MultipleJobs" /></td>
+                            <td><InputNumber @bind-Value="w.DependentCredits" class="narrow-money" /></td>
+                            <td><InputNumber @bind-Value="w.OtherIncome" class="narrow-money" /></td>
+                            <td><InputNumber @bind-Value="w.Deductions" class="narrow-money" /></td>
+                            <td><InputNumber @bind-Value="w.ExtraWithholding" class="narrow-money" /></td>
+                            <td><InputSelect @bind-Value="w.MissouriStatus">@foreach (var m in Enum.GetValues<MissouriFilingStatus>()) { <option value="@m">@Fmt.Words(m)</option> }</InputSelect></td>
+                            <td><InputNumber @bind-Value="w.MissouriExtraWithholding" class="narrow-money" /></td>
+                            <td><button class="secondary" type="button" @onclick="() => editing.Withholdings.Remove(w)">✕</button></td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+                <button class="secondary" type="button" @onclick="() => editing.Withholdings.Add(new WithholdingElectionDto { EffectiveDate = today })">Add W-4 row</button>
+
                 <div class="toolbar">
                     <button type="submit">Save</button>
                     <button class="secondary" type="button" @onclick="() => editing = null">Cancel</button>
@@ -151,6 +199,15 @@ else
         {
             Id = p.Id, IncomeSourceId = p.IncomeSourceId, Frequency = p.Frequency, EffectiveDate = p.EffectiveDate, AnchorPayDate = p.AnchorPayDate,
             PayOnPriorBusinessDay = p.PayOnPriorBusinessDay, FirstPayDay = p.FirstPayDay, SecondPayDay = p.SecondPayDay,
+        }).ToList(),
+        Deductions = s.Deductions.Select(d => new DeductionElectionDto
+        {
+            Id = d.Id, Name = d.Name, Kind = d.Kind, Treatment = d.Treatment, AmountPerCheck = d.AmountPerCheck, PercentOfGross = d.PercentOfGross, EffectiveDate = d.EffectiveDate, EndDate = d.EndDate,
+        }).ToList(),
+        Withholdings = s.Withholdings.Select(w => new WithholdingElectionDto
+        {
+            Id = w.Id, EffectiveDate = w.EffectiveDate, FederalStatus = w.FederalStatus, MultipleJobs = w.MultipleJobs, DependentCredits = w.DependentCredits, OtherIncome = w.OtherIncome,
+            Deductions = w.Deductions, ExtraWithholding = w.ExtraWithholding, MissouriStatus = w.MissouriStatus, MissouriExtraWithholding = w.MissouriExtraWithholding,
         }).ToList(),
     };
 

@@ -1,6 +1,6 @@
 # ADR-0006: LAN-only access, single API key, TLS in transit, no MFA
 
-> **Status:** Accepted
+> **Status:** Accepted (account-number line amended by ADR-0008)
 > **Date:** 2026-09-26
 > **Deciders:** Kevin
 

@@ -15,6 +15,8 @@ public class Bill
     public required string Name { get; set; }
     public int? CategoryId { get; set; }
     public Category? Category { get; set; }
+    /// <summary>The biller's account / membership / policy number (ADR-0008).</summary>
+    public string? AccountNumber { get; set; }
     public BillFrequency Frequency { get; set; } = BillFrequency.Monthly;
     /// <summary>Day of month the bill is due (1–31; 31 means last day).</summary>
     public int DueDay { get; set; }

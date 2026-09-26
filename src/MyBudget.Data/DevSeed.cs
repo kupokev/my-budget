@@ -13,7 +13,7 @@ public static class DevSeed
     {
         if (await db.Accounts.AnyAsync(ct)) return;
 
-        var pnc = new Account { Name = "PNC Checking", Institution = "PNC", Type = AccountType.Checking, MinimumBalance = 2000m, LastFour = "0000" };
+        var pnc = new Account { Name = "PNC Checking", Institution = "PNC", Type = AccountType.Checking, MinimumBalance = 2000m };
         var premierSavings = new Account { Name = "Chase Premier Savings", Institution = "Chase", Type = AccountType.Savings, MinimumBalance = 500m };
         var chaseMain = new Account { Name = "Chase Main", Institution = "Chase", Type = AccountType.Checking };
         var automatedBills = new Account { Name = "Chase Automated Bills", Institution = "Chase", Type = AccountType.Checking, TransferCadence = TransferCadence.PerPaycheck };
@@ -35,6 +35,19 @@ public static class DevSeed
             [
                 new PaySchedule { Frequency = PayFrequency.SemiMonthly, EffectiveDate = new(2025, 1, 1), AnchorPayDate = new(2025, 1, 15), FirstPayDay = 15, SecondPayDay = 31 },
                 new PaySchedule { Frequency = PayFrequency.BiWeekly, EffectiveDate = new(2026, 2, 1), AnchorPayDate = new(2026, 2, 6) },
+            ],
+            // Placeholder elections: replace with the real per-check amounts from a stub.
+            Deductions =
+            [
+                new DeductionElection { Name = "Medical", Kind = DeductionKind.Medical, Treatment = DeductionTreatment.PreTaxSection125, AmountPerCheck = 160m, EffectiveDate = new(2025, 1, 1) },
+                new DeductionElection { Name = "Dental", Kind = DeductionKind.Dental, Treatment = DeductionTreatment.PreTaxSection125, AmountPerCheck = 18m, EffectiveDate = new(2025, 1, 1) },
+                new DeductionElection { Name = "Vision", Kind = DeductionKind.Vision, Treatment = DeductionTreatment.PreTaxSection125, AmountPerCheck = 6m, EffectiveDate = new(2025, 1, 1) },
+                new DeductionElection { Name = "Life / disability", Kind = DeductionKind.Life, Treatment = DeductionTreatment.PostTax, AmountPerCheck = 12m, EffectiveDate = new(2025, 1, 1) },
+                new DeductionElection { Name = "401(k) 6%", Kind = DeductionKind.Retirement401k, Treatment = DeductionTreatment.PreTaxRetirement, PercentOfGross = 0.06m, EffectiveDate = new(2025, 1, 1) },
+            ],
+            Withholdings =
+            [
+                new WithholdingElection { EffectiveDate = new(2025, 1, 1), FederalStatus = FederalFilingStatus.SingleOrMarriedFilingSeparately, MissouriStatus = MissouriFilingStatus.Single },
             ],
         };
         db.IncomeSources.AddRange(employer,
@@ -71,6 +84,24 @@ public static class DevSeed
             new Bill { Name = "Car insurance", Category = insurance, Frequency = BillFrequency.SemiAnnual, DueDay = 15, AnchorDueDate = new(2026, 3, 15), ProjectedAmount = 612m, PaymentMethod = PaymentMethodKind.Card, PaymentCard = hiltonSurpass, FundingAccount = premierSavings },
             new Bill { Name = "AAA", Category = memberships, Frequency = BillFrequency.Annual, DueDay = 1, AnchorDueDate = new(2026, 5, 1), ProjectedAmount = 120m, PaymentMethod = PaymentMethodKind.Card, PaymentCard = chaseIhg, FundingAccount = premierSavings },
             new Bill { Name = "Costco", Category = memberships, Frequency = BillFrequency.Annual, DueDay = 1, AnchorDueDate = new(2026, 11, 1), ProjectedAmount = 65m, PaymentMethod = PaymentMethodKind.Card, PaymentCard = chaseIhg, FundingAccount = premierSavings });
+
+        db.HsaYears.Add(new HsaYear
+        {
+            Year = 2026,
+            Months = Enumerable.Range(1, 12).Select(m => new HsaMonth { Month = m, Tier = m == 2 ? HsaTier.NotEligible : HsaTier.Family }).ToList(),
+            Contributions =
+            [
+                new HsaContribution { Date = new(2026, 1, 15), Amount = 1_288m, Source = HsaContributionSource.Employer, Account = inspiraHsa, Notes = "Inspira employer contribution" },
+                new HsaContribution { Date = new(2026, 8, 31), Amount = 2_805m, Source = HsaContributionSource.Direct, Account = fidelityHsa, Notes = "Fidelity direct through August" },
+            ],
+        });
+
+        db.Loans.Add(new Loan
+        {
+            Name = "Mortgage", Kind = LoanKind.Mortgage, Lender = "Placeholder Bank", OriginalPrincipal = 300_000m, AnnualRate = 0.065m, TermMonths = 360,
+            StartDate = new(2022, 6, 1), ScheduledPayment = 1_896.20m,
+            Balances = [new LoanBalance { AsOf = new(2026, 9, 1), Balance = 283_000m }],
+        });
 
         db.AccountBalances.AddRange(
             new AccountBalance { Account = pnc, AsOf = new(2026, 9, 1), Balance = 2_450m },

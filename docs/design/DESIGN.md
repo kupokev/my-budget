@@ -7,6 +7,7 @@ works. Add a row and a DD when a new subsystem gets its own design.
 | --- | --- | --- |
 | [DD-0001](./DD-0001-architecture-overview.md) | Architecture overview | Active |
 | [DD-0002](./DD-0002-core-ledger.md) | Core ledger: income, accounts, bills, cards, transfer needs, home view (Phase 1) | Active |
+| [DD-0003](./DD-0003-calculators.md) | Calculators: paycheck estimator, HSA planner, amortization, reference tables (Phase 2) | Active |
 
 ## Decision records
 
@@ -19,5 +20,6 @@ works. Add a row and a DD when a new subsystem gets its own design.
 | [ADR-0005](./decisions/ADR-0005-no-docker-systemd-and-existing-postgres.md) | No Docker; systemd + PostgreSQL in prod, in-memory in dev |
 | [ADR-0006](./decisions/ADR-0006-lan-only-api-key-tls-no-mfa.md) | LAN-only, single API key, TLS, no MFA |
 | [ADR-0007](./decisions/ADR-0007-no-ui-component-framework.md) | No UI component framework; hand CSS + QuickGrid |
+| [ADR-0008](./decisions/ADR-0008-store-full-account-numbers.md) | Store full account/member/loan numbers on bills, loans, cards, accounts |
 
 Files are named `DD-NNNN-name.md` and `ADR-NNNN-name.md` so the number in prose maps straight to a file.

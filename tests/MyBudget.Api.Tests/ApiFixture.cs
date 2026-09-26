@@ -13,7 +13,11 @@ public sealed class ApiFixture : IDisposable
     public static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { Converters = { new JsonStringEnumConverter() } };
 
     private readonly WebApplicationFactory<Program> _factory = new WebApplicationFactory<Program>()
-        .WithWebHostBuilder(b => b.UseEnvironment("Development"));
+        .WithWebHostBuilder(b =>
+        {
+            b.UseEnvironment("Development");
+            b.UseSetting("Database:Name", "test-" + Guid.NewGuid());
+        });
 
     public HttpClient Client { get; }
     public HttpClient Anonymous { get; }
@@ -27,11 +31,13 @@ public sealed class ApiFixture : IDisposable
 
     public async Task<T> Get<T>(string url) => (await Client.GetFromJsonAsync<T>(url, Json))!;
 
-    public async Task<T> Post<T>(string url, T body)
+    public Task<T> Post<T>(string url, T body) => Post<T, T>(url, body);
+
+    public async Task<TOut> Post<TIn, TOut>(string url, TIn body)
     {
         var r = await Client.PostAsJsonAsync(url, body, Json);
         r.EnsureSuccessStatusCode();
-        return (await r.Content.ReadFromJsonAsync<T>(Json))!;
+        return (await r.Content.ReadFromJsonAsync<TOut>(Json))!;
     }
 
     public async Task<T> Put<T>(string url, T body)

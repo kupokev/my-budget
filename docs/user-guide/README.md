@@ -27,3 +27,28 @@ IHG/Hilton status) and focus on *this app's* specific workflow for each.
 - **Cards:** the summary shows which bills sit on each card, their monthly total, the latest
   balance and utilization. "Balance" records a statement or month-end balance.
 - **Home:** bills due in the next 14 days, the next pay date, and per-account transfer needs.
+
+## Phase 2: calculators
+
+- **Income → benefit elections and W-4.** Open your W-2 employer and add one row per deduction
+  from a stub (medical, dental, vision, 401(k) as a percent, and so on) with its tax treatment.
+  Section 125 items reduce FICA and income tax; a traditional 401(k) reduces income tax only; Roth
+  and after-tax items come out of net. Add a W-4 row with your filing status and any Step 2/3/4
+  entries. Everything is effective-dated, so a change at open enrollment is a new row, not an edit.
+- **Paycheck.** Pick the source and a pay date. *Estimate* shows the check and the year side by side;
+  hover any line for its formula and expand "How this was calculated" for the steps. *What-if*
+  changes salary, 401(k) percent, W-4 entries or a benefit amount and shows the check and year-end
+  refund/owed next to today's. *Year* lists every check. *Bonus* estimates a supplemental payment
+  flat (22%) or by the aggregate method. *Actual stubs* is where you type a real stub's lines and
+  compare; the goal is net within $5, and any gap is listed line by line.
+- **HSA.** Click months to cycle not eligible → self-only → family. The plan on the right shows the
+  prorated limit with its formula, room after employer/payroll/direct contributions, and the
+  monthly and per-paycheck pace to hit the limit (or your own target and date) by year end.
+- **Loans.** Add a loan with rate, term and start date; leave the payment blank to compute it.
+  Record a balance from each statement. *Projection* runs from the latest balance: payoff date,
+  interest remaining, what extra principal saves, and what the original schedule says the balance
+  should be now.
+- **Tax tables.** Everything the paycheck and HSA math depends on, by year. Each January copy the
+  previous year forward, update the figures from Pub 15-T, the SSA wage base, the Missouri
+  withholding formula and the IRS limit notices, then tick Verified. Until then the Paycheck page
+  shows an "unverified" warning.

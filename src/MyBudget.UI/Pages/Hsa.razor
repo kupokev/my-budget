@@ -1,0 +1,142 @@
+@page "/hsa"
+@inject ApiClient Api
+@using MyBudget.Domain
+
+<h1>HSA</h1>
+<ErrorBanner @bind-Message="error" />
+
+@if (hsa is null || plan is null || accounts is null)
+{
+    <p class="muted">Loading…</p>
+}
+else
+{
+    <div class="toolbar">
+        <span class="year-nav">
+            <button class="secondary" type="button" @onclick="() => ChangeYear(year - 1)">‹</button><strong>@year</strong><button class="secondary" type="button" @onclick="() => ChangeYear(year + 1)">›</button>
+        </span>
+        <span class="muted">Limits: self-only @Fmt.Money(plan.LimitSelfOnly), family @Fmt.Money(plan.LimitFamily), catch-up @Fmt.Money(plan.LimitCatchUp) (@plan.LimitsSource)</span>
+    </div>
+
+    <div class="row">
+        <section class="panel grow">
+            <h2>Eligibility by month</h2>
+            <p class="muted">Click a month to cycle: not eligible → self-only → family. Coverage on the first of the month is what counts.</p>
+            <div class="hsa-months">
+                @for (var m = 0; m < 12; m++)
+                {
+                    var i = m;
+                    <button type="button" class="hsa-month @hsa.Months[i].ToString().ToLowerInvariant()" @onclick="() => Cycle(i)">
+                        <span>@Fmt.Month(new DateOnly(year, i + 1, 1))</span>
+                        <small>@(hsa.Months[i] switch { HsaTier.Family => "Family", HsaTier.SelfOnly => "Self-only", _ => "—" })</small>
+                    </button>
+                }
+            </div>
+            <div class="row">
+                <div class="field"><label>Target amount <span class="muted">(blank = the limit)</span></label><input type="number" step="0.01" @bind="hsa.TargetAmount" /></div>
+                <div class="field"><label>Reach it by <span class="muted">(blank = Dec 31)</span></label><input type="date" @bind="hsa.TargetDate" /></div>
+                <div class="field"><label class="inline"><input type="checkbox" @bind="hsa.CatchUpEligible" /> 55+ catch-up</label></div>
+                <div class="field"><label>Limit override: self-only</label><input type="number" step="0.01" @bind="hsa.LimitOverrideSelfOnly" /></div>
+                <div class="field"><label>Limit override: family</label><input type="number" step="0.01" @bind="hsa.LimitOverrideFamily" /></div>
+            </div>
+            <div class="field"><label>Notes</label><input type="text" @bind="hsa.Notes" /></div>
+            <button type="button" @onclick="SaveYear">Save year</button>
+        </section>
+
+        <section class="panel">
+            <h2>Plan as of @Fmt.Date(plan.AsOf)</h2>
+            <table class="estimate">
+                <tbody>
+                    <tr title="@plan.LimitFormula"><td>Annual limit (@plan.EligibleMonths eligible months)</td><td class="money"><Money Value="plan.AnnualLimit" /></td></tr>
+                    <tr><td class="indent">Employer</td><td class="money">−@Fmt.Money(plan.Employer)</td></tr>
+                    <tr><td class="indent">Payroll</td><td class="money">−@Fmt.Money(plan.Payroll)</td></tr>
+                    <tr><td class="indent">Direct</td><td class="money">−@Fmt.Money(plan.Direct)</td></tr>
+                    <tr class="total"><td>Room</td><td class="money"><Money Value="plan.Room" Signed="true" /></td></tr>
+                    <tr class="sub"><td>Target (@plan.TargetSource)</td><td class="money"><Money Value="plan.Target" /></td></tr>
+                    <tr><td>Remaining to target</td><td class="money"><Money Value="plan.RemainingToTarget" /></td></tr>
+                    <tr class="total"><td>Per month × @plan.MonthsLeft</td><td class="money"><Money Value="plan.RecommendedMonthly" /></td></tr>
+                    <tr class="total"><td>Per paycheck × @plan.PaychecksLeft</td><td class="money"><Money Value="plan.RecommendedPerPaycheck" /></td></tr>
+                </tbody>
+            </table>
+            @if (plan.OverContributed) { <p class="neg">Over-contributed by @Fmt.Money(plan.OverBy).</p> }
+            <p class="muted">@plan.PaychecksSource</p>
+            <Steps Items="plan.Steps" />
+        </section>
+    </div>
+
+    <section class="panel">
+        <h2>Contributions</h2>
+        <div class="row">
+            <div class="field"><label>Date</label><input type="date" @bind="newContribution.Date" /></div>
+            <div class="field"><label>Amount</label><input type="number" step="0.01" @bind="newContribution.Amount" /></div>
+            <div class="field"><label>Source</label><select @bind="newContribution.Source">@foreach (var s in Enum.GetValues<HsaContributionSource>()) { <option value="@s">@s</option> }</select></div>
+            <div class="field"><label>Account</label><select @bind="newContribution.AccountId"><option value="">—</option>@foreach (var a in accounts.Where(a => a.Type == AccountType.Hsa)) { <option value="@a.Id">@a.Name</option> }</select></div>
+            <div class="field grow"><label>Notes</label><input type="text" @bind="newContribution.Notes" /></div>
+            <div class="field"><label>&nbsp;</label><button type="button" @onclick="AddContribution">Add</button></div>
+        </div>
+        <table>
+            <thead><tr><th>Date</th><th>Source</th><th>Account</th><th class="money">Amount</th><th>Notes</th><th></th></tr></thead>
+            <tbody>
+            @foreach (var c in hsa.Contributions)
+            {
+                <tr><td>@Fmt.Date(c.Date)</td><td>@c.Source</td><td>@accounts.FirstOrDefault(a => a.Id == c.AccountId)?.Name</td><td><Money Value="c.Amount" /></td><td>@c.Notes</td>
+                    <td><button class="secondary" type="button" @onclick="() => RemoveContribution(c)">✕</button></td></tr>
+            }
+            </tbody>
+        </table>
+    </section>
+}
+
+@code {
+    private int year = DateTime.Today.Year;
+    private HsaYearDto? hsa;
+    private HsaPlanDto? plan;
+    private List<AccountDto>? accounts;
+    private HsaContributionDto newContribution = new() { Date = DateOnly.FromDateTime(DateTime.Today), Source = HsaContributionSource.Direct };
+    private string? error;
+
+    protected override Task OnInitializedAsync() => Load();
+
+    private async Task Load()
+    {
+        try
+        {
+            accounts ??= await Api.GetAccountsAsync();
+            hsa = await Api.GetHsaYearAsync(year);
+            plan = await Api.GetHsaPlanAsync(year);
+        }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task ChangeYear(int y) { year = y; await Load(); }
+
+    private async Task Cycle(int i)
+    {
+        hsa!.Months[i] = hsa.Months[i] switch { HsaTier.NotEligible => HsaTier.SelfOnly, HsaTier.SelfOnly => HsaTier.Family, _ => HsaTier.NotEligible };
+        await SaveYear();
+    }
+
+    private async Task SaveYear()
+    {
+        try { hsa = await Api.SaveHsaYearAsync(hsa!); plan = await Api.GetHsaPlanAsync(year); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task AddContribution()
+    {
+        if (newContribution.Amount <= 0) return;
+        try
+        {
+            hsa = await Api.AddHsaContributionAsync(year, newContribution);
+            newContribution = new() { Date = newContribution.Date, Source = newContribution.Source, AccountId = newContribution.AccountId };
+            plan = await Api.GetHsaPlanAsync(year);
+        }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task RemoveContribution(HsaContributionDto c)
+    {
+        try { await Api.DeleteHsaContributionAsync(year, c.Id); await Load(); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+}

@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>Pure loan math: payment, amortization schedule, payoff projection from a current balance. No UI or DB.</Description>
+  </PropertyGroup>
+</Project>

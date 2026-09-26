@@ -47,6 +47,38 @@ public sealed class ApiClient(HttpClient http)
     public Task DeleteIncomeSourceAsync(int id) => Delete($"api/income-sources/{id}");
     public Task<PayCalendarDto> GetPayCalendarAsync(int year) => Get<PayCalendarDto>($"api/income-sources/pay-calendar?year={year}");
 
+    // Paycheck (Phase 2)
+    public Task<PaycheckEstimateDto> GetPaycheckEstimateAsync(int sourceId, DateOnly date) => Get<PaycheckEstimateDto>($"api/paycheck/estimate?sourceId={sourceId}&date={date:yyyy-MM-dd}");
+    public Task<YearEstimateDto> GetPaycheckYearAsync(int sourceId, int year) => Get<YearEstimateDto>($"api/paycheck/year?sourceId={sourceId}&year={year}");
+    public Task<WhatIfResponse> WhatIfAsync(WhatIfRequest req) => Post<WhatIfRequest, WhatIfResponse>("api/paycheck/what-if", req);
+    public Task<PaycheckEstimateDto> SupplementalAsync(SupplementalRequest req) => Post<SupplementalRequest, PaycheckEstimateDto>("api/paycheck/supplemental", req);
+    public Task<List<PaycheckDto>> GetPaychecksAsync(int? sourceId = null, int? year = null) => Get<List<PaycheckDto>>($"api/paychecks?sourceId={sourceId}&year={year}");
+    public Task<PaycheckDto> SavePaycheckAsync(PaycheckDto p) => p.Id == 0 ? Post("api/paychecks", p) : Put($"api/paychecks/{p.Id}", p);
+    public Task DeletePaycheckAsync(int id) => Delete($"api/paychecks/{id}");
+    public Task<PaycheckCompareDto> ComparePaycheckAsync(int id) => Get<PaycheckCompareDto>($"api/paychecks/{id}/compare");
+
+    // Reference tables
+    public Task<List<ReferenceYearSummaryDto>> GetReferenceYearsAsync() => Get<List<ReferenceYearSummaryDto>>("api/reference-years");
+    public Task<TaxYearDto> GetTaxYearAsync(int year) => Get<TaxYearDto>($"api/tax-tables/{year}");
+    public Task<TaxYearDto> SaveTaxYearAsync(TaxYearDto t) => Put($"api/tax-tables/{t.Year}", t);
+    public Task<TaxYearDto> CopyTaxYearAsync(int year, int fromYear) => Post<object, TaxYearDto>($"api/tax-tables/{year}/copy-from/{fromYear}", new { });
+    public Task<ContributionLimitsDto> GetLimitsAsync(int year) => Get<ContributionLimitsDto>($"api/limits/{year}");
+    public Task<ContributionLimitsDto> SaveLimitsAsync(ContributionLimitsDto l) => Put($"api/limits/{l.Year}", l);
+
+    // HSA
+    public Task<HsaYearDto> GetHsaYearAsync(int year) => Get<HsaYearDto>($"api/hsa/{year}");
+    public Task<HsaYearDto> SaveHsaYearAsync(HsaYearDto y) => Put($"api/hsa/{y.Year}", y);
+    public Task<HsaYearDto> AddHsaContributionAsync(int year, HsaContributionDto c) => Post<HsaContributionDto, HsaYearDto>($"api/hsa/{year}/contributions", c);
+    public Task DeleteHsaContributionAsync(int year, int id) => Delete($"api/hsa/{year}/contributions/{id}");
+    public Task<HsaPlanDto> GetHsaPlanAsync(int year) => Get<HsaPlanDto>($"api/hsa/{year}/plan");
+
+    // Loans
+    public Task<List<LoanDto>> GetLoansAsync() => Get<List<LoanDto>>("api/loans");
+    public Task<LoanDto> SaveLoanAsync(LoanDto l) => l.Id == 0 ? Post("api/loans", l) : Put($"api/loans/{l.Id}", l);
+    public Task DeleteLoanAsync(int id) => Delete($"api/loans/{id}");
+    public Task<LoanBalanceDto> SaveLoanBalanceAsync(int id, LoanBalanceDto b) => Post($"api/loans/{id}/balances", b);
+    public Task<LoanProjectionDto> GetLoanProjectionAsync(int id, decimal? extra = null) => Get<LoanProjectionDto>(extra is { } e ? $"api/loans/{id}/projection?extra={e}" : $"api/loans/{id}/projection");
+
     // Views
     public Task<TransferNeedsDto> GetTransferNeedsAsync(DateOnly? asOf = null)
         => Get<TransferNeedsDto>(asOf is { } d ? $"api/transfer-needs?asOf={d:yyyy-MM-dd}" : "api/transfer-needs");
@@ -55,11 +87,13 @@ public sealed class ApiClient(HttpClient http)
     private async Task<T> Get<T>(string url)
         => await http.GetFromJsonAsync<T>(url, Json) ?? throw new InvalidOperationException($"Empty response from {url}");
 
-    private async Task<T> Post<T>(string url, T body)
+    private Task<T> Post<T>(string url, T body) => Post<T, T>(url, body);
+
+    private async Task<TOut> Post<TIn, TOut>(string url, TIn body)
     {
         var r = await http.PostAsJsonAsync(url, body, Json);
         await ThrowIfFailed(r);
-        return (await r.Content.ReadFromJsonAsync<T>(Json))!;
+        return (await r.Content.ReadFromJsonAsync<TOut>(Json))!;
     }
 
     private async Task<T> Put<T>(string url, T body)

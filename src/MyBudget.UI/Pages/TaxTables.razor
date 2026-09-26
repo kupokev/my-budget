@@ -1,0 +1,163 @@
+@page "/tax-tables"
+@inject ApiClient Api
+@using MyBudget.Domain
+
+<h1>Tax tables</h1>
+<ErrorBanner @bind-Message="error" />
+<p class="muted">Year-keyed reference values the calculators use. Confirm them against the published tables each January and tick Verified. Rates are percents.</p>
+
+@if (years is null)
+{
+    <p class="muted">Loading…</p>
+}
+else
+{
+    <div class="toolbar">
+        @foreach (var y in years) { <button type="button" class="@(y.Year == year ? "" : "secondary")" @onclick="() => Select(y.Year)">@y.Year @(y.TaxVerified ? "✓" : "")</button> }
+        <label class="inline">New year <input class="narrow" type="number" @bind="newYear" /></label>
+        <button class="secondary" type="button" @onclick="CopyYear">Copy @year → @newYear</button>
+    </div>
+
+    @if (tax is not null)
+    {
+        <section class="panel">
+            <h2>@tax.Year federal</h2>
+            <div class="row">
+                <div class="field"><label>Std deduction: single / MFS</label><input type="number" step="1" @bind="tax.FederalStandardDeductionSingle" /></div>
+                <div class="field"><label>Std deduction: married jointly</label><input type="number" step="1" @bind="tax.FederalStandardDeductionMarriedJointly" /></div>
+                <div class="field"><label>Std deduction: head of household</label><input type="number" step="1" @bind="tax.FederalStandardDeductionHeadOfHousehold" /></div>
+                <div class="field"><label>Social Security %</label><input type="number" step="0.01" @bind="tax.SocialSecurityRatePercent" /></div>
+                <div class="field"><label>SS wage base</label><input type="number" step="1" @bind="tax.SocialSecurityWageBase" /></div>
+                <div class="field"><label>Medicare %</label><input type="number" step="0.01" @bind="tax.MedicareRatePercent" /></div>
+                <div class="field"><label>Additional Medicare %</label><input type="number" step="0.01" @bind="tax.AdditionalMedicareRatePercent" /></div>
+                <div class="field"><label>Additional Medicare over</label><input type="number" step="1" @bind="tax.AdditionalMedicareThreshold" /></div>
+                <div class="field"><label>Supplemental %</label><input type="number" step="0.01" @bind="tax.SupplementalRatePercent" /></div>
+                <div class="field"><label>Supplemental % over threshold</label><input type="number" step="0.01" @bind="tax.SupplementalHighRatePercent" /></div>
+                <div class="field"><label>Supplemental threshold</label><input type="number" step="1" @bind="tax.SupplementalHighThreshold" /></div>
+            </div>
+            <div class="row">
+                @foreach (var status in Enum.GetValues<FederalFilingStatus>())
+                {
+                    <div>
+                        <h3>@Fmt.Words(status)</h3>
+                        <table class="compact">
+                            <thead><tr><th>Over</th><th>Rate %</th><th></th></tr></thead>
+                            <tbody>
+                            @foreach (var b in tax.Brackets.Where(b => b.Jurisdiction == Jurisdiction.Federal && b.FilingStatus == status).OrderBy(b => b.Over))
+                            {
+                                <tr><td><input type="number" step="1" @bind="b.Over" /></td><td><input type="number" step="0.1" class="narrow" @bind="b.RatePercent" /></td><td><button class="secondary" type="button" @onclick="() => tax.Brackets.Remove(b)">✕</button></td></tr>
+                            }
+                            </tbody>
+                        </table>
+                        <button class="secondary" type="button" @onclick="() => tax.Brackets.Add(new TaxBracketDto { Jurisdiction = Jurisdiction.Federal, FilingStatus = status })">Add bracket</button>
+                    </div>
+                }
+            </div>
+        </section>
+
+        <section class="panel">
+            <h2>@tax.Year Missouri</h2>
+            <div class="row">
+                <div class="field"><label>Std deduction: single</label><input type="number" step="1" @bind="tax.MissouriStandardDeductionSingle" /></div>
+                <div class="field"><label>Married, spouse works</label><input type="number" step="1" @bind="tax.MissouriStandardDeductionMarriedSpouseWorks" /></div>
+                <div class="field"><label>Married, one income</label><input type="number" step="1" @bind="tax.MissouriStandardDeductionMarriedOneIncome" /></div>
+                <div class="field"><label>Head of household</label><input type="number" step="1" @bind="tax.MissouriStandardDeductionHeadOfHousehold" /></div>
+                <div class="field"><label>Supplemental %</label><input type="number" step="0.01" @bind="tax.MissouriSupplementalRatePercent" /></div>
+            </div>
+            <table class="compact">
+                <thead><tr><th>Over</th><th>Rate %</th><th></th></tr></thead>
+                <tbody>
+                @foreach (var b in tax.Brackets.Where(b => b.Jurisdiction == Jurisdiction.Missouri).OrderBy(b => b.Over))
+                {
+                    <tr><td><input type="number" step="1" @bind="b.Over" /></td><td><input type="number" step="0.1" class="narrow" @bind="b.RatePercent" /></td><td><button class="secondary" type="button" @onclick="() => tax.Brackets.Remove(b)">✕</button></td></tr>
+                }
+                </tbody>
+            </table>
+            <button class="secondary" type="button" @onclick="() => tax.Brackets.Add(new TaxBracketDto { Jurisdiction = Jurisdiction.Missouri })">Add bracket</button>
+        </section>
+
+        <section class="panel">
+            <div class="row">
+                <div class="field grow"><label>Source</label><input type="text" @bind="tax.Source" /></div>
+                <div class="field grow"><label>Notes</label><input type="text" @bind="tax.Notes" /></div>
+                <div class="field"><label class="inline"><input type="checkbox" @bind="tax.Verified" /> Verified against published tables</label></div>
+            </div>
+            <button type="button" @onclick="SaveTax">Save @tax.Year tax tables</button>
+        </section>
+    }
+
+    @if (limits is not null)
+    {
+        <section class="panel">
+            <h2>@limits.Year contribution limits</h2>
+            <div class="row">
+                <div class="field"><label>HSA self-only</label><input type="number" step="1" @bind="limits.HsaSelfOnly" /></div>
+                <div class="field"><label>HSA family</label><input type="number" step="1" @bind="limits.HsaFamily" /></div>
+                <div class="field"><label>HSA catch-up (55+)</label><input type="number" step="1" @bind="limits.HsaCatchUp" /></div>
+                <div class="field"><label>401(k) employee</label><input type="number" step="1" @bind="limits.Retirement401kEmployee" /></div>
+                <div class="field"><label>401(k) catch-up</label><input type="number" step="1" @bind="limits.Retirement401kCatchUp" /></div>
+                <div class="field"><label>401(k) total (415c)</label><input type="number" step="1" @bind="limits.Retirement401kTotal" /></div>
+                <div class="field"><label>IRA</label><input type="number" step="1" @bind="limits.Ira" /></div>
+                <div class="field"><label>IRA catch-up</label><input type="number" step="1" @bind="limits.IraCatchUp" /></div>
+            </div>
+            <div class="row">
+                <div class="field grow"><label>Source</label><input type="text" @bind="limits.Source" /></div>
+                <div class="field"><label class="inline"><input type="checkbox" @bind="limits.Verified" /> Verified</label></div>
+            </div>
+            <button type="button" @onclick="SaveLimits">Save @limits.Year limits</button>
+        </section>
+    }
+    else
+    {
+        <section class="panel"><p>No @year contribution limits yet. <button class="secondary" type="button" @onclick="StartLimits">Enter them</button></p></section>
+    }
+}
+
+@code {
+    private List<ReferenceYearSummaryDto>? years;
+    private int year = DateTime.Today.Year;
+    private int newYear = DateTime.Today.Year + 1;
+    private TaxYearDto? tax;
+    private ContributionLimitsDto? limits;
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            years = await Api.GetReferenceYearsAsync();
+            if (years.Count > 0 && years.All(y => y.Year != year)) year = years[0].Year;
+            await Select(year);
+        }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task Select(int y)
+    {
+        year = y; tax = null; limits = null;
+        try { tax = await Api.GetTaxYearAsync(y); } catch (ApiException ex) when (ex.Status == 404) { }
+        catch (Exception ex) { error = ex.Message; }
+        try { limits = await Api.GetLimitsAsync(y); } catch (ApiException ex) when (ex.Status == 404) { }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task SaveTax()
+    {
+        try { tax = await Api.SaveTaxYearAsync(tax!); years = await Api.GetReferenceYearsAsync(); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task SaveLimits()
+    {
+        try { limits = await Api.SaveLimitsAsync(limits!); years = await Api.GetReferenceYearsAsync(); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private void StartLimits() => limits = new() { Year = year };
+
+    private async Task CopyYear()
+    {
+        try { await Api.CopyTaxYearAsync(newYear, year); years = await Api.GetReferenceYearsAsync(); await Select(newYear); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+}

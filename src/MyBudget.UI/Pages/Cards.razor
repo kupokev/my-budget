@@ -18,7 +18,7 @@ else
         @foreach (var s in summary)
         {
             <tr>
-                <td>@s.CardName</td>
+                <td>@s.CardName <MaskedNumber Value="@cards.First(c => c.Id == s.CardId).AccountNumber" /></td>
                 <td class="muted">@(s.Bills.Count == 0 ? "—" : string.Join(", ", s.Bills))</td>
                 <td><Money Value="s.MonthlyBillSpend" /></td>
                 <td>@Fmt.Money(s.LatestBalance)</td>
@@ -59,7 +59,7 @@ else
                     <div class="field"><label>Name</label><InputText @bind-Value="editing.Name" /><ValidationMessage For="() => editing.Name" /></div>
                     <div class="field"><label>Issuer</label><InputText @bind-Value="editing.Issuer" /></div>
                     <div class="field"><label>Network</label><InputText @bind-Value="editing.Network" /></div>
-                    <div class="field"><label>Last four</label><InputText @bind-Value="editing.LastFour" maxlength="4" /></div>
+                    <div class="field"><label>Card number</label><MaskedInput @bind-Value="editing.AccountNumber" /></div>
                 </div>
                 <div class="row">
                     <div class="field"><label>APR %</label><InputNumber @bind-Value="editing.Apr" step="0.01" /></div>
@@ -116,7 +116,7 @@ else
         balanceFor = null;
         editing = new()
         {
-            Id = c.Id, Name = c.Name, Issuer = c.Issuer, Network = c.Network, LastFour = c.LastFour, Apr = c.Apr, PromoApr = c.PromoApr,
+            Id = c.Id, Name = c.Name, Issuer = c.Issuer, Network = c.Network, AccountNumber = c.AccountNumber, Apr = c.Apr, PromoApr = c.PromoApr,
             PromoAprExpires = c.PromoAprExpires, StatementDay = c.StatementDay, DueDay = c.DueDay, CreditLimit = c.CreditLimit,
             AnnualFee = c.AnnualFee, AnnualFeeMonth = c.AnnualFeeMonth, PayingAccountId = c.PayingAccountId, Notes = c.Notes, IsActive = c.IsActive,
         };

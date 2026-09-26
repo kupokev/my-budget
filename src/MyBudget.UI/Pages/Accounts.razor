@@ -21,7 +21,7 @@ else
         @foreach (var a in accounts.Where(a => showInactive || a.IsActive))
         {
             <tr class="@(a.IsActive ? "" : "muted")">
-                <td>@a.Name @(a.IsRainyDayFund ? "☂" : "")</td>
+                <td>@a.Name @(a.IsRainyDayFund ? "☂" : "") <MaskedNumber Value="@a.AccountNumber" /></td>
                 <td>@Fmt.Words(a.Type)</td>
                 <td>@a.Institution</td>
                 <td><Money Value="a.MinimumBalance" /></td>
@@ -49,7 +49,7 @@ else
                     <div class="field"><label>Type</label><InputSelect @bind-Value="editing.Type">
                         @foreach (var t in Enum.GetValues<MyBudget.Domain.AccountType>()) { <option value="@t">@Fmt.Words(t)</option> }
                     </InputSelect></div>
-                    <div class="field"><label>Last four</label><InputText @bind-Value="editing.LastFour" maxlength="4" /></div>
+                    <div class="field"><label>Account number</label><MaskedInput @bind-Value="editing.AccountNumber" /></div>
                 </div>
                 <div class="row">
                     <div class="field"><label>Minimum balance</label><InputNumber @bind-Value="editing.MinimumBalance" step="0.01" /></div>
@@ -215,7 +215,7 @@ else
 
     private static AccountDto Clone(AccountDto a) => new()
     {
-        Id = a.Id, Name = a.Name, Institution = a.Institution, Type = a.Type, LastFour = a.LastFour, MinimumBalance = a.MinimumBalance,
+        Id = a.Id, Name = a.Name, Institution = a.Institution, Type = a.Type, AccountNumber = a.AccountNumber, MinimumBalance = a.MinimumBalance,
         TransferCadence = a.TransferCadence, IsRainyDayFund = a.IsRainyDayFund, Notes = a.Notes, IsActive = a.IsActive,
     };
 }

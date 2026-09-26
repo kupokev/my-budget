@@ -1,0 +1,342 @@
+@page "/paycheck"
+@inject ApiClient Api
+@using MyBudget.Domain
+
+<h1>Paycheck</h1>
+<ErrorBanner @bind-Message="error" />
+
+@if (sources is null)
+{
+    <p class="muted">Loading…</p>
+}
+else if (sources.Count == 0)
+{
+    <p>No W-2 income source yet. Add one under Income with a salary, a pay schedule, deductions, and a W-4.</p>
+}
+else
+{
+    <div class="toolbar">
+        <label class="inline">Source <select @onchange="OnSourceChanged">
+            @foreach (var s in sources) { <option value="@s.Id" selected="@(s.Id == sourceId)">@s.Name</option> }
+        </select></label>
+        <label class="inline">Pay date <input type="date" value="@date.ToString("yyyy-MM-dd")" @onchange="OnDateChanged" /></label>
+        <span class="tabs">
+            @foreach (var t in new[] { "Estimate", "What-if", "Year", "Bonus", "Actual stubs" })
+            {
+                <button type="button" class="@(tab == t ? "" : "secondary")" @onclick="() => SwitchTab(t)">@t</button>
+            }
+        </span>
+    </div>
+
+    @if (tab == "Estimate")
+    {
+        @if (estimate is null) { <p class="muted">Calculating…</p> }
+        else
+        {
+            <div class="row">
+                <section class="panel">
+                    <h2>@Fmt.Date(estimate.PayDate) · @estimate.IncomeSource</h2>
+                    <p class="muted">@Fmt.Money(estimate.AnnualSalary) ÷ @estimate.PeriodsPerYear checks · W-4: @estimate.W4Summary · MO W-4: @estimate.MoW4Summary · @estimate.TaxYear tables@(estimate.TaxYearVerified ? "" : " (unverified)")</p>
+                    <EstimateTable E="estimate" />
+                    <Warnings Items="estimate.Warnings" />
+                    <Steps Items="estimate.Steps" />
+                </section>
+                <section class="panel">
+                    <h2>Per year</h2>
+                    @if (yearEst is null) { <p class="muted">…</p> }
+                    else
+                    {
+                        <table class="estimate">
+                            <tbody>
+                                <tr><td>Checks</td><td class="money">@yearEst.Checks.Count</td></tr>
+                                <tr class="total"><td>Gross</td><td class="money"><Money Value="yearEst.Gross" /></td></tr>
+                                <tr><td class="indent">Pre-tax deductions</td><td class="money">−@Fmt.Money(yearEst.PreTax)</td></tr>
+                                <tr><td class="indent">Federal income tax</td><td class="money">−@Fmt.Money(yearEst.Federal)</td></tr>
+                                <tr><td class="indent">Social Security</td><td class="money">−@Fmt.Money(yearEst.SocialSecurity)</td></tr>
+                                <tr><td class="indent">Medicare</td><td class="money">−@Fmt.Money(yearEst.Medicare)</td></tr>
+                                <tr><td class="indent">Missouri</td><td class="money">−@Fmt.Money(yearEst.Missouri)</td></tr>
+                                <tr><td class="indent">Post-tax deductions</td><td class="money">−@Fmt.Money(yearEst.PostTax)</td></tr>
+                                <tr class="total"><td>Net</td><td class="money"><Money Value="yearEst.Net" /></td></tr>
+                                <tr class="sub" title="@yearEst.FederalYearEndFormula"><td>Federal year-end</td><td class="money"><Money Value="yearEst.FederalRefundOrOwed" Signed="true" /> <span class="muted">@(yearEst.FederalRefundOrOwed >= 0 ? "refund" : "owed")</span></td></tr>
+                            </tbody>
+                        </table>
+                        <p class="muted">Liability @Fmt.Money(yearEst.FederalLiability) vs withheld @Fmt.Money(yearEst.FederalWithheld). Hover the row for the formula.</p>
+                    }
+                </section>
+            </div>
+        }
+    }
+    else if (tab == "What-if")
+    {
+        <section class="panel">
+            <h2>Change something, see the check and the year</h2>
+            <p class="muted">Blank means "as configured today". Percent fields are whole numbers.</p>
+            <div class="row">
+                <div class="field"><label>Annual salary</label><input type="number" step="0.01" @bind="whatIf.AnnualSalary" /></div>
+                <div class="field"><label>401(k) %</label><input type="number" step="0.5" @bind="whatIf.Retirement401kPercent" /></div>
+                <div class="field"><label>Federal status</label><select @bind="whatIfStatus">
+                    <option value="">(as configured)</option>
+                    @foreach (var s in Enum.GetValues<FederalFilingStatus>()) { <option value="@s">@Fmt.Words(s)</option> }
+                </select></div>
+                <div class="field"><label>Step 2 (two jobs)</label><select @bind="whatIfMultipleJobs"><option value="">(as configured)</option><option value="true">Checked</option><option value="false">Unchecked</option></select></div>
+                <div class="field"><label>Step 3 credits / yr</label><input type="number" step="1" @bind="whatIf.DependentCredits" /></div>
+                <div class="field"><label>4(a) other income / yr</label><input type="number" step="1" @bind="whatIf.OtherIncome" /></div>
+                <div class="field"><label>4(b) deductions / yr</label><input type="number" step="1" @bind="whatIf.Deductions" /></div>
+                <div class="field"><label>4(c) extra / check</label><input type="number" step="1" @bind="whatIf.ExtraWithholding" /></div>
+                <div class="field"><label>MO extra / check</label><input type="number" step="1" @bind="whatIf.MissouriExtraWithholding" /></div>
+            </div>
+            @if (estimate is not null && estimate.PreTaxDeductions.Concat(estimate.PostTaxDeductions).Any())
+            {
+                <div class="row">
+                    @foreach (var l in estimate.PreTaxDeductions.Concat(estimate.PostTaxDeductions).Where(l => !l.Formula.Contains('%')))
+                    {
+                        var name = l.Name;
+                        <div class="field"><label>@name / check <span class="muted">(now @Fmt.Money(l.Amount))</span></label>
+                            <input type="number" step="0.01" value="@(whatIf.BenefitAmounts.TryGetValue(name, out var v) ? v.ToString("0.00") : "")" @onchange="e => SetBenefit(name, e)" /></div>
+                    }
+                </div>
+            }
+            <div class="toolbar">
+                <button type="button" @onclick="RunWhatIf">Compare</button>
+                <button class="secondary" type="button" @onclick="ResetWhatIf">Reset</button>
+            </div>
+        </section>
+        @if (whatIfResult is { } w)
+        {
+            <div class="row">
+                <section class="panel"><h2>Now</h2><EstimateTable E="w.Baseline" /><p class="muted">Year net @Fmt.Money(w.BaselineYear.Net) · year-end <Money Value="w.BaselineYear.FederalRefundOrOwed" Signed="true" /></p></section>
+                <section class="panel"><h2>Scenario</h2><EstimateTable E="w.Scenario" />
+                    <p class="muted">Year net @Fmt.Money(w.ScenarioYear.Net) · year-end <Money Value="w.ScenarioYear.FederalRefundOrOwed" Signed="true" /></p>
+                    <p><strong>Per check:</strong> <Money Value="w.Scenario.Net - w.Baseline.Net" Signed="true" /> net · <strong>Per year:</strong> <Money Value="w.ScenarioYear.Net - w.BaselineYear.Net" Signed="true" /> net,
+                        <Money Value="w.ScenarioYear.FederalRefundOrOwed - w.BaselineYear.FederalRefundOrOwed" Signed="true" /> year-end</p>
+                    <Steps Items="w.Scenario.Steps" /></section>
+            </div>
+        }
+    }
+    else if (tab == "Year")
+    {
+        @if (yearEst is null) { <p class="muted">Calculating…</p> }
+        else
+        {
+            <section class="panel">
+                <h2>@yearEst.Year · @yearEst.IncomeSource · @yearEst.Checks.Count checks</h2>
+                <Warnings Items="yearEst.Warnings" />
+                <div class="scroll-x">
+                <table>
+                    <thead><tr><th>Pay date</th><th class="money">Gross</th><th class="money">Pre-tax</th><th class="money">Federal</th><th class="money">Soc. Sec.</th><th class="money">Medicare</th><th class="money">Missouri</th><th class="money">Post-tax</th><th class="money">Net</th></tr></thead>
+                    <tbody>
+                    @foreach (var c in yearEst.Checks)
+                    {
+                        <tr class="@(c.Date < today ? "past" : "")"><td>@Fmt.Date(c.Date)</td><td><Money Value="c.Gross" /></td><td><Money Value="c.PreTax" /></td><td><Money Value="c.Federal" /></td><td><Money Value="c.SocialSecurity" /></td><td><Money Value="c.Medicare" /></td><td><Money Value="c.Missouri" /></td><td><Money Value="c.PostTax" /></td><td><Money Value="c.Net" /></td></tr>
+                    }
+                    </tbody>
+                    <tfoot><tr><th>Total</th><th><Money Value="yearEst.Gross" /></th><th><Money Value="yearEst.PreTax" /></th><th><Money Value="yearEst.Federal" /></th><th><Money Value="yearEst.SocialSecurity" /></th><th><Money Value="yearEst.Medicare" /></th><th><Money Value="yearEst.Missouri" /></th><th><Money Value="yearEst.PostTax" /></th><th><Money Value="yearEst.Net" /></th></tr></tfoot>
+                </table>
+                </div>
+                <p title="@yearEst.FederalYearEndFormula">Federal year-end: liability @Fmt.Money(yearEst.FederalLiability), withheld @Fmt.Money(yearEst.FederalWithheld) → <Money Value="yearEst.FederalRefundOrOwed" Signed="true" /> @(yearEst.FederalRefundOrOwed >= 0 ? "refund" : "owed") <span class="muted">(hover for formula)</span></p>
+            </section>
+        }
+    }
+    else if (tab == "Bonus")
+    {
+        <section class="panel">
+            <h2>Bonus or other one-time pay</h2>
+            <div class="row">
+                <div class="field"><label>Amount</label><input type="number" step="0.01" @bind="bonus.Amount" /></div>
+                <div class="field"><label>Method</label><select @bind="bonus.Method">
+                    <option value="@SupplementalMethod.Flat">Flat 22% (most employers)</option>
+                    <option value="@SupplementalMethod.Aggregate">Aggregate (combined with a regular check)</option>
+                </select></div>
+                <div class="field"><label>Supplemental pay already this year</label><input type="number" step="0.01" @bind="bonus.YtdSupplemental" /></div>
+                <div class="field"><label>&nbsp;</label><button type="button" @onclick="RunBonus">Estimate</button></div>
+            </div>
+            @if (bonusResult is { } b)
+            {
+                <EstimateTable E="b" />
+                <Steps Items="b.Steps" />
+            }
+        </section>
+    }
+    else if (tab == "Actual stubs")
+    {
+        <section class="panel">
+            <h2>Entered stubs</h2>
+            <p class="muted">Type the numbers off a real stub; the estimate should land within $5 of its net. Line names are matched to the estimate's line names, so use the same names as your deductions.</p>
+            <div class="toolbar"><button type="button" @onclick="NewStub">Enter a stub for @Fmt.Date(date)</button></div>
+            @if (stubs is { Count: > 0 })
+            {
+                <table>
+                    <thead><tr><th>Pay date</th><th>Kind</th><th class="money">Gross</th><th class="money">Net</th><th></th></tr></thead>
+                    <tbody>
+                    @foreach (var s in stubs)
+                    {
+                        <tr><td>@Fmt.Date(s.PayDate)</td><td>@s.Kind</td><td><Money Value="s.Gross" /></td><td><Money Value="s.Net" /></td>
+                            <td class="actions"><button class="secondary" type="button" @onclick="() => Compare(s)">Compare</button> <button class="secondary" type="button" @onclick="() => EditStub(s)">Edit</button></td></tr>
+                    }
+                    </tbody>
+                </table>
+            }
+        </section>
+        @if (stubEdit is not null)
+        {
+            <section class="panel">
+                <h3>@(stubEdit.Id == 0 ? "New stub" : "Edit stub")</h3>
+                <div class="row">
+                    <div class="field"><label>Pay date</label><input type="date" @bind="stubEdit.PayDate" /></div>
+                    <div class="field"><label>Kind</label><select @bind="stubEdit.Kind">@foreach (var k in Enum.GetValues<PaycheckKind>()) { <option value="@k">@k</option> }</select></div>
+                    <div class="field"><label>Gross</label><input type="number" step="0.01" @bind="stubEdit.Gross" /></div>
+                    <div class="field"><label>Net</label><input type="number" step="0.01" @bind="stubEdit.Net" /></div>
+                    <div class="field grow"><label>Notes</label><input type="text" @bind="stubEdit.Notes" /></div>
+                </div>
+                <table>
+                    <thead><tr><th>Category</th><th>Line</th><th class="money">Amount</th><th></th></tr></thead>
+                    <tbody>
+                    @foreach (var l in stubEdit.Lines)
+                    {
+                        <tr>
+                            <td><select @bind="l.Category">@foreach (var c in Enum.GetValues<PaycheckLineCategory>()) { <option value="@c">@Fmt.Words(c)</option> }</select></td>
+                            <td><input type="text" @bind="l.Name" /></td>
+                            <td><input type="number" step="0.01" @bind="l.Amount" /></td>
+                            <td><button class="secondary" type="button" @onclick="() => stubEdit.Lines.Remove(l)">✕</button></td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+                <div class="toolbar">
+                    <button class="secondary" type="button" @onclick="() => stubEdit.Lines.Add(new PaycheckLineDto { Category = PaycheckLineCategory.Tax })">Add line</button>
+                    <button type="button" @onclick="SaveStub">Save</button>
+                    <button class="secondary" type="button" @onclick="() => stubEdit = null">Cancel</button>
+                    @if (stubEdit.Id != 0) { <button class="secondary danger" type="button" @onclick="DeleteStub">Delete</button> }
+                </div>
+            </section>
+        }
+        @if (compare is { } cmp)
+        {
+            <section class="panel">
+                <h3>@Fmt.Date(cmp.Actual.PayDate) · estimate vs stub · net @(cmp.WithinFiveDollars ? "within $5 ✓" : "off by " + Fmt.Money(Math.Abs(cmp.NetVariance)))</h3>
+                <table>
+                    <thead><tr><th>Line</th><th class="money">Estimated</th><th class="money">Actual</th><th class="money">Actual − est.</th></tr></thead>
+                    <tbody>
+                    @foreach (var r in cmp.Rows)
+                    {
+                        <tr class="@(r.Name is "Gross" or "Net" ? "total" : "")"><td>@r.Name</td><td>@Fmt.Money(r.Estimated)</td><td>@Fmt.Money(r.Actual)</td><td>@(r.Variance is { } v ? (MarkupString)$"<span class=\"money {(v == 0 ? "" : Math.Abs(v) > 5 ? "neg" : "")}\">{Fmt.Money(v)}</span>" : (MarkupString)"<span class=\"muted\">—</span>")</td></tr>
+                    }
+                    </tbody>
+                </table>
+                <Steps Items="cmp.Estimate.Steps" />
+            </section>
+        }
+    }
+}
+
+@code {
+    private List<IncomeSourceDto>? sources;
+    private int sourceId;
+    private DateOnly date = DateOnly.FromDateTime(DateTime.Today);
+    private readonly DateOnly today = DateOnly.FromDateTime(DateTime.Today);
+    private string tab = "Estimate";
+    private PaycheckEstimateDto? estimate;
+    private YearEstimateDto? yearEst;
+    private WhatIfRequest whatIf = new();
+    private string whatIfStatus = "";
+    private string whatIfMultipleJobs = "";
+    private WhatIfResponse? whatIfResult;
+    private SupplementalRequest bonus = new() { Amount = 5_000m };
+    private PaycheckEstimateDto? bonusResult;
+    private List<PaycheckDto>? stubs;
+    private PaycheckDto? stubEdit;
+    private PaycheckCompareDto? compare;
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            sources = (await Api.GetIncomeSourcesAsync()).Where(s => s.IsActive && s.Type == IncomeSourceType.W2Salary && s.PaySchedules.Count > 0).ToList();
+            if (sources.Count > 0) { sourceId = sources[0].Id; await Recalc(); }
+        }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task OnSourceChanged(ChangeEventArgs e) { sourceId = int.Parse((string)e.Value!); await Recalc(); }
+    private async Task OnDateChanged(ChangeEventArgs e) { if (DateOnly.TryParse((string?)e.Value, out var d)) { date = d; await Recalc(); } }
+    private async Task SwitchTab(string t) { tab = t; if (t == "Actual stubs" && stubs is null) await LoadStubs(); }
+
+    private async Task Recalc()
+    {
+        estimate = null; yearEst = null; whatIfResult = null; bonusResult = null; compare = null; error = null;
+        try
+        {
+            estimate = await Api.GetPaycheckEstimateAsync(sourceId, date);
+            yearEst = await Api.GetPaycheckYearAsync(sourceId, date.Year);
+        }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private void SetBenefit(string name, ChangeEventArgs e)
+    {
+        if (decimal.TryParse((string?)e.Value, out var v)) whatIf.BenefitAmounts[name] = v; else whatIf.BenefitAmounts.Remove(name);
+    }
+
+    private async Task RunWhatIf()
+    {
+        whatIf.IncomeSourceId = sourceId; whatIf.PayDate = date;
+        whatIf.FederalStatus = Enum.TryParse<FederalFilingStatus>(whatIfStatus, out var fs) ? fs : null;
+        whatIf.MultipleJobs = bool.TryParse(whatIfMultipleJobs, out var mj) ? mj : null;
+        try { whatIfResult = await Api.WhatIfAsync(whatIf); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private void ResetWhatIf() { whatIf = new(); whatIfStatus = ""; whatIfMultipleJobs = ""; whatIfResult = null; }
+
+    private async Task RunBonus()
+    {
+        bonus.IncomeSourceId = sourceId; bonus.PayDate = date;
+        try { bonusResult = await Api.SupplementalAsync(bonus); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task LoadStubs()
+    {
+        try { stubs = await Api.GetPaychecksAsync(sourceId); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private void NewStub()
+    {
+        compare = null;
+        stubEdit = new PaycheckDto { IncomeSourceId = sourceId, PayDate = date, Gross = estimate?.Gross ?? 0 };
+        if (estimate is not null)
+        {
+            foreach (var l in estimate.PreTaxDeductions) stubEdit.Lines.Add(new() { Category = PaycheckLineCategory.PreTaxDeduction, Name = l.Name });
+            foreach (var l in new[] { estimate.FederalIncomeTax, estimate.SocialSecurity, estimate.Medicare, estimate.MissouriIncomeTax }) stubEdit.Lines.Add(new() { Category = PaycheckLineCategory.Tax, Name = l.Name });
+            foreach (var l in estimate.PostTaxDeductions) stubEdit.Lines.Add(new() { Category = PaycheckLineCategory.PostTaxDeduction, Name = l.Name });
+        }
+    }
+
+    private void EditStub(PaycheckDto s)
+    {
+        compare = null;
+        stubEdit = new PaycheckDto { Id = s.Id, IncomeSourceId = s.IncomeSourceId, PayDate = s.PayDate, Kind = s.Kind, Gross = s.Gross, Net = s.Net, Notes = s.Notes,
+            Lines = s.Lines.Select(l => new PaycheckLineDto { Category = l.Category, Name = l.Name, Amount = l.Amount }).ToList() };
+    }
+
+    private async Task SaveStub()
+    {
+        try { await Api.SavePaycheckAsync(stubEdit!); stubEdit = null; await LoadStubs(); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task DeleteStub()
+    {
+        try { await Api.DeletePaycheckAsync(stubEdit!.Id); stubEdit = null; await LoadStubs(); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task Compare(PaycheckDto s)
+    {
+        stubEdit = null;
+        try { compare = await Api.ComparePaycheckAsync(s.Id); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+}

@@ -11,6 +11,8 @@ public class IncomeSource
 
     public List<SalaryRate> SalaryRates { get; set; } = [];
     public List<PaySchedule> PaySchedules { get; set; } = [];
+    public List<DeductionElection> Deductions { get; set; } = [];
+    public List<WithholdingElection> Withholdings { get; set; } = [];
 }
 
 /// <summary>Annual salary in effect from a date (INC-2). A raise is a new row, never an edit.</summary>

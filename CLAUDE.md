@@ -52,7 +52,7 @@ them as the design evolves, don't treat the original doc as authoritative once t
 | Data | EF Core: in-memory provider in dev, PostgreSQL (existing network server) in prod (ADR-0005) |
 | Charts | FactFoundry.Blazor.Charts |
 | Styling | Hand-written CSS + QuickGrid, no component framework (ADR-0007) |
-| Auth | LAN-only, single API key, TLS in transit, no MFA (ADR-0006) |
+| Auth | LAN-only, single API key, TLS in transit, no MFA (ADR-0006); full account numbers stored (ADR-0008) |
 | Import | CSV/OFX per institution |
 | Local AI | Ollama + Open WebUI (an instance you already run), tool-calling model |
 | Hosting | `dotnet publish` + systemd on a Linux server on the home network, no Docker |
@@ -66,7 +66,7 @@ dotnet run --project src/MyBudget.Api --launch-profile http   # API on http://lo
 dotnet run --project src/MyBudget.Desktop      # Photino desktop app; MYBUDGET_API_URL / MYBUDGET_API_KEY override defaults
 ```
 
-Layout: `src/MyBudget.{Domain,Engines.Ledger,Contracts,Data,Api,UI,Desktop}`, `tests/MyBudget.{Engines,Api}.Tests`.
+Layout: `src/MyBudget.{Domain,Engines.Ledger,Engines.Paycheck,Engines.Hsa,Engines.Amortization,Contracts,Data,Api,UI,Desktop}`, `tests/MyBudget.{Engines,Api}.Tests`.
 Central package versions live in `Directory.Packages.props`. `AllowMissingPrunePackageData` in
 `Directory.Build.props` works around the Arch-packaged SDK (NETSDK1226). Engines never reference
 Data, Api, or UI. The UI never references Data or Api directly, only Contracts and its own `ApiClient`.

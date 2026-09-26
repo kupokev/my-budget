@@ -19,7 +19,7 @@ public static class ServiceCollectionExtensions
             switch (options.Provider)
             {
                 case DatabaseProvider.InMemory:
-                    db.UseInMemoryDatabase("MyBudget");
+                    db.UseInMemoryDatabase(options.Name);
                     break;
                 case DatabaseProvider.PostgreSQL:
                     if (string.IsNullOrWhiteSpace(options.ConnectionString))

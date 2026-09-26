@@ -12,7 +12,7 @@ public sealed class AccountDto
     [Required, StringLength(100)] public string Name { get; set; } = "";
     [StringLength(100)] public string? Institution { get; set; }
     public AccountType Type { get; set; }
-    [StringLength(4)] public string? LastFour { get; set; }
+    [StringLength(60)] public string? AccountNumber { get; set; }
     [Range(0, 1_000_000)] public decimal MinimumBalance { get; set; }
     public TransferCadence TransferCadence { get; set; } = TransferCadence.Monthly;
     public bool IsRainyDayFund { get; set; }
@@ -46,7 +46,7 @@ public sealed class CardDto
     [Required, StringLength(100)] public string Name { get; set; } = "";
     [StringLength(60)] public string? Issuer { get; set; }
     [StringLength(30)] public string? Network { get; set; }
-    [StringLength(4)] public string? LastFour { get; set; }
+    [StringLength(60)] public string? AccountNumber { get; set; }
     [Range(0, 100)] public decimal Apr { get; set; }
     [Range(0, 100)] public decimal? PromoApr { get; set; }
     public DateOnly? PromoAprExpires { get; set; }
@@ -82,6 +82,7 @@ public sealed class BillDto
     public int Id { get; set; }
     [Required, StringLength(100)] public string Name { get; set; } = "";
     public int? CategoryId { get; set; }
+    [StringLength(60)] public string? AccountNumber { get; set; }
     public BillFrequency Frequency { get; set; } = BillFrequency.Monthly;
     [Range(1, 31)] public int DueDay { get; set; } = 1;
     public DateOnly? AnchorDueDate { get; set; }
@@ -120,6 +121,35 @@ public sealed class IncomeSourceDto
     public bool IsActive { get; set; } = true;
     public List<SalaryRateDto> SalaryRates { get; set; } = [];
     public List<PayScheduleDto> PaySchedules { get; set; } = [];
+    public List<DeductionElectionDto> Deductions { get; set; } = [];
+    public List<WithholdingElectionDto> Withholdings { get; set; } = [];
+}
+
+public sealed class DeductionElectionDto
+{
+    public int Id { get; set; }
+    [Required, StringLength(100)] public string Name { get; set; } = "";
+    public DeductionKind Kind { get; set; }
+    public DeductionTreatment Treatment { get; set; }
+    [Range(0, 100_000)] public decimal? AmountPerCheck { get; set; }
+    /// <summary>Percent of gross as a whole number (6 = 6%) for editing; the API stores the fraction.</summary>
+    [Range(0, 100)] public decimal? PercentOfGross { get; set; }
+    public DateOnly EffectiveDate { get; set; }
+    public DateOnly? EndDate { get; set; }
+}
+
+public sealed class WithholdingElectionDto
+{
+    public int Id { get; set; }
+    public DateOnly EffectiveDate { get; set; }
+    public FederalFilingStatus FederalStatus { get; set; }
+    public bool MultipleJobs { get; set; }
+    [Range(0, 1_000_000)] public decimal DependentCredits { get; set; }
+    [Range(0, 100_000_000)] public decimal OtherIncome { get; set; }
+    [Range(0, 100_000_000)] public decimal Deductions { get; set; }
+    [Range(0, 100_000)] public decimal ExtraWithholding { get; set; }
+    public MissouriFilingStatus MissouriStatus { get; set; }
+    [Range(0, 100_000)] public decimal MissouriExtraWithholding { get; set; }
 }
 
 public sealed class SalaryRateDto

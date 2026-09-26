@@ -20,13 +20,13 @@ the app instead of the 2026 tab.
 | `IncomeSource` | Employer or other money source (INC-1) | Type: W-2, 1099, reimbursement, other |
 | `SalaryRate` | Annual salary from an effective date (INC-2) | A raise is a new row; unique per (source, date) |
 | `PaySchedule` | Pay cadence from an effective date (INC-3) | Bi-weekly/semi-monthly/monthly; anchor pay date; semi-monthly days (31 = last); weekend → prior Friday flag. Effective-dated because 2026 switched 24 → 26 mid-year |
-| `Account` | Where money sits (ACC-1) | Type, min balance, transfer cadence (monthly / per paycheck), rainy-day flag, last four only |
+| `Account` | Where money sits (ACC-1) | Type, min balance, transfer cadence (monthly / per paycheck), rainy-day flag, account number (ADR-0008) |
 | `AccountBalance` | Balance as of a date | Unique per (account, date); latest one shows in lists |
 | `Transfer` | Money moved into an account to fund its bills (ACC-3) | Summed per month for Long/Short |
 | `Card` | Credit card (CC-1) | APR + promo, statement/due day, limit, fee + month, paying account |
 | `CardBalance` | Statement/month-end balance (CC-3/4 later) | Unique per (card, date) |
 | `Category` | Spending bucket (BIL-8 later) | Bills carry one; imported transactions will too |
-| `Bill` | Obligation (BIL-1/2) | Frequency, due day, anchor due date for non-monthly, autopay, projected, **payment method** (account or card) and **funding account** (always set), optional bank-autopay discount (RWD-4a, stored only) |
+| `Bill` | Obligation (BIL-1/2) | Account/member number (ADR-0008), frequency, due day, anchor due date for non-monthly, autopay, projected, **payment method** (account or card) and **funding account** (always set), optional bank-autopay discount (RWD-4a, stored only) |
 | `BillPeriod` | One bill in one month (BIL-3) | Unique per (bill, month). Holds the actual plus optional **per-month overrides** for due date and expected amount, since real bills drift month to month; null override = bill default. A row may hold only an override. Empty row is deleted on save |
 
 Every fact is effective-dated or period-keyed; there is no year table (DD-0001).

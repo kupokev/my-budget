@@ -4,6 +4,7 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../MyBudget.Domain/MyBudget.Domain.csproj" />
+    <ProjectReference Include="../MyBudget.Engines.Paycheck/MyBudget.Engines.Paycheck.csproj" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.EntityFrameworkCore" />

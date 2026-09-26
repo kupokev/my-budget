@@ -1,0 +1,18 @@
+@* Gross → deductions → taxes → net for one check, with each line's formula on hover. *@
+<table class="estimate">
+    <tbody>
+        <tr class="total"><td>Gross</td><td class="money"><Money Value="E.Gross" /></td></tr>
+        @foreach (var l in E.PreTaxDeductions) { <tr title="@l.Formula"><td class="indent">@l.Name <span class="muted">pre-tax</span></td><td class="money">−@Fmt.Money(l.Amount)</td></tr> }
+        <tr class="sub"><td>Taxable wages <span class="muted">(FICA @Fmt.Money(E.FicaWages))</span></td><td class="money"><Money Value="E.TaxableWages" /></td></tr>
+        @foreach (var l in new[] { E.FederalIncomeTax, E.SocialSecurity, E.Medicare, E.MissouriIncomeTax })
+        {
+            <tr title="@l.Formula"><td class="indent">@l.Name</td><td class="money">−@Fmt.Money(l.Amount)</td></tr>
+        }
+        @foreach (var l in E.PostTaxDeductions) { <tr title="@l.Formula"><td class="indent">@l.Name <span class="muted">post-tax</span></td><td class="money">−@Fmt.Money(l.Amount)</td></tr> }
+        <tr class="total"><td>Net</td><td class="money"><Money Value="E.Net" /></td></tr>
+    </tbody>
+</table>
+
+@code {
+    [Parameter, EditorRequired] public PaycheckEstimateDto E { get; set; } = default!;
+}

@@ -1,0 +1,169 @@
+@page "/loans"
+@inject ApiClient Api
+@using MyBudget.Domain
+
+<h1>Loans</h1>
+<ErrorBanner @bind-Message="error" />
+
+@if (loans is null || bills is null)
+{
+    <p class="muted">Loading…</p>
+}
+else
+{
+    <div class="toolbar"><button type="button" @onclick="() => Edit(new LoanDto { StartDate = DateOnly.FromDateTime(DateTime.Today) })">New loan</button></div>
+    <table>
+        <thead><tr><th>Loan</th><th>Kind</th><th class="money">Rate</th><th class="money">Payment</th><th class="money">Latest balance</th><th>As of</th><th></th></tr></thead>
+        <tbody>
+        @foreach (var l in loans)
+        {
+            <tr class="@(l.IsActive ? "" : "muted")">
+                <td>@l.Name <span class="muted">@l.Lender @l.AccountNumber</span></td><td>@Fmt.Words(l.Kind)</td>
+                <td class="money">@l.AnnualRatePercent.ToString("0.###")%</td>
+                <td>@Fmt.Money(l.ScheduledPayment)</td>
+                <td>@Fmt.Money(l.LatestBalance)</td><td>@Fmt.Date(l.LatestBalanceAsOf)</td>
+                <td class="actions">
+                    <button class="secondary" type="button" @onclick="() => Project(l)">Projection</button>
+                    <button class="secondary" type="button" @onclick="() => OpenBalance(l)">Balance</button>
+                    <button class="secondary" type="button" @onclick="() => Edit(l)">Edit</button>
+                </td>
+            </tr>
+        }
+        </tbody>
+    </table>
+
+    @if (balanceFor is { } bl)
+    {
+        <section class="panel">
+            <h3>Record balance · @bl.Name</h3>
+            <div class="row">
+                <div class="field"><label>As of</label><input type="date" @bind="newBalance.AsOf" /></div>
+                <div class="field"><label>Balance</label><input type="number" step="0.01" @bind="newBalance.Balance" /></div>
+                <div class="field"><label>&nbsp;</label><button type="button" @onclick="SaveBalance">Save</button> <button class="secondary" type="button" @onclick="() => balanceFor = null">Close</button></div>
+            </div>
+        </section>
+    }
+
+    @if (editing is not null)
+    {
+        <section class="panel">
+            <h2>@(editing.Id == 0 ? "New loan" : editing.Name)</h2>
+            <EditForm Model="editing" OnValidSubmit="Save">
+                <DataAnnotationsValidator />
+                <div class="row">
+                    <div class="field"><label>Name</label><InputText @bind-Value="editing.Name" /><ValidationMessage For="() => editing.Name" /></div>
+                    <div class="field"><label>Kind</label><InputSelect @bind-Value="editing.Kind">@foreach (var k in Enum.GetValues<LoanKind>()) { <option value="@k">@Fmt.Words(k)</option> }</InputSelect></div>
+                    <div class="field"><label>Lender</label><InputText @bind-Value="editing.Lender" /></div>
+                    <div class="field"><label>Loan / account #</label><InputText @bind-Value="editing.AccountNumber" /></div>
+                    <div class="field"><label>Original principal</label><InputNumber @bind-Value="editing.OriginalPrincipal" step="0.01" /></div>
+                    <div class="field"><label>Rate %</label><InputNumber @bind-Value="editing.AnnualRatePercent" step="0.001" /></div>
+                    <div class="field"><label>Term (months)</label><InputNumber @bind-Value="editing.TermMonths" /></div>
+                    <div class="field"><label>Start</label><InputDate @bind-Value="editing.StartDate" /></div>
+                </div>
+                <div class="row">
+                    <div class="field"><label>Scheduled payment <span class="muted">(blank = compute)</span></label><InputNumber @bind-Value="editing.ScheduledPayment" step="0.01" /></div>
+                    <div class="field"><label>Extra principal / month</label><InputNumber @bind-Value="editing.ExtraMonthlyPayment" step="0.01" /></div>
+                    <div class="field"><label>Bill in the ledger</label><InputSelect @bind-Value="editing.BillId"><option value="">—</option>@foreach (var b in bills) { <option value="@b.Id">@b.Name</option> }</InputSelect></div>
+                    <div class="field"><label class="inline"><InputCheckbox @bind-Value="editing.IsActive" /> Active</label></div>
+                </div>
+                <div class="field"><label>Notes</label><InputTextArea @bind-Value="editing.Notes" rows="2" /></div>
+                <div class="toolbar">
+                    <button type="submit">Save</button>
+                    <button class="secondary" type="button" @onclick="() => editing = null">Cancel</button>
+                    @if (editing.Id != 0) { <button class="secondary danger" type="button" @onclick="DeleteEditing">Delete</button> }
+                </div>
+            </EditForm>
+        </section>
+    }
+
+    @if (projection is { } p)
+    {
+        <section class="panel">
+            <h2>@p.Name · projection from @Fmt.Money(p.FromBalance) (@p.FromSource)</h2>
+            <div class="row">
+                <div class="field"><label>Extra principal / month</label><input type="number" step="0.01" @bind="extraTry" /></div>
+                <div class="field"><label>&nbsp;</label><button type="button" @onclick="() => Project(loans.First(l => l.Id == p.LoanId), extraTry)">Recalculate</button></div>
+            </div>
+            <table class="estimate">
+                <tbody>
+                    <tr title="@p.PaymentFormula"><td>Scheduled payment</td><td class="money"><Money Value="p.ScheduledPayment" /></td></tr>
+                    <tr><td>Payoff</td><td class="money">@Fmt.Date(p.PayoffDate) <span class="muted">(@p.MonthsRemaining payments)</span></td></tr>
+                    <tr><td>Interest remaining</td><td class="money"><Money Value="p.InterestRemaining" /></td></tr>
+                    <tr><td>Total remaining</td><td class="money"><Money Value="p.TotalRemaining" /></td></tr>
+                    @if (p.InterestSavedByExtra is { } saved) { <tr class="sub"><td>Extra @Fmt.Money(p.ExtraMonthly)/mo saves</td><td class="money"><Money Value="saved" /> <span class="muted">and @p.MonthsSavedByExtra months</span></td></tr> }
+                    @if (p.ScheduledBalanceNow is { } sb) { <tr><td>Original schedule says balance now (after @p.PaymentsMadeOnSchedule payments)</td><td class="money"><Money Value="sb" /> <span class="muted">vs @Fmt.Money(p.FromBalance) actual</span></td></tr> }
+                </tbody>
+            </table>
+            <details>
+                <summary>Schedule (@p.Rows.Count rows)</summary>
+                <div class="scroll-x">
+                <table>
+                    <thead><tr><th>#</th><th>Date</th><th class="money">Payment</th><th class="money">Interest</th><th class="money">Principal</th><th class="money">Extra</th><th class="money">Balance</th></tr></thead>
+                    <tbody>
+                    @foreach (var r in p.Rows)
+                    {
+                        <tr><td>@r.Number</td><td>@Fmt.Date(r.Date)</td><td><Money Value="r.Payment" /></td><td><Money Value="r.Interest" /></td><td><Money Value="r.Principal" /></td><td><Money Value="r.Extra" /></td><td><Money Value="r.Balance" /></td></tr>
+                    }
+                    </tbody>
+                </table>
+                </div>
+            </details>
+        </section>
+    }
+}
+
+@code {
+    private List<LoanDto>? loans;
+    private List<BillDto>? bills;
+    private LoanDto? editing;
+    private LoanDto? balanceFor;
+    private LoanBalanceDto newBalance = new();
+    private LoanProjectionDto? projection;
+    private decimal extraTry;
+    private string? error;
+
+    protected override Task OnInitializedAsync() => Load();
+
+    private async Task Load()
+    {
+        try { loans = await Api.GetLoansAsync(); bills = await Api.GetBillsAsync(); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private void Edit(LoanDto l)
+    {
+        projection = null; balanceFor = null;
+        editing = new()
+        {
+            Id = l.Id, Name = l.Name, Kind = l.Kind, Lender = l.Lender, AccountNumber = l.AccountNumber, OriginalPrincipal = l.OriginalPrincipal, AnnualRatePercent = l.AnnualRatePercent, TermMonths = l.TermMonths,
+            StartDate = l.StartDate, ScheduledPayment = l.ScheduledPayment, ExtraMonthlyPayment = l.ExtraMonthlyPayment, BillId = l.BillId, Notes = l.Notes, IsActive = l.IsActive,
+        };
+    }
+
+    private async Task Save()
+    {
+        try { await Api.SaveLoanAsync(editing!); editing = null; await Load(); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task DeleteEditing()
+    {
+        try { await Api.DeleteLoanAsync(editing!.Id); editing = null; await Load(); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private void OpenBalance(LoanDto l) { editing = null; balanceFor = l; newBalance = new() { LoanId = l.Id, AsOf = DateOnly.FromDateTime(DateTime.Today), Balance = l.LatestBalance ?? 0 }; }
+
+    private async Task SaveBalance()
+    {
+        try { await Api.SaveLoanBalanceAsync(balanceFor!.Id, newBalance); balanceFor = null; await Load(); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task Project(LoanDto l, decimal? extra = null)
+    {
+        editing = null; balanceFor = null;
+        try { projection = await Api.GetLoanProjectionAsync(l.Id, extra); extraTry = projection.ExtraMonthly; }
+        catch (Exception ex) { error = ex.Message; }
+    }
+}

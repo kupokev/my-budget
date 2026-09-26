@@ -1,0 +1,12 @@
+@* Editor for a sensitive number: password-style until revealed. Binds like InputText. *@
+<span class="masked-input">
+    <InputText type="@(show ? "text" : "password")" Value="@Value" ValueChanged="ValueChanged" ValueExpression="ValueExpression" autocomplete="off" />
+    <button type="button" class="link" @onclick="() => show = !show">@(show ? "hide" : "show")</button>
+</span>
+
+@code {
+    [Parameter] public string? Value { get; set; }
+    [Parameter] public EventCallback<string?> ValueChanged { get; set; }
+    [Parameter] public System.Linq.Expressions.Expression<Func<string?>>? ValueExpression { get; set; }
+    private bool show;
+}

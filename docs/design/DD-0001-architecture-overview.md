@@ -24,7 +24,7 @@ wherever a free or manual alternative exists.
 | Data | EF Core; in-memory provider in Development, PostgreSQL (existing network server) in Production, chosen by config (ADR-0005) | Dev model can churn without migrations; reference tables for tax brackets and contribution limits are keyed by year so rule changes don't need code changes. |
 | Charts | FactFoundry.Blazor.Charts | Existing library, avoid pulling in a second charting dependency. |
 | Styling | Hand-written CSS + QuickGrid, no component framework | Lighter and lower maintenance than MudBlazor/Bootstrap (ADR-0007). |
-| Auth | LAN-only, single shared API key, HTTPS, no MFA | Single user on a home network; tunnel (cloudflared) if ever used remotely (ADR-0006). |
+| Auth | LAN-only, single shared API key, HTTPS, no MFA | Single user on a home network; tunnel (cloudflared) if ever used remotely (ADR-0006). Full account numbers are stored (ADR-0008). |
 | Import | CSV/OFX per institution | No paid aggregator (see ADR-0001). |
 | Local AI | Ollama + Open WebUI (an instance you already run), tool-calling model | Private, free, and avoids the accuracy problems of an LLM writing its own database queries (see ADR-0003). |
 | Hosting | `dotnet publish` + systemd on a Linux server on the home network | Self-hosted, no Docker by preference (ADR-0005). |
