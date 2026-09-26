@@ -67,7 +67,11 @@ internal static class Mapping
         b.StartDate = d.StartDate; b.EndDate = d.EndDate; b.Notes = d.Notes; b.IsActive = d.IsActive;
     }
 
-    public static BillActualDto ToDto(this BillActual a) => new() { Id = a.Id, BillId = a.BillId, Period = a.Period, Amount = a.Amount, PaidOn = a.PaidOn, Notes = a.Notes };
+    public static BillPeriodDto ToDto(this BillPeriod p) => new()
+    {
+        Id = p.Id, BillId = p.BillId, Period = p.Period, DueDate = p.DueDate, ProjectedAmount = p.ProjectedAmount,
+        ActualAmount = p.ActualAmount, PaidOn = p.PaidOn, Notes = p.Notes,
+    };
 
     public static IncomeSourceDto ToDto(this IncomeSource s) => new()
     {

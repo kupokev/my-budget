@@ -15,10 +15,15 @@ IHG/Hilton status) and focus on *this app's* specific workflow for each.
   panel at the bottom: expand an account to see each bill's monthly accrual and its formula.
   Use "Balance / transfer" to record a balance snapshot or a transfer into the account; Long/Short
   compares transfers this month to the monthly need.
-- **Bills:** the year grid is the old bill tab. Click a month cell, type the actual, press Enter;
-  Esc cancels; an empty value clears it. Grey parentheses are projected amounts for months the bill
-  is due; red actuals are over projection. "Paid via" is the account or card that pays; "Funded
-  from" is where the money really comes from (for a card-paid bill, the account that covers it).
+- **Bills:** the year grid is the old bill tab. Click a month cell to open that month's editor:
+  type the actual and press Enter for the quick case, or also set this month's due date or expected
+  amount when they differ from the bill's defaults (a blank field means "use the default"). A blue
+  dot on a cell marks a month with an override; hover a cell for its details. Grey parentheses are
+  expected amounts for months the bill is due; red actuals are over. A bill that stops (a payment
+  plan ending in October) gets an End date on the bill, which zeroes later months automatically.
+  Category, Due, Paid via and Funded from are hidden by default: use the Columns menu, or hover the
+  bill name. "Paid via" is the account or card that pays; "Funded from" is where the money really
+  comes from (for a card-paid bill, the account that covers it).
 - **Cards:** the summary shows which bills sit on each card, their monthly total, the latest
   balance and utilization. "Balance" records a statement or month-end balance.
 - **Home:** bills due in the next 14 days, the next pay date, and per-account transfer needs.

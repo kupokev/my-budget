@@ -7,12 +7,15 @@ public static class SinkingFund
 {
     public sealed record Accrual(decimal Monthly, string Formula);
 
-    public static Accrual MonthlyAccrual(Bill bill, DateOnly asOf)
+    /// <param name="projectedThisMonth">A per-month projected override for asOf's month; applies to monthly bills only.</param>
+    public static Accrual MonthlyAccrual(Bill bill, DateOnly asOf, decimal? projectedThisMonth = null)
     {
         var amount = bill.ProjectedAmount;
         switch (bill.Frequency)
         {
             case BillFrequency.Monthly:
+                if (projectedThisMonth is { } o)
+                    return new(Round(o), $"{o:C} projected for {asOf:MMMM yyyy} (default {amount:C})");
                 return new(Round(amount), $"{amount:C} monthly");
             case BillFrequency.OneOff:
             {

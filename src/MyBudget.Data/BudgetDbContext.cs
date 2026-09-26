@@ -15,7 +15,7 @@ public sealed class BudgetDbContext(DbContextOptions<BudgetDbContext> options) :
     public DbSet<CardBalance> CardBalances => Set<CardBalance>();
     public DbSet<Category> Categories => Set<Category>();
     public DbSet<Bill> Bills => Set<Bill>();
-    public DbSet<BillActual> BillActuals => Set<BillActual>();
+    public DbSet<BillPeriod> BillPeriods => Set<BillPeriod>();
 
     protected override void OnModelCreating(ModelBuilder mb)
     {
@@ -70,8 +70,8 @@ public sealed class BudgetDbContext(DbContextOptions<BudgetDbContext> options) :
             e.HasOne(x => x.PaymentAccount).WithMany().HasForeignKey(x => x.PaymentAccountId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(x => x.PaymentCard).WithMany().HasForeignKey(x => x.PaymentCardId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(x => x.FundingAccount).WithMany().HasForeignKey(x => x.FundingAccountId).OnDelete(DeleteBehavior.Restrict);
-            e.HasMany(x => x.Actuals).WithOne(x => x.Bill).HasForeignKey(x => x.BillId).OnDelete(DeleteBehavior.Cascade);
+            e.HasMany(x => x.Periods).WithOne(x => x.Bill).HasForeignKey(x => x.BillId).OnDelete(DeleteBehavior.Cascade);
         });
-        mb.Entity<BillActual>().HasIndex(x => new { x.BillId, x.Period }).IsUnique();
+        mb.Entity<BillPeriod>().HasIndex(x => new { x.BillId, x.Period }).IsUnique();
     }
 }

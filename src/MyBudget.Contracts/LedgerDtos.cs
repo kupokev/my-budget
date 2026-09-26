@@ -98,12 +98,15 @@ public sealed class BillDto
     public bool IsActive { get; set; } = true;
 }
 
-public sealed class BillActualDto
+/// <summary>One bill in one month: the actual plus optional per-month overrides (null = use the bill's default).</summary>
+public sealed class BillPeriodDto
 {
     public int Id { get; set; }
     public int BillId { get; set; }
     public DateOnly Period { get; set; }
-    public decimal Amount { get; set; }
+    public DateOnly? DueDate { get; set; }
+    public decimal? ProjectedAmount { get; set; }
+    public decimal? ActualAmount { get; set; }
     public DateOnly? PaidOn { get; set; }
     public string? Notes { get; set; }
 }

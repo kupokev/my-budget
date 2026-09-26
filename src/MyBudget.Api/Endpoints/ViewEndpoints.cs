@@ -29,7 +29,7 @@ public static class ViewEndpoints
     internal static async Task<TransferNeedsDto> Needs(BudgetDbContext db, DateOnly asOf)
     {
         var (perYear, source) = await IncomeEndpoints.PaychecksPerYear(db, asOf);
-        var bills = await db.Bills.ToListAsync();
+        var bills = await db.Bills.Include(b => b.Periods).ToListAsync();
         var accounts = await db.Accounts.ToDictionaryAsync(a => a.Id);
         var monthStart = new DateOnly(asOf.Year, asOf.Month, 1);
         var monthEnd = monthStart.AddMonths(1).AddDays(-1);
@@ -39,7 +39,7 @@ public static class ViewEndpoints
             .Select(g => new { AccountId = g.Key, Sum = g.Sum(t => t.Amount) })
             .ToDictionaryAsync(x => x.AccountId, x => x.Sum);
 
-        var needs = TransferNeeds.Compute(bills, perYear, asOf);
+        var needs = TransferNeeds.Compute(bills, perYear, asOf, BillEndpoints.ProjectedOverrides(bills, asOf));
         var dtos = needs.Select(n =>
         {
             var acct = accounts.GetValueOrDefault(n.AccountId);

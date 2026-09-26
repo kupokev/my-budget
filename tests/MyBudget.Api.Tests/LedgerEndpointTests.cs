@@ -42,21 +42,54 @@ public class LedgerEndpointTests : IClassFixture<ApiFixture>
     }
 
     [Fact]
-    public async Task Bill_actual_upsert_shows_variance_in_history()
+    public async Task Bill_month_upsert_shows_variance_in_history()
     {
         var bills = await _api.Get<List<BillDto>>("api/bills");
         var electric = bills.Single(b => b.Name == "Electric");
 
-        await _api.Put($"api/bills/{electric.Id}/actuals/2026-09-15", new BillActualDto { BillId = electric.Id, Period = new(2026, 9, 1), Amount = 151.20m });
-        await _api.Put($"api/bills/{electric.Id}/actuals/2026-09-01", new BillActualDto { BillId = electric.Id, Period = new(2026, 9, 1), Amount = 149.50m }); // same month → overwrite
+        await _api.Put($"api/bills/{electric.Id}/periods/2026-09-15", new BillPeriodDto { ActualAmount = 151.20m });
+        await _api.Put($"api/bills/{electric.Id}/periods/2026-09-01", new BillPeriodDto { ActualAmount = 149.50m }); // same month → overwrite
 
         var history = await _api.Get<List<BillHistoryDto>>("api/bills/history?year=2026");
         var row = history.Single(h => h.BillId == electric.Id);
         var sep = row.Months.Single(m => m.Period == new DateOnly(2026, 9, 1));
         Assert.Equal(149.50m, sep.Actual);
         Assert.Equal(140m, sep.Projected);
+        Assert.False(sep.ProjectedIsOverride);
+        Assert.Equal(new DateOnly(2026, 9, 18), sep.DueDate);
         Assert.Equal(9.50m, sep.Variance);
         Assert.Equal(149.50m, row.AverageActual);
+    }
+
+    [Fact]
+    public async Task Per_month_due_date_and_projected_overrides_flow_to_history_upcoming_and_needs()
+    {
+        var bills = await _api.Get<List<BillDto>>("api/bills");
+        var water = bills.Single(b => b.Name == "Water");
+
+        // October: water is due on the 3rd this time and expected to be $72, not the usual 20th / $60.
+        await _api.Put($"api/bills/{water.Id}/periods/2026-10-01", new BillPeriodDto { DueDate = new(2026, 10, 3), ProjectedAmount = 72m });
+        // December: no water bill (say the account closes) → projected 0 for that month only.
+        await _api.Put($"api/bills/{water.Id}/periods/2026-12-01", new BillPeriodDto { ProjectedAmount = 0m });
+
+        var history = await _api.Get<List<BillHistoryDto>>("api/bills/history?year=2026");
+        var months = history.Single(h => h.BillId == water.Id).Months;
+        var oct = months.Single(m => m.Period == new DateOnly(2026, 10, 1));
+        Assert.Equal(new DateOnly(2026, 10, 3), oct.DueDate);
+        Assert.True(oct.DueDateIsOverride);
+        Assert.Equal(72m, oct.Projected);
+        Assert.True(oct.ProjectedIsOverride);
+        Assert.Equal(0m, months.Single(m => m.Period == new DateOnly(2026, 12, 1)).Projected);
+        Assert.Equal(60m, months.Single(m => m.Period == new DateOnly(2026, 11, 1)).Projected);
+
+        var needs = await _api.Get<TransferNeedsDto>("api/transfer-needs?asOf=2026-10-15");
+        var line = needs.Accounts.Single(a => a.AccountName == "Chase Automated Bills").Lines.Single(l => l.BillName == "Water");
+        Assert.Equal(72m, line.MonthlyAccrual);
+        Assert.Contains("October 2026", line.Formula);
+
+        // Clean up so other tests see the seed as-is.
+        await _api.Client.DeleteAsync($"api/bills/{water.Id}/periods/2026-10-01");
+        await _api.Client.DeleteAsync($"api/bills/{water.Id}/periods/2026-12-01");
     }
 
     [Fact]

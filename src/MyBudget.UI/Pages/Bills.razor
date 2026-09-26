@@ -13,16 +13,57 @@ else
 {
     <div class="toolbar">
         <button type="button" @onclick="() => Edit(new BillDto())">New bill</button>
-        <label class="inline">Year <InputNumber TValue="int" Value="year" ValueChanged="ChangeYear" ValueExpression="() => year" /></label>
+        <span class="year-nav">
+            <button class="secondary" type="button" title="Previous year" @onclick="() => ChangeYear(year - 1)">‹</button>
+            <strong>@year</strong>
+            <button class="secondary" type="button" title="Next year" @onclick="() => ChangeYear(year + 1)">›</button>
+        </span>
+        <details class="dropdown">
+            <summary class="btn secondary">Columns ▾</summary>
+            <div class="dropdown-menu">
+                @foreach (var c in OptionalColumns)
+                {
+                    <label class="inline"><input type="checkbox" checked="@shown.Contains(c)" @onchange="e => Toggle(c, e)" /> @c</label>
+                }
+            </div>
+        </details>
         <label class="inline"><input type="checkbox" @bind="showInactive" /> Show inactive</label>
-        <span class="muted">Click a month cell to enter the actual amount. Variance = actual − projected.</span>
+        <span class="muted">Click a month to enter that month's actual, due date, or expected amount.</span>
     </div>
+
+    @if (monthEdit is not null)
+    {
+        <section class="panel month-editor">
+            <h3>@monthEdit.BillName · @monthEdit.Period.ToString("MMMM yyyy")</h3>
+            <div class="row">
+                <div class="field"><label>Actual</label>
+                    <input type="number" step="0.01" @bind="monthEdit.ActualAmount" @bind:event="oninput" @onkeydown="OnMonthKey" @ref="actualInput" placeholder="—" /></div>
+                <div class="field"><label>Expected this month <span class="muted">(default @Fmt.Money(monthEdit.DefaultProjected))</span></label>
+                    <input type="number" step="0.01" @bind="monthEdit.ProjectedAmount" @bind:event="oninput" @onkeydown="OnMonthKey" placeholder="@monthEdit.DefaultProjected.ToString("0.00")" /></div>
+                <div class="field"><label>Due this month <span class="muted">(default @Fmt.Date(monthEdit.DefaultDueDate))</span></label>
+                    <input type="date" @bind="monthEdit.DueDate" @onkeydown="OnMonthKey" /></div>
+                <div class="field"><label>Paid on</label><input type="date" @bind="monthEdit.PaidOn" @onkeydown="OnMonthKey" /></div>
+                <div class="field grow"><label>Notes</label><input type="text" @bind="monthEdit.Notes" @bind:event="oninput" @onkeydown="OnMonthKey" /></div>
+            </div>
+            <div class="toolbar">
+                <button type="button" @onclick="SaveMonth">Save</button>
+                <button class="secondary" type="button" @onclick="() => monthEdit = null">Close</button>
+                <button class="secondary danger" type="button" @onclick="ClearMonth">Clear month</button>
+                <span class="muted">Enter saves, Esc closes. Leave a field blank to use the bill's default.</span>
+            </div>
+        </section>
+    }
 
     <div class="scroll-x">
     <table class="grid">
         <thead>
             <tr>
-                <th>Bill</th><th>Category</th><th>Due</th><th>Paid via</th><th>Funded from</th><th class="money">Projected</th>
+                <th>Bill</th>
+                @if (Show("Category")) { <th>Category</th> }
+                @if (Show("Due")) { <th>Due</th> }
+                @if (Show("Paid via")) { <th>Paid via</th> }
+                @if (Show("Funded from")) { <th>Funded from</th> }
+                <th class="money">Projected</th>
                 @for (var m = 1; m <= 12; m++) { <th class="money">@Fmt.Month(new DateOnly(year, m, 1))</th> }
                 <th class="money">Avg actual</th><th></th>
             </tr>
@@ -32,24 +73,33 @@ else
         {
             var h = history.FirstOrDefault(x => x.BillId == b.Id);
             <tr class="@(b.IsActive ? "" : "muted")">
-                <td>@b.Name @(b.IsAutopay ? "" : "✍")</td>
-                <td>@(categories.FirstOrDefault(c => c.Id == b.CategoryId)?.Name)</td>
-                <td>@DueText(b)</td>
-                <td>@PaidVia(b)</td>
-                <td>@accounts.FirstOrDefault(a => a.Id == b.FundingAccountId)?.Name</td>
+                <td>
+                    <span class="tip">@b.Name
+                        <span class="tip-box">
+                            <b>@b.Name</b>
+                            <span>Category: @(categories.FirstOrDefault(c => c.Id == b.CategoryId)?.Name ?? "—")</span>
+                            <span>Due: @DueText(b)</span>
+                            <span>Paid via: @PaidVia(b)</span>
+                            <span>Funded from: @(accounts.FirstOrDefault(a => a.Id == b.FundingAccountId)?.Name ?? "—")</span>
+                            <span>@(b.IsAutopay ? "Autopay" : "Paid manually")@(b.BankAutopayDiscount is { } d ? $" · bank-autopay discount {Fmt.Money(d)}/mo" : "")</span>
+                            @if (b.EndDate is { } end) { <span>Ends @Fmt.Date(end)</span> }
+                            @if (!string.IsNullOrWhiteSpace(b.Notes)) { <span class="muted">@b.Notes</span> }
+                        </span>
+                    </span>
+                </td>
+                @if (Show("Category")) { <td>@(categories.FirstOrDefault(c => c.Id == b.CategoryId)?.Name)</td> }
+                @if (Show("Due")) { <td>@DueText(b)</td> }
+                @if (Show("Paid via")) { <td>@PaidVia(b)</td> }
+                @if (Show("Funded from")) { <td>@accounts.FirstOrDefault(a => a.Id == b.FundingAccountId)?.Name</td> }
                 <td><Money Value="b.ProjectedAmount" /></td>
                 @if (h is not null)
                 {
                     @foreach (var mo in h.Months)
                     {
-                        var isEditing = actualEdit is { } e && e.BillId == b.Id && e.Period == mo.Period;
-                        <td class="cell @(mo.Projected == 0 && mo.Actual is null ? "dim" : "") @(mo.Variance > 0 ? "over" : "")" @onclick="() => StartActual(b, mo)" title="@Title(mo)">
-                            @if (isEditing)
-                            {
-                                <input class="cell-input" type="number" step="0.01" @bind="actualEdit!.Amount" @bind:event="oninput"
-                                       @onkeydown="OnActualKey" @onclick:stopPropagation="true" @ref="actualInput" />
-                            }
-                            else if (mo.Actual is { } a)
+                        var isEditing = monthEdit is { } e && e.BillId == b.Id && e.Period == mo.Period;
+                        <td class="cell @(mo.Projected == 0 && mo.Actual is null ? "dim" : "") @(mo.Variance > 0 ? "over" : "") @(isEditing ? "editing" : "")"
+                            @onclick="() => OpenMonth(b, mo)" title="@Title(mo)">
+                            @if (mo.Actual is { } a)
                             {
                                 <Money Value="a" />
                             }
@@ -57,6 +107,7 @@ else
                             {
                                 <span class="muted money">(@Fmt.Money(mo.Projected))</span>
                             }
+                            @if (mo.ProjectedIsOverride || mo.DueDateIsOverride) { <sup class="ovr" title="has a per-month override">•</sup> }
                         </td>
                     }
                     <td>@Fmt.Money(h.AverageActual)</td>
@@ -71,12 +122,22 @@ else
         </tbody>
         <tfoot>
             <tr>
-                <th colspan="5">Total projected (monthly bills)</th>
+                <th colspan="@(1 + shown.Count)">Projected</th>
                 <th><Money Value="bills.Where(b => b.IsActive && b.Frequency == BillFrequency.Monthly).Sum(b => b.ProjectedAmount)" /></th>
                 @for (var m = 1; m <= 12; m++)
                 {
                     var period = new DateOnly(year, m, 1);
-                    <th><Money Value="history.SelectMany(x => x.Months).Where(x => x.Period == period && x.Actual is not null).Sum(x => x.Actual!.Value)" /></th>
+                    <th><Money Value="MonthSum(period, x => x.Projected)" /></th>
+                }
+                <th colspan="2"></th>
+            </tr>
+            <tr>
+                <th colspan="@(1 + shown.Count)">Actual</th>
+                <th></th>
+                @for (var m = 1; m <= 12; m++)
+                {
+                    var period = new DateOnly(year, m, 1);
+                    <th><Money Value="MonthSum(period, x => x.Actual ?? 0m)" /></th>
                 }
                 <th colspan="2"></th>
             </tr>
@@ -134,7 +195,7 @@ else
                 <div class="row">
                     <div class="field"><label class="inline"><InputCheckbox @bind-Value="editing.IsAutopay" /> Autopay</label></div>
                     <div class="field"><label>Start</label><InputDate @bind-Value="editing.StartDate" /></div>
-                    <div class="field"><label>End</label><InputDate @bind-Value="editing.EndDate" /></div>
+                    <div class="field"><label>End <span class="muted">(last month it's owed)</span></label><InputDate @bind-Value="editing.EndDate" /></div>
                     <div class="field"><label class="inline"><InputCheckbox @bind-Value="editing.IsActive" /> Active</label></div>
                 </div>
                 <div class="field"><label>Notes</label><InputTextArea @bind-Value="editing.Notes" rows="2" /></div>
@@ -159,6 +220,8 @@ else
 }
 
 @code {
+    private static readonly string[] OptionalColumns = ["Category", "Due", "Paid via", "Funded from"];
+
     private List<BillDto>? bills;
     private List<AccountDto>? accounts;
     private List<CardDto>? cards;
@@ -166,13 +229,19 @@ else
     private List<BillHistoryDto>? history;
     private int year = DateTime.Today.Year;
     private bool showInactive;
+    private readonly HashSet<string> shown = [];
     private BillDto? editing;
     private CategoryDto newCategory = new();
-    private ActualEdit? actualEdit;
+    private MonthEdit? monthEdit;
     private ElementReference actualInput;
     private string? error;
 
-    private sealed class ActualEdit { public int BillId; public DateOnly Period; public decimal? Amount; }
+    private sealed class MonthEdit
+    {
+        public int BillId; public string BillName = ""; public DateOnly Period;
+        public decimal DefaultProjected; public DateOnly? DefaultDueDate;
+        public decimal? ActualAmount; public decimal? ProjectedAmount; public DateOnly? DueDate; public DateOnly? PaidOn; public string? Notes;
+    }
 
     protected override Task OnInitializedAsync() => Load();
 
@@ -189,26 +258,42 @@ else
         catch (Exception ex) { error = ex.Message; }
     }
 
-    private async Task ChangeYear(int y) { year = y; await Load(); }
+    private async Task ChangeYear(int y) { year = y; monthEdit = null; await Load(); }
+
+    private bool Show(string col) => shown.Contains(col);
+    private void Toggle(string col, ChangeEventArgs e) { if (e.Value is true) shown.Add(col); else shown.Remove(col); }
+
+    private decimal MonthSum(DateOnly period, Func<BillMonthDto, decimal> pick)
+        => history!.Where(h => bills!.Any(b => b.Id == h.BillId && (showInactive || b.IsActive)))
+                   .SelectMany(h => h.Months).Where(m => m.Period == period).Sum(pick);
 
     private string DueText(BillDto b) => b.Frequency switch
     {
-        BillFrequency.Monthly => $"{b.DueDay}th",
+        BillFrequency.Monthly => $"{Ordinal(b.DueDay)} of the month",
         BillFrequency.OneOff => Fmt.Date(b.AnchorDueDate),
         _ => $"{Fmt.Words(b.Frequency)} from {Fmt.Date(b.AnchorDueDate)}",
     };
+
+    private static string Ordinal(int d) => d == 31 ? "last day" : d + (d % 100 is 11 or 12 or 13 ? "th" : (d % 10) switch { 1 => "st", 2 => "nd", 3 => "rd", _ => "th" });
 
     private string PaidVia(BillDto b) => b.PaymentMethod == PaymentMethodKind.Card
         ? "💳 " + cards!.FirstOrDefault(c => c.Id == b.PaymentCardId)?.Name
         : accounts!.FirstOrDefault(a => a.Id == b.PaymentAccountId)?.Name ?? "—";
 
-    private static string Title(BillMonthDto m) => m.Actual is { } a
-        ? $"actual {Fmt.Money(a)} vs projected {Fmt.Money(m.Projected)} → {Fmt.Money(m.Variance)}"
-        : $"projected {Fmt.Money(m.Projected)}";
+    private static string Title(BillMonthDto m)
+    {
+        var parts = new List<string>();
+        if (m.DueDate is { } d) parts.Add($"due {Fmt.Date(d)}{(m.DueDateIsOverride ? " (this month only)" : "")}");
+        parts.Add($"expected {Fmt.Money(m.Projected)}{(m.ProjectedIsOverride ? " (this month only)" : "")}");
+        if (m.Actual is { } a) parts.Add($"actual {Fmt.Money(a)} → {Fmt.Money(m.Variance)}");
+        if (m.PaidOn is { } p) parts.Add($"paid {Fmt.Date(p)}");
+        if (!string.IsNullOrWhiteSpace(m.Notes)) parts.Add(m.Notes);
+        return string.Join(" · ", parts);
+    }
 
     private void Edit(BillDto b)
     {
-        actualEdit = null;
+        monthEdit = null;
         editing = new()
         {
             Id = b.Id, Name = b.Name, CategoryId = b.CategoryId, Frequency = b.Frequency, DueDay = b.DueDay == 0 ? 1 : b.DueDay, AnchorDueDate = b.AnchorDueDate,
@@ -237,28 +322,52 @@ else
         catch (Exception ex) { error = ex.Message; }
     }
 
-    private async Task StartActual(BillDto b, BillMonthDto m)
+    private async Task OpenMonth(BillDto b, BillMonthDto m)
     {
-        if (actualEdit is { } e && e.BillId == b.Id && e.Period == m.Period) return;
-        actualEdit = new ActualEdit { BillId = b.Id, Period = m.Period, Amount = m.Actual ?? (m.Projected == 0 ? null : m.Projected) };
+        editing = null;
+        var defaultProjected = m.ProjectedIsOverride ? b.ProjectedAmount : m.Projected;
+        monthEdit = new MonthEdit
+        {
+            BillId = b.Id, BillName = b.Name, Period = m.Period,
+            DefaultProjected = defaultProjected, DefaultDueDate = m.DueDateIsOverride ? null : m.DueDate,
+            ActualAmount = m.Actual, ProjectedAmount = m.ProjectedIsOverride ? m.Projected : null,
+            DueDate = m.DueDateIsOverride ? m.DueDate : null, PaidOn = m.PaidOn, Notes = m.Notes,
+        };
         await Task.Yield();
         try { await actualInput.FocusAsync(); } catch { }
     }
 
-    private async Task OnActualKey(KeyboardEventArgs e)
+    private async Task OnMonthKey(KeyboardEventArgs e)
     {
-        if (e.Key == "Escape") { actualEdit = null; return; }
-        if (e.Key != "Enter" || actualEdit is null) return;
+        if (e.Key == "Escape") monthEdit = null;
+        else if (e.Key == "Enter") await SaveMonth();
+    }
+
+    private async Task SaveMonth()
+    {
+        if (monthEdit is null) return;
         try
         {
-            if (actualEdit.Amount is { } amt)
-                await Api.SaveBillActualAsync(actualEdit.BillId, actualEdit.Period, new BillActualDto { BillId = actualEdit.BillId, Period = actualEdit.Period, Amount = amt });
-            else
-                await Api.DeleteBillActualAsync(actualEdit.BillId, actualEdit.Period);
-            actualEdit = null;
+            await Api.SaveBillPeriodAsync(monthEdit.BillId, monthEdit.Period, new BillPeriodDto
+            {
+                BillId = monthEdit.BillId, Period = monthEdit.Period, ActualAmount = monthEdit.ActualAmount,
+                ProjectedAmount = monthEdit.ProjectedAmount, DueDate = monthEdit.DueDate, PaidOn = monthEdit.PaidOn, Notes = monthEdit.Notes,
+            });
+            monthEdit = null;
             history = await Api.GetBillHistoryAsync(year);
         }
-        catch (ApiException ex) when (ex.Status == 404) { actualEdit = null; }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task ClearMonth()
+    {
+        if (monthEdit is null) return;
+        try
+        {
+            await Api.SaveBillPeriodAsync(monthEdit.BillId, monthEdit.Period, new BillPeriodDto { BillId = monthEdit.BillId, Period = monthEdit.Period });
+            monthEdit = null;
+            history = await Api.GetBillHistoryAsync(year);
+        }
         catch (Exception ex) { error = ex.Message; }
     }
 }

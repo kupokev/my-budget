@@ -12,7 +12,9 @@ public static class TransferNeeds
 
     public sealed record AccountNeed(int AccountId, decimal Monthly, decimal PerPaycheck, string PerPaycheckFormula, IReadOnlyList<Line> Lines);
 
-    public static IReadOnlyList<AccountNeed> Compute(IEnumerable<Bill> bills, int paychecksPerYear, DateOnly asOf)
+    /// <param name="projectedThisMonth">Per-bill projected overrides for asOf's month, keyed by bill id.</param>
+    public static IReadOnlyList<AccountNeed> Compute(IEnumerable<Bill> bills, int paychecksPerYear, DateOnly asOf,
+        IReadOnlyDictionary<int, decimal>? projectedThisMonth = null)
     {
         if (paychecksPerYear <= 0) throw new ArgumentOutOfRangeException(nameof(paychecksPerYear));
 
@@ -23,7 +25,7 @@ public static class TransferNeeds
             {
                 var lines = g.Select(b =>
                 {
-                    var a = SinkingFund.MonthlyAccrual(b, asOf);
+                    var a = SinkingFund.MonthlyAccrual(b, asOf, projectedThisMonth is not null && projectedThisMonth.TryGetValue(b.Id, out var o) ? o : null);
                     return new Line(b.Id, b.Name, b.Frequency, b.ProjectedAmount, a.Monthly, a.Formula, b.PaymentMethod == PaymentMethodKind.Card);
                 }).OrderBy(l => l.BillName).ToList();
                 var monthly = SinkingFund.Round(lines.Sum(l => l.MonthlyAccrual));

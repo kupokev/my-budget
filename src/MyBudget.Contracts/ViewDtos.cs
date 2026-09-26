@@ -21,7 +21,11 @@ public sealed record PayCalendarDto(int Year, IReadOnlyList<PayDateDto> PayDates
 
 public sealed record UpcomingBillDto(int BillId, string BillName, DateOnly DueDate, decimal Amount, string PaidVia, string FundingAccount, bool IsAutopay);
 
-public sealed record BillMonthDto(DateOnly Period, decimal? Actual, decimal Projected, decimal? Variance);
+/// <summary>A bill's month in the year grid. DueDate is the override if set, else the generated date, else null when not due.</summary>
+public sealed record BillMonthDto(
+    DateOnly Period, DateOnly? DueDate, bool DueDateIsOverride,
+    decimal Projected, bool ProjectedIsOverride,
+    decimal? Actual, decimal? Variance, DateOnly? PaidOn, string? Notes);
 
 public sealed record BillHistoryDto(int BillId, string BillName, decimal Projected, decimal? AverageActual, IReadOnlyList<BillMonthDto> Months);
 

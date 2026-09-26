@@ -37,8 +37,8 @@ public sealed class ApiClient(HttpClient http)
     public Task<BillDto> SaveBillAsync(BillDto b) => b.Id == 0 ? Post("api/bills", b) : Put($"api/bills/{b.Id}", b);
     public Task DeleteBillAsync(int id) => Delete($"api/bills/{id}");
     public Task<List<BillHistoryDto>> GetBillHistoryAsync(int year) => Get<List<BillHistoryDto>>($"api/bills/history?year={year}");
-    public Task<BillActualDto> SaveBillActualAsync(int billId, DateOnly period, BillActualDto a) => Put($"api/bills/{billId}/actuals/{period:yyyy-MM-dd}", a);
-    public Task DeleteBillActualAsync(int billId, DateOnly period) => Delete($"api/bills/{billId}/actuals/{period:yyyy-MM-dd}");
+    public Task<BillPeriodDto> SaveBillPeriodAsync(int billId, DateOnly period, BillPeriodDto p) => Put($"api/bills/{billId}/periods/{period:yyyy-MM-dd}", p);
+    public Task DeleteBillPeriodAsync(int billId, DateOnly period) => Delete($"api/bills/{billId}/periods/{period:yyyy-MM-dd}");
     public Task<List<UpcomingBillDto>> GetUpcomingBillsAsync(int days) => Get<List<UpcomingBillDto>>($"api/bills/upcoming?days={days}");
 
     // Income

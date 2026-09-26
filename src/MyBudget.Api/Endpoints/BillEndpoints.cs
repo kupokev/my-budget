@@ -65,45 +65,57 @@ public static class BillEndpoints
         });
 
         // BIL-3: one row per bill, one column per month of the year, with projected-vs-actual variance.
+        // Per-month overrides (due date, projected) win over the bill's defaults.
         g.MapGet("/history", async (int? year, BudgetDbContext db, TimeProvider clock) =>
         {
             var y = year ?? clock.GetLocalNow().Year;
-            var bills = await db.Bills.Include(b => b.Actuals).OrderBy(b => b.Name).ToListAsync();
+            var bills = await db.Bills.Include(b => b.Periods).OrderBy(b => b.Name).ToListAsync();
             var from = new DateOnly(y, 1, 1);
             var to = new DateOnly(y, 12, 31);
             return bills.Select(b =>
             {
-                var due = BillDueDates.Between(b, from, to).Select(d => new DateOnly(d.Year, d.Month, 1)).ToHashSet();
+                var generated = BillDueDates.Between(b, from, to).ToLookup(d => new DateOnly(d.Year, d.Month, 1));
                 var months = Enumerable.Range(1, 12).Select(m =>
                 {
                     var period = new DateOnly(y, m, 1);
-                    var actual = b.Actuals.FirstOrDefault(a => a.Period == period)?.Amount;
-                    var projected = due.Contains(period) ? b.ProjectedAmount : 0m;
-                    return new BillMonthDto(period, actual, projected, actual is { } a ? a - projected : null);
+                    var row = b.Periods.FirstOrDefault(p => p.Period == period);
+                    var dueDefault = generated[period].Cast<DateOnly?>().FirstOrDefault();
+                    var due = row?.DueDate ?? dueDefault;
+                    var projected = row?.ProjectedAmount ?? (dueDefault is not null ? b.ProjectedAmount : 0m);
+                    var actual = row?.ActualAmount;
+                    return new BillMonthDto(period, due, row?.DueDate is not null, projected, row?.ProjectedAmount is not null,
+                        actual, actual is { } a ? a - projected : null, row?.PaidOn, row?.Notes);
                 }).ToList();
                 var actuals = months.Where(m => m.Actual is not null).Select(m => m.Actual!.Value).ToList();
                 return new BillHistoryDto(b.Id, b.Name, b.ProjectedAmount, actuals.Count > 0 ? Math.Round(actuals.Average(), 2) : null, months);
             });
         });
 
-        // Upsert the actual for a month. Period is any date in that month.
-        g.MapPut("/{id:int}/actuals/{period}", async (int id, DateOnly period, BillActualDto dto, BudgetDbContext db) =>
+        // Upsert a bill's month. Period is any date in that month. A row with nothing set is deleted.
+        g.MapPut("/{id:int}/periods/{period}", async (int id, DateOnly period, BillPeriodDto dto, BudgetDbContext db) =>
         {
             if (await db.Bills.FindAsync(id) is null) return Results.NotFound();
             var p = new DateOnly(period.Year, period.Month, 1);
-            var a = await db.BillActuals.FirstOrDefaultAsync(x => x.BillId == id && x.Period == p)
-                    ?? db.BillActuals.Add(new BillActual { BillId = id, Period = p }).Entity;
-            a.Amount = dto.Amount; a.PaidOn = dto.PaidOn; a.Notes = dto.Notes;
+            var row = await db.BillPeriods.FirstOrDefaultAsync(x => x.BillId == id && x.Period == p);
+            var empty = dto.DueDate is null && dto.ProjectedAmount is null && dto.ActualAmount is null && dto.PaidOn is null && string.IsNullOrWhiteSpace(dto.Notes);
+            if (empty)
+            {
+                if (row is not null) { db.BillPeriods.Remove(row); await db.SaveChangesAsync(); }
+                return Results.Ok(new BillPeriodDto { BillId = id, Period = p });
+            }
+            row ??= db.BillPeriods.Add(new BillPeriod { BillId = id, Period = p }).Entity;
+            row.DueDate = dto.DueDate; row.ProjectedAmount = dto.ProjectedAmount; row.ActualAmount = dto.ActualAmount;
+            row.PaidOn = dto.PaidOn; row.Notes = string.IsNullOrWhiteSpace(dto.Notes) ? null : dto.Notes.Trim();
             await db.SaveChangesAsync();
-            return Results.Ok(a.ToDto());
+            return Results.Ok(row.ToDto());
         });
 
-        g.MapDelete("/{id:int}/actuals/{period}", async (int id, DateOnly period, BudgetDbContext db) =>
+        g.MapDelete("/{id:int}/periods/{period}", async (int id, DateOnly period, BudgetDbContext db) =>
         {
             var p = new DateOnly(period.Year, period.Month, 1);
-            var a = await db.BillActuals.FirstOrDefaultAsync(x => x.BillId == id && x.Period == p);
-            if (a is null) return Results.NotFound();
-            db.BillActuals.Remove(a);
+            var row = await db.BillPeriods.FirstOrDefaultAsync(x => x.BillId == id && x.Period == p);
+            if (row is null) return Results.NotFound();
+            db.BillPeriods.Remove(row);
             await db.SaveChangesAsync();
             return Results.NoContent();
         });
@@ -120,14 +132,25 @@ public static class BillEndpoints
     internal static async Task<List<UpcomingBillDto>> Upcoming(BudgetDbContext db, DateOnly asOf, int days)
     {
         var to = asOf.AddDays(days);
-        var bills = await db.Bills.Include(b => b.PaymentAccount).Include(b => b.PaymentCard).Include(b => b.FundingAccount).Where(b => b.IsActive).ToListAsync();
+        var bills = await db.Bills.Include(b => b.PaymentAccount).Include(b => b.PaymentCard).Include(b => b.FundingAccount).Include(b => b.Periods).Where(b => b.IsActive).ToListAsync();
         return bills
-            .SelectMany(b => BillDueDates.Between(b, asOf, to).Select(d => new UpcomingBillDto(
-                b.Id, b.Name, d, b.ProjectedAmount,
+            .SelectMany(b => BillDueDates.Between(b, asOf, to, DueOverrides(b)).Select(d => new UpcomingBillDto(
+                b.Id, b.Name, d, b.Periods.FirstOrDefault(p => p.Period == new DateOnly(d.Year, d.Month, 1))?.ProjectedAmount ?? b.ProjectedAmount,
                 b.PaymentMethod == PaymentMethodKind.Card ? $"Card: {b.PaymentCard?.Name}" : b.PaymentAccount?.Name ?? "—",
                 b.FundingAccount?.Name ?? "—", b.IsAutopay)))
             .OrderBy(u => u.DueDate).ThenBy(u => u.BillName)
             .ToList();
+    }
+
+    internal static Dictionary<DateOnly, DateOnly> DueOverrides(Bill b)
+        => b.Periods.Where(p => p.DueDate is not null).ToDictionary(p => p.Period, p => p.DueDate!.Value);
+
+    /// <summary>Projected overrides for one month, keyed by bill id, for transfer-needs math.</summary>
+    internal static Dictionary<int, decimal> ProjectedOverrides(IEnumerable<Bill> bills, DateOnly month)
+    {
+        var period = new DateOnly(month.Year, month.Month, 1);
+        return bills.SelectMany(b => b.Periods.Where(p => p.Period == period && p.ProjectedAmount is not null).Select(p => (b.Id, p.ProjectedAmount!.Value)))
+            .ToDictionary(x => x.Id, x => x.Value);
     }
 
     private static IResult? Validate(BillDto d)

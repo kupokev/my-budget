@@ -27,7 +27,7 @@ the app instead of the 2026 tab.
 | `CardBalance` | Statement/month-end balance (CC-3/4 later) | Unique per (card, date) |
 | `Category` | Spending bucket (BIL-8 later) | Bills carry one; imported transactions will too |
 | `Bill` | Obligation (BIL-1/2) | Frequency, due day, anchor due date for non-monthly, autopay, projected, **payment method** (account or card) and **funding account** (always set), optional bank-autopay discount (RWD-4a, stored only) |
-| `BillActual` | What a bill cost in a month (BIL-3) | Unique per (bill, month); upsert semantics |
+| `BillPeriod` | One bill in one month (BIL-3) | Unique per (bill, month). Holds the actual plus optional **per-month overrides** for due date and expected amount, since real bills drift month to month; null override = bill default. A row may hold only an override. Empty row is deleted on save |
 
 Every fact is effective-dated or period-keyed; there is no year table (DD-0001).
 
@@ -37,8 +37,8 @@ Every fact is effective-dated or period-keyed; there is no year table (DD-0001).
 | --- | --- | --- |
 | `PayDates.Generate` | For each date the schedule in effect is the latest EffectiveDate ≤ date. Bi-weekly steps 14 days from the anchor; monthly uses the anchor's day clamped to month end; semi-monthly uses the two days. Weekend dates shift to the prior Friday when the flag is on | INC-3 |
 | `PayDates.ThreePaycheckMonths` | Months with ≥ 3 pay dates, with the dates | INC-4 |
-| `BillDueDates.Between` | Monthly: due day each month (clamped). Quarterly/semi-annual/annual: step 3/6/12 months from the anchor in both directions. One-off: the anchor. Honors start/end/active | BIL-1, BIL-5 |
-| `SinkingFund.MonthlyAccrual` | Monthly → amount. Q/SA/A → amount × occurrences ÷ 12. One-off → amount ÷ whole months until due. Returns the formula string with the number | BIL-4 |
+| `BillDueDates.Between` | Monthly: due day each month (clamped). Quarterly/semi-annual/annual: step 3/6/12 months from the anchor in both directions. One-off: the anchor. Honors start/end/active. Optional per-month due-date overrides replace that month's date, even across the window edge | BIL-1, BIL-5 |
+| `SinkingFund.MonthlyAccrual` | Monthly → amount (or this month's override, formula says so). Q/SA/A → amount × occurrences ÷ 12. One-off → amount ÷ whole months until due. Returns the formula string with the number | BIL-4 |
 | `TransferNeeds.Compute` | Group active bills by **funding account** (never the card); monthly need = Σ accruals; per-paycheck = monthly × 12 ÷ paychecks/year; each line carries its formula | ACC-2, ACC-2a |
 
 Long/Short (ACC-3) is computed in the API: transfers recorded this month − monthly need.
@@ -54,7 +54,7 @@ source string is returned with the numbers so the UI can show it.
 | `accounts` CRUD, `accounts/{id}/balances`, `accounts/{id}/transfers` | ACC-1, ACC-3 |
 | `cards` CRUD, `cards/summary`, `cards/{id}/balances` | CC-1, CC-2 |
 | `categories` list/create/update | BIL-8 groundwork |
-| `bills` CRUD, `bills/history?year=`, `bills/{id}/actuals/{period}` (PUT upsert / DELETE), `bills/upcoming?days=` | BIL-1–4 |
+| `bills` CRUD, `bills/history?year=` (per month: due date, expected, actual, variance, override flags), `bills/{id}/periods/{period}` (PUT upsert / DELETE), `bills/upcoming?days=` (uses overrides) | BIL-1–4 |
 | `income-sources` CRUD (rates and schedules replaced wholesale), `income-sources/pay-calendar?year=` | INC-1–4 |
 | `transfer-needs?asOf=` | ACC-2/2a/3 with per-line formulas |
 | `home` | Upcoming bills (14 days), next pay date, transfer needs |
@@ -64,7 +64,9 @@ Enums serialize as strings.
 
 ### UI (`MyBudget.UI`, Razor class library)
 
-Pages: Home, Bills (year grid with click-to-enter actuals and projected-vs-actual variance, bill
+Pages: Home, Bills (year grid with prev/next year, optional Category/Due/Paid via/Funded from columns
+hidden by default behind a Columns checklist and shown on a hover card over the bill name; clicking a
+month opens a month editor for actual, expected-this-month, due-this-month, paid-on, notes; bill
 editor, categories), Accounts (list, editor, balance/transfer ledger, transfer-needs breakdown with
 formulas), Cards (summary with bills-on-card and utilization, editor, balance entry), Income
 (sources with salary history and effective-dated schedules, pay-date calendar with 3-check months).
@@ -82,11 +84,13 @@ Every computed number's formula is visible next to it (auditability principle).
 
 - Real 2026 pay-schedule anchors and the actual list of open cards; the dev seed uses placeholders.
 - Whether one-off bills should accrue at all or just appear as due items.
+- Column visibility on Bills is per session; persist it (per-viewer local storage) if it gets annoying.
 - Card balance history (CC-3/4) needs a statement-import path or manual monthly entry habit.
 
 ## Status
 
-Built 2026-09-26: entities, engine (13 tests), API (7 endpoint tests), five pages, Photino host.
+Built 2026-09-26: entities, engine (15 tests), API (8 endpoint tests), five pages, Photino host.
+Same day: per-month due/expected overrides, Bills column toggles and hover card, year arrows, full-width layout.
 Not yet run against PostgreSQL; no migrations generated yet (ADR-0005 dev path only).
 
 ## References

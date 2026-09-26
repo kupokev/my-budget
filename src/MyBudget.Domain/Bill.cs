@@ -48,17 +48,25 @@ public class Bill
     public string? Notes { get; set; }
     public bool IsActive { get; set; } = true;
 
-    public List<BillActual> Actuals { get; set; } = [];
+    public List<BillPeriod> Periods { get; set; } = [];
 }
 
-/// <summary>What a bill actually cost in a period (BIL-3). Period is the first day of the month.</summary>
-public class BillActual
+/// <summary>
+/// One bill in one month (BIL-3). Period is the first day of the month. Holds the actual amount
+/// plus optional per-month overrides, because real due dates and amounts drift month to month:
+/// a null override means "use the bill's default". A row may exist with only an override and no actual.
+/// </summary>
+public class BillPeriod
 {
     public int Id { get; set; }
     public int BillId { get; set; }
     public Bill? Bill { get; set; }
     public DateOnly Period { get; set; }
-    public decimal Amount { get; set; }
+    /// <summary>This month's due date when it differs from the bill's due day.</summary>
+    public DateOnly? DueDate { get; set; }
+    /// <summary>This month's expected amount when it differs from the bill's projected amount.</summary>
+    public decimal? ProjectedAmount { get; set; }
+    public decimal? ActualAmount { get; set; }
     public DateOnly? PaidOn { get; set; }
     public string? Notes { get; set; }
 }

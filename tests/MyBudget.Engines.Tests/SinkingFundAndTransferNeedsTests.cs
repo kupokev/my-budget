@@ -66,6 +66,30 @@ public class SinkingFundAndTransferNeedsTests
     }
 
     [Fact]
+    public void Due_date_override_replaces_that_months_generated_date_even_across_the_window_edge()
+    {
+        var bill = new Bill { Name = "Water", Frequency = BillFrequency.Monthly, DueDay = 20, ProjectedAmount = 60m, FundingAccountId = 1 };
+        var overrides = new Dictionary<DateOnly, DateOnly>
+        {
+            [new(2026, 10, 1)] = new(2026, 10, 3),   // moved earlier within the month
+            [new(2026, 9, 1)] = new(2026, 10, 1),    // September's bill slipped into October
+        };
+        var due = BillDueDates.Between(bill, new(2026, 10, 1), new(2026, 11, 30), overrides);
+        Assert.Equal([new(2026, 10, 1), new(2026, 10, 3), new(2026, 11, 20)], due);
+    }
+
+    [Fact]
+    public void Projected_override_for_the_month_changes_a_monthly_bills_accrual_and_says_so()
+    {
+        var bill = new Bill { Id = 7, Name = "Electric", Frequency = BillFrequency.Monthly, ProjectedAmount = 140m, FundingAccountId = 1 };
+        var needs = TransferNeeds.Compute([bill], 26, AsOf, new Dictionary<int, decimal> { [7] = 210m });
+        var line = Assert.Single(Assert.Single(needs).Lines);
+        Assert.Equal(210m, line.MonthlyAccrual);
+        Assert.Contains("September 2026", line.Formula);
+        Assert.Contains("default $140.00", line.Formula);
+    }
+
+    [Fact]
     public void Monthly_bill_on_the_31st_clamps_in_short_months()
     {
         var bill = new Bill { Name = "Rent", Frequency = BillFrequency.Monthly, DueDay = 31, ProjectedAmount = 1m, FundingAccountId = 1 };

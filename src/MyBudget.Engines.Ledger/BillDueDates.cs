@@ -15,8 +15,20 @@ public static class BillDueDates
         _ => throw new ArgumentOutOfRangeException(nameof(f)),
     };
 
-    public static IReadOnlyList<DateOnly> Between(Bill bill, DateOnly from, DateOnly to)
+    /// <param name="dueOverrides">Per-month due-date overrides keyed by period (first of month). A month's
+    /// generated date is replaced by its override, which may move it into or out of the window.</param>
+    public static IReadOnlyList<DateOnly> Between(Bill bill, DateOnly from, DateOnly to, IReadOnlyDictionary<DateOnly, DateOnly>? dueOverrides = null)
     {
+        if (dueOverrides is { Count: > 0 })
+        {
+            // Generate a month wider each side so an override that shifts a date across the window edge is seen.
+            var wide = Between(bill, Dates.FirstOfMonth(from).AddMonths(-1), to.AddMonths(1));
+            return wide
+                .Select(d => dueOverrides.TryGetValue(Dates.FirstOfMonth(d), out var o) ? o : d)
+                .Where(d => d >= from && d <= to)
+                .Distinct().OrderBy(d => d).ToList();
+        }
+
         if (!bill.IsActive || to < from) return [];
         var lo = bill.StartDate is { } s && s > from ? s : from;
         var hi = bill.EndDate is { } e && e < to ? e : to;
