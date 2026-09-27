@@ -132,6 +132,16 @@ public sealed class AiService(HttpClient http, AiOptionsProvider optionsProvider
         };
     }
 
+    /// <summary>The assistant's own record of a call. OpenAI wants an id, a type and arguments as a JSON string.</summary>
+    private static object AssistantCall(bool openAi, string id, string name, string argText) => openAi
+        ? new { id, type = "function", function = new { name, arguments = argText } }
+        : new { function = new { name, arguments = JsonSerializer.Deserialize<object>(argText) } };
+
+    /// <summary>A tool's answer. OpenAI matches it to the call by id; Ollama matches by position.</summary>
+    private static object ToolResult(bool openAi, string id, string result) => openAi
+        ? new { role = "tool", tool_call_id = id, content = result }
+        : new { role = "tool", content = result };
+
     private static string Snippet(string body)
     {
         var t = body.Trim().ReplaceLineEndings(" ");
@@ -175,6 +185,9 @@ public sealed class AiService(HttpClient http, AiOptionsProvider optionsProvider
         messages.AddRange(history.Select(m => new { role = m.Role, content = m.Content }));
         var toolDefs = AiTools.Catalog.Select(t => new { type = "function", function = new { name = t.Name, description = t.Description, parameters = t.Parameters } }).ToList();
         var calls = new List<ToolCallDto>();
+        // Results keyed by call, so a repeat is answered from memory instead of rerunning the query.
+        var answered = new Dictionary<string, string>();
+        var toolsWithheld = false;
 
         // Settled on the first round and reused, so a fallback costs one extra request per conversation.
         (string Url, bool OpenAi)? endpoint = null;
@@ -187,9 +200,13 @@ public sealed class AiService(HttpClient http, AiOptionsProvider optionsProvider
             var problems = new List<string>();
             foreach (var candidate in endpoint is { } known ? [known] : ChatEndpoints(options))
             {
-                object body = candidate.OpenAi
-                    ? new { model = options.Model, messages, tools = toolDefs, stream = false, temperature = 0.1 }
-                    : new { model = options.Model, messages, tools = toolDefs, stream = false, options = new { temperature = 0.1 } };
+                object body = (candidate.OpenAi, toolsWithheld) switch
+                {
+                    (true, false) => new { model = options.Model, messages, tools = toolDefs, stream = false, temperature = 0.1 },
+                    (true, true) => new { model = options.Model, messages, stream = false, temperature = 0.1 },
+                    (false, false) => new { model = options.Model, messages, tools = toolDefs, stream = false, options = new { temperature = 0.1 } },
+                    _ => new { model = options.Model, messages, stream = false, options = new { temperature = 0.1 } },
+                };
                 HttpResponseMessage res;
                 try
                 {
@@ -234,23 +251,73 @@ public sealed class AiService(HttpClient http, AiOptionsProvider optionsProvider
 
             var assistantCalls = new List<object>();
             var toolMessages = new List<object>();
+            var allRepeats = true;
+
             foreach (var call in toolCalls.EnumerateArray())
             {
                 var fn = call.GetProperty("function");
                 var name = fn.GetProperty("name").GetString() ?? "";
-                var args = fn.TryGetProperty("arguments", out var a) ? a : default;
+                // Ollama returns arguments as an object; an OpenAI-compatible server returns them as a
+                // JSON *string*. Taking the raw text of a string keeps its quotes and escapes, so
+                // echoing it back double-encodes it and the server rejects the whole request.
+                var raw = fn.TryGetProperty("arguments", out var a) ? a : default;
+                using var argsDoc = raw.ValueKind == JsonValueKind.String
+                    ? JsonDocument.Parse(string.IsNullOrWhiteSpace(raw.GetString()) ? "{}" : raw.GetString()!)
+                    : null;
+                var args = argsDoc?.RootElement ?? raw;
                 var argText = args.ValueKind == JsonValueKind.Undefined ? "{}" : args.GetRawText();
+
+                // An OpenAI-compatible server matches a result to its call by id. Without one the
+                // model never sees an answer and asks the same question again, which is what a
+                // seven-identical-calls transcript looks like.
+                var id = call.TryGetProperty("id", out var idEl) ? idEl.GetString() : null;
+                if (string.IsNullOrEmpty(id)) id = $"call_{calls.Count + 1}";
+
+                var key = $"{name}|{argText}";
+                if (answered.TryGetValue(key, out var cached))
+                {
+                    // Already asked and answered: hand back the same result rather than doing the work twice.
+                    toolMessages.Add(ToolResult(openAi, id, cached));
+                    assistantCalls.Add(AssistantCall(openAi, id, name, argText));
+                    continue;
+                }
+
+                allRepeats = false;
                 string result;
                 try { result = await tools.InvokeAsync(name, args); }
                 catch (Exception ex) { result = JsonSerializer.Serialize(new { error = ex.Message }); }
+                answered[key] = result;
+
                 calls.Add(new ToolCallDto(name, argText, result.Length > 4000 ? result[..4000] + "…" : result));
-                assistantCalls.Add(new { function = new { name, arguments = args.ValueKind == JsonValueKind.Undefined ? new { } : JsonSerializer.Deserialize<object>(argText) } });
-                toolMessages.Add(new { role = "tool", content = result });
+                assistantCalls.Add(AssistantCall(openAi, id, name, argText));
+                toolMessages.Add(ToolResult(openAi, id, result));
             }
-            messages.Add(new { role = "assistant", content, tool_calls = assistantCalls });
+
+            // OpenAI expects no content alongside tool calls; Ollama is happy either way.
+            messages.Add(openAi
+                ? new { role = "assistant", content = (string?)null, tool_calls = assistantCalls }
+                : (object)new { role = "assistant", content, tool_calls = assistantCalls });
             messages.AddRange(toolMessages);
+
+            // A model that only repeats itself will never finish. Take the tools away and make it
+            // answer from what it already has, rather than burning the remaining rounds.
+            if (allRepeats && !toolsWithheld)
+            {
+                toolsWithheld = true;
+                messages.Add(new
+                {
+                    role = "user",
+                    content = "You already have the results you need above. Answer now in plain prose, using only those numbers. Do not call any more functions.",
+                });
+            }
         }
-        return new ChatResponseDto("I couldn't finish answering that within the tool budget.", calls, options.Model);
+        // Out of rounds. Say which model and what it did, because the fix is usually a different
+        // model rather than anything about the question.
+        return new ChatResponseDto(
+            $"{options.Model} kept asking for data instead of answering, and ran out of its {options.MaxToolRounds} tool rounds. " +
+            "It looked up " + (calls.Count == 0 ? "nothing" : string.Join(", ", calls.Select(c => c.Name).Distinct())) +
+            ". A model that follows tool-calling instructions more closely usually fixes this; raising Tool rounds under Admin → Settings rarely does.",
+            calls, options.Model);
     }
 
     /// <summary>AI-1: the month's narrative, built only from pre-fetched tool results.</summary>

@@ -130,9 +130,15 @@ public static class SpendingEndpoints
         var weekStart = (isCurrent ? today : start.AddMonths(1).AddDays(-1)).AddDays(-6);
         var thisWeek = Math.Round(rows.Where(r => r.Date >= weekStart && r.Date >= start).Sum(r => -r.Amount), 2);
 
-        var summary = difference == 0
-            ? $"You spent {thisWeek:C} in the last seven days. This month is level with the same point last month."
-            : $"You spent {thisWeek:C} in the last seven days, bringing this month's spending to {Math.Abs(difference):C} {(difference < 0 ? "less" : "more")} than this time last month.";
+        // Two separate facts. Joining them with "bringing" implies the week caused the gap, which
+        // reads oddly when the week is empty and isn't true even when it isn't.
+        var week = thisWeek == 0
+            ? "Nothing spent in the last seven days."
+            : $"{thisWeek:C} spent in the last seven days.";
+        var against = difference == 0
+            ? "This month is level with the same point last month."
+            : $"This month is {Math.Abs(difference):C} {(difference < 0 ? "below" : "above")} where it stood at this point last month.";
+        var summary = $"{week} {against}";
 
         return new CumulativeSpendDto(
             year, month, today, upTo, labels, thisOut, lastOut,
