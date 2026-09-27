@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="MyBudget">
+  <rect width="256" height="256" rx="56" fill="#16211a"/>
+  <!-- Stacked bars: a budget read at a glance. -->
+  <rect x="58"  y="150" width="30" height="54" rx="8" fill="#2f6b45"/>
+  <rect x="103" y="116" width="30" height="88" rx="8" fill="#4fa970"/>
+  <rect x="148" y="78"  width="30" height="126" rx="8" fill="#7fd6a0"/>
+  <!-- Trend line over them. -->
+  <path d="M60 138 L118 104 L163 66 L196 58" fill="none" stroke="#e8efe9" stroke-width="9"
+        stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
+  <circle cx="196" cy="58" r="11" fill="#e8efe9"/>
+</svg>

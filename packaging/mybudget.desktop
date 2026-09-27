@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=MyBudget
+GenericName=Personal budget
+Comment=Budget, paycheck, HSA and rewards tracking that runs entirely on your own machine
+Exec=mybudget
+Icon=mybudget
+Terminal=false
+Categories=Office;Finance;
+Keywords=budget;finance;money;paycheck;
+StartupWMClass=MyBudget.Desktop

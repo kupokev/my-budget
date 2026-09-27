@@ -1,0 +1,109 @@
+name: Release
+
+# Tag a commit on main and the packages build themselves:
+#   git tag v1.0.0 && git push origin v1.0.0
+# Can also be run by hand from the Actions tab to rehearse a release without tagging.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to build, without the leading v (e.g. 1.0.0)"
+        required: true
+        default: "0.0.0-test"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Work out the version
+        id: v
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION="${{ github.event.inputs.version }}"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Building $VERSION"
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      # The tests are the gate: a tag that doesn't pass them doesn't become a release.
+      - name: Test
+        run: dotnet test --configuration Release --logger "console;verbosity=minimal"
+
+      - name: Publish
+        run: |
+          dotnet publish src/MyBudget.Desktop \
+            --configuration Release \
+            --runtime linux-x64 \
+            --self-contained true \
+            -p:Version=${{ steps.v.outputs.version }} \
+            -p:InformationalVersion=${{ steps.v.outputs.version }} \
+            --output publish
+
+      - name: Install packaging tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends librsvg2-bin rpm zstd libfuse2
+          sudo gem install --no-document fpm
+          curl -fsSL -o /usr/local/bin/appimagetool \
+            https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
+          sudo chmod +x /usr/local/bin/appimagetool
+
+      - name: Build packages
+        # appimagetool wants FUSE; extracting it sidesteps that on a runner.
+        run: |
+          cd /usr/local/bin && sudo ./appimagetool --appimage-extract >/dev/null && sudo mv squashfs-root /opt/appimagetool
+          sudo ln -sf /opt/appimagetool/AppRun /usr/local/bin/appimagetool
+          cd "$GITHUB_WORKSPACE"
+          packaging/build-packages.sh "${{ steps.v.outputs.version }}" publish dist
+
+      - name: Checksums
+        run: |
+          cd dist
+          sha256sum * > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packages-${{ steps.v.outputs.version }}
+          path: dist/*
+
+      - name: Publish the release
+        if: github.event_name == 'push'
+        uses: softprops/action-gh-release@v2
+        with:
+          name: MyBudget ${{ steps.v.outputs.version }}
+          generate_release_notes: true
+          files: dist/*
+          body: |
+            Linux packages for MyBudget ${{ steps.v.outputs.version }}.
+
+            | File | Install |
+            | --- | --- |
+            | `MyBudget-${{ steps.v.outputs.version }}-x86_64.AppImage` | `chmod +x` and run it. No installation. |
+            | `mybudget_${{ steps.v.outputs.version }}_amd64.deb` | `sudo apt install ./mybudget_${{ steps.v.outputs.version }}_amd64.deb` |
+            | `mybudget-${{ steps.v.outputs.version }}-1.x86_64.rpm` | `sudo dnf install ./mybudget-${{ steps.v.outputs.version }}-1.x86_64.rpm` |
+            | `mybudget-${{ steps.v.outputs.version }}-1-x86_64.pkg.tar.zst` | `sudo pacman -U ./mybudget-${{ steps.v.outputs.version }}-1-x86_64.pkg.tar.zst` |
+
+            The packages pull in WebKitGTK, which the window needs. The AppImage expects it to be
+            installed already.
+
+            Your budget lives at `~/.local/share/MyBudget/mybudget.db` and is untouched by installing
+            or upgrading. Back it up from **Admin → Settings → Export budget** before a version jump.
+
+            Verify a download against `SHA256SUMS.txt`:
+
+            ```
+            sha256sum -c SHA256SUMS.txt --ignore-missing
+            ```

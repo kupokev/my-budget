@@ -1,0 +1,5 @@
+#!/bin/sh
+# AppImage entry point. The published app expects its files alongside the binary, so run from there.
+HERE="$(dirname "$(readlink -f "$0")")"
+cd "$HERE/usr/lib/mybudget" || exit 1
+exec ./MyBudget.Desktop "$@"

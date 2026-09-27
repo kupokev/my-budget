@@ -52,7 +52,7 @@ else
         <table>
             <thead><tr><th>Account / holding</th><th class="money">Shares</th><th class="money">Price</th><th class="money" title="Move between the two most recent closes">Day</th><th class="money">Value</th><th class="money">Cost</th><th class="money">Unrealized</th><th class="money" title="Paid so far in the selected year">Dividends</th><th class="money" title="A year at the current run rate: trailing-twelve-month dividends per share × shares held now">Est. / yr</th><th>DRIP</th><th></th></tr></thead>
             <tbody>
-            @foreach (var acct in portfolio.Positions.GroupBy(x => x.Holding.AccountName).OrderBy(g => g.Key))
+            @foreach (var acct in portfolio.Positions.GroupBy(x => x.Holding.AccountName ?? "Unassigned").OrderBy(g => g.Key))
             {
                 var accountOpen = openAccounts.Contains(acct.Key);
                 var acctValue = acct.Sum(x => x.MarketValue ?? 0);
