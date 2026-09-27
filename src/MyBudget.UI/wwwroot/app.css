@@ -314,3 +314,23 @@ table.tx td.center { text-align: center; }
 /* in a dialog the grid is narrow: checkboxes go on their own line under the fields */
 .modal .form .checks { grid-column: 1 / -1; grid-row: auto; justify-self: start; flex-direction: column; gap: 8px; padding: 6px 0 0; white-space: normal; }
 .modal .form fieldset.group { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+
+.tip-box .indent { padding-left: 10px; }
+
+/* Points vs cash: the verdict panel and its three bands. */
+.panel.verdict { border-top: 3px solid var(--border); }
+.panel.verdict.good { border-top-color: var(--ok); }
+.panel.verdict.marginal { border-top-color: var(--warn); }
+.panel.verdict.poor { border-top-color: var(--danger); }
+.panel.verdict h2 { margin-bottom: 2px; }
+.panel.verdict.good h2 { color: var(--ok); }
+.panel.verdict.marginal h2 { color: var(--warn); }
+.panel.verdict.poor h2 { color: var(--danger); }
+.panel.verdict .big { font-size: 30px; font-weight: 600; margin: 0 0 8px; }
+.panel.verdict .formula { font-size: 12px; margin-top: 10px; }
+.bands { display: flex; gap: 6px; margin-top: 12px; flex-wrap: wrap; }
+.bands .band { flex: 1 1 auto; text-align: center; font-size: 11px; padding: 5px 8px; border-radius: var(--radius); border: 1px solid var(--border); color: var(--muted); }
+.bands .band.on { font-weight: 600; color: var(--text); }
+.bands .band.poor.on { border-color: var(--danger); background: color-mix(in srgb, var(--danger) 14%, transparent); }
+.bands .band.marginal.on { border-color: var(--warn); background: color-mix(in srgb, var(--warn) 14%, transparent); }
+.bands .band.good.on { border-color: var(--ok); background: color-mix(in srgb, var(--ok) 14%, transparent); }

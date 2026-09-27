@@ -65,27 +65,115 @@ public static class DevSeed
         var gas = new Category { Name = "Gas", PlannedMonthly = 250m };
         var travel = new Category { Name = "Travel", PlannedMonthly = 400m };
         var other = new Category { Name = "Other spending", PlannedMonthly = 800m };
+        var onlineRetail = new Category { Name = "Online retail" };
+        var streaming = new Category { Name = "Streaming" };
+        var drugstore = new Category { Name = "Drugstore" };
+        var merchandise = new Category { Name = "General merchandise", PlannedMonthly = 500m };
         db.Categories.AddRange(utilities, housing, subscriptions, insurance, memberships, restaurants, groceries, gas, travel, other,
-            new Category { Name = "Transportation" }, new Category { Name = "Hotels (IHG)" }, new Category { Name = "Hotels (Hilton)" },
-            new Category { Name = "Online retail" }, new Category { Name = "Streaming" }, new Category { Name = "Drugstore" }, new Category { Name = "Entertainment" });
+            onlineRetail, streaming, drugstore, merchandise,
+            new Category { Name = "Transportation" }, new Category { Name = "Entertainment" });
+        // Labels: where a purchase happened. "General merchandise" at Amazon earns differently from the same
+        // category at Costco, so the label carries its own planned spend and its own earn rule.
+        var amazon = new Label { Name = "Amazon", Category = merchandise, PlannedMonthly = 300m };
+        var costco = new Label { Name = "Costco", Category = merchandise };
+        var ihgLabel = new Label { Name = "IHG", Category = travel };
+        var hiltonLabel = new Label { Name = "Hilton", Category = travel };
+        db.Labels.AddRange(amazon, costco, ihgLabel, hiltonLabel);
         await db.SaveChangesAsync(ct);
 
-        // Programs and catalog cards, exactly as "Add from catalog" would create them.
-        foreach (var program in CardCatalog.Programs()) db.LoyaltyPrograms.Add(program);
+        // Loyalty programs, then cards linked to them. This is exactly what "New card" plus the rewards
+        // editor (Cards → ★) and Rewards → Programs let you build by hand; nothing here is special.
+        var ihgProgram = new LoyaltyProgram
+        {
+            // Diamond was earned by spending $40,000 on the card in 2025, so it is held all through 2026
+            // without spending again; the 2027 plan is where the $40,000 shows up as a goal once more.
+            Name = "IHG One Rewards", PointValueCents = 0.5m, Priority = 1, TargetTier = "Diamond", CurrentTier = "Diamond", PointsBalance = 85_000m,
+            Tiers = [new() { Name = "Club", Rank = 0 }, new() { Name = "Silver", Rank = 1 }, new() { Name = "Gold", Rank = 2 }, new() { Name = "Platinum", Rank = 3 }, new() { Name = "Diamond", Rank = 4 }],
+            Progress = [new LoyaltyProgress { Year = 2026, Nights = 12, QualifyingPoints = 30_000m }, new LoyaltyProgress { Year = 2025, Nights = 21, ProgramSpend = 40_000m }],
+        };
+        var hiltonProgram = new LoyaltyProgram
+        {
+            Name = "Hilton Honors", PointValueCents = 0.5m, Priority = 2, TargetTier = "Diamond", CurrentTier = "Gold", PointsBalance = 120_000m,
+            Tiers = [new() { Name = "Member", Rank = 0 }, new() { Name = "Silver", Rank = 1 }, new() { Name = "Gold", Rank = 2 }, new() { Name = "Diamond", Rank = 3 }],
+            Progress = [new LoyaltyProgress { Year = 2026, Nights = 18, Stays = 9, ProgramSpend = 4_200m }],
+        };
+        var deltaProgram = new LoyaltyProgram
+        {
+            Name = "Delta SkyMiles", PointValueCents = 1.2m, Priority = 3, CurrentTier = "Member", PointsBalance = 34_000m,
+            Tiers = [new() { Name = "Member", Rank = 0 }, new() { Name = "Silver", Rank = 1 }, new() { Name = "Gold", Rank = 2 }, new() { Name = "Platinum", Rank = 3 }],
+        };
+        var hertzProgram = new LoyaltyProgram
+        {
+            Name = "Hertz Gold Plus Rewards", PointValueCents = 0.4m, Priority = 4, TargetTier = "Five Star",
+            Tiers = [new() { Name = "Gold", Rank = 0 }, new() { Name = "Five Star", Rank = 1 }, new() { Name = "President's Circle", Rank = 2 }],
+            Notes = "Five Star comes free with the IHG Premier card, not from renting.",
+        };
+        db.LoyaltyPrograms.AddRange(ihgProgram, hiltonProgram, deltaProgram, hertzProgram);
+
+        Card C(string name, string issuer, string network, int statementDay, int dueDay, decimal fee = 0, int? feeMonth = null, LoyaltyProgram? program = null, decimal? centsPerPoint = null) =>
+            new()
+            {
+                Name = name, Issuer = issuer, Network = network, StatementDay = statementDay, DueDay = dueDay, AnnualFee = fee, AnnualFeeMonth = feeMonth,
+                PayingAccount = chaseMain, Apr = 24.99m, CreditLimit = 10_000m, LoyaltyProgram = program, PointValueCents = centsPerPoint,
+            };
+
+        var chaseIhg = C("Chase IHG One Rewards Premier", "Chase", "Mastercard", 12, 9, 99m, 4, ihgProgram);
+        chaseIhg.EarnRules.AddRange([
+            new EarnRule { Category = travel, Label = ihgLabel, PointsPerDollar = 10 }, new EarnRule { Category = travel, PointsPerDollar = 5 },
+            new EarnRule { Category = gas, PointsPerDollar = 5 }, new EarnRule { Category = restaurants, PointsPerDollar = 5 }, new EarnRule { PointsPerDollar = 3 }]);
+        chaseIhg.Thresholds.AddRange([
+            new SpendThreshold { Amount = 20_000m, RewardKind = ThresholdRewardKind.Credit, Description = "$100 statement credit + 10,000 points", ValueDollars = 150m },
+            new SpendThreshold { Amount = 40_000m, RewardKind = ThresholdRewardKind.Status, Description = "IHG Diamond Elite", TierName = "Diamond" }]);
+
+        chaseIhg.Perks.AddRange([
+            new CardPerk { Description = "TSA PreCheck / Global Entry fee credit", AnnualValue = 20m, Notes = "$78 every 4 years, counted per year" },
+            new CardPerk { Description = "Fourth night free on award stays", AnnualValue = 150m }]);
+
+        var hiltonSurpass = C("Amex Hilton Honors Surpass", "American Express", "Amex", 20, 15, 150m, 6, hiltonProgram);
+        hiltonSurpass.EarnRules.AddRange([
+            new EarnRule { Category = travel, Label = hiltonLabel, PointsPerDollar = 12 }, new EarnRule { Category = restaurants, PointsPerDollar = 6 },
+            new EarnRule { Category = groceries, PointsPerDollar = 6 }, new EarnRule { Category = gas, PointsPerDollar = 6 }, new EarnRule { PointsPerDollar = 3 }]);
+        hiltonSurpass.Thresholds.AddRange([
+            new SpendThreshold { Amount = 15_000m, RewardKind = ThresholdRewardKind.FreeNight, Description = "Free night reward", ValueDollars = 250m },
+            new SpendThreshold { Amount = 40_000m, RewardKind = ThresholdRewardKind.Status, Description = "Hilton Diamond", TierName = "Diamond" }]);
+
+        var amexDelta = C("Amex Delta SkyMiles Gold", "American Express", "Amex", 8, 5, 150m, 9, deltaProgram);
+        amexDelta.EarnRules.AddRange([new EarnRule { Category = travel, PointsPerDollar = 2 }, new EarnRule { Category = restaurants, PointsPerDollar = 2 }, new EarnRule { Category = groceries, PointsPerDollar = 2 }, new EarnRule { PointsPerDollar = 1 }]);
+
+        // Cash-back cards: no program, a point worth exactly 1¢, so "points" come out in dollars.
+        var sapphire = C("Chase Sapphire Preferred", "Chase", "Visa", 16, 13, 95m, 3, centsPerPoint: 1.25m);
+        sapphire.EarnRules.AddRange([new EarnRule { Category = travel, PointsPerDollar = 2 }, new EarnRule { Category = restaurants, PointsPerDollar = 3 }, new EarnRule { Category = streaming, PointsPerDollar = 3 }, new EarnRule { PointsPerDollar = 1 }]);
+        var freedom = C("Chase Freedom Unlimited", "Chase", "Visa", 14, 11, centsPerPoint: 1.0m);
+        freedom.EarnRules.AddRange([
+            new EarnRule { Category = restaurants, PointsPerDollar = 3 },
+            new EarnRule { Category = drugstore, PointsPerDollar = 3 },
+            // General merchandise pays 5× at Amazon this year, and the card's base rate at Costco or anywhere else.
+            new EarnRule { Category = merchandise, Label = amazon, PointsPerDollar = 5, Notes = "Amazon promo rate", StartYear = 2026, EndYear = 2026 },
+            new EarnRule { PointsPerDollar = 1.5m }]);
+        var citi = C("Citi Double Cash", "Citi", "Mastercard", 10, 7, centsPerPoint: 1.0m);
+        citi.EarnRules.Add(new EarnRule { PointsPerDollar = 2 });
+
+        db.Cards.AddRange(chaseIhg, hiltonSurpass, amexDelta, sapphire, freedom, citi,
+            C("HICV", "Comenity", "Visa", 27, 24));
         await db.SaveChangesAsync(ct);
-        var chaseIhg = await CatalogService.AddCardAsync(db, "chase-ihg-premier", chaseMain, ct);
-        chaseIhg.StatementDay = 12; chaseIhg.DueDay = 9; chaseIhg.AnnualFeeMonth = 4;
-        var hiltonSurpass = await CatalogService.AddCardAsync(db, "amex-hilton-surpass", chaseMain, ct);
-        hiltonSurpass.StatementDay = 20; hiltonSurpass.DueDay = 15; hiltonSurpass.AnnualFeeMonth = 6;
-        var sapphire = await CatalogService.AddCardAsync(db, "chase-sapphire-preferred", chaseMain, ct);
-        var freedom = await CatalogService.AddCardAsync(db, "chase-freedom-unlimited", chaseMain, ct);
-        var citi = await CatalogService.AddCardAsync(db, "citi-double-cash", chaseMain, ct);
-        var quicksilver = await CatalogService.AddCardAsync(db, "capital-one-quicksilver", chaseMain, ct);
-        var savor = await CatalogService.AddCardAsync(db, "capital-one-savorone", chaseMain, ct);
-        var wf = await CatalogService.AddCardAsync(db, "wells-fargo-active-cash", chaseMain, ct);
-        var discover = await CatalogService.AddCardAsync(db, "discover-it", chaseMain, ct);
-        var amexBce = await CatalogService.AddCardAsync(db, "amex-blue-cash-everyday", chaseMain, ct);
-        db.Cards.Add(new Card { Name = "HICV", Issuer = "Comenity", Network = "Visa", StatementDay = 27, DueDay = 24, PayingAccount = chaseMain, Apr = 24.99m, CreditLimit = 10_000m });
+
+        // Status paths: how each tier can be earned, including the card ones.
+        ihgProgram.Paths.AddRange([
+            new StatusPath { TierName = "Platinum", Kind = StatusPathKind.HoldCard, Card = chaseIhg, Notes = "for holding the IHG Premier" },
+            new StatusPath { TierName = "Diamond", Kind = StatusPathKind.CardSpend, Threshold = 40_000m, Card = chaseIhg },
+            new StatusPath { TierName = "Diamond", Kind = StatusPathKind.Nights, Threshold = 70 },
+            new StatusPath { TierName = "Diamond", Kind = StatusPathKind.QualifyingPoints, Threshold = 120_000 },
+            new StatusPath { TierName = "Platinum", Kind = StatusPathKind.Nights, Threshold = 40 }]);
+        hiltonProgram.Paths.AddRange([
+            new StatusPath { TierName = "Gold", Kind = StatusPathKind.HoldCard, Card = hiltonSurpass, Notes = "for holding the Surpass" },
+            new StatusPath { TierName = "Diamond", Kind = StatusPathKind.CardSpend, Threshold = 40_000m, Card = hiltonSurpass },
+            new StatusPath { TierName = "Diamond", Kind = StatusPathKind.Nights, Threshold = 50 },
+            new StatusPath { TierName = "Diamond", Kind = StatusPathKind.Stays, Threshold = 25 },
+            new StatusPath { TierName = "Diamond", Kind = StatusPathKind.ProgramSpend, Threshold = 11_500m, Notes = "2026 eligible Hilton spend path" }]);
+        deltaProgram.Paths.Add(new StatusPath { TierName = "Silver", Kind = StatusPathKind.QualifyingPoints, Threshold = 6_000m, Notes = "MQDs" });
+        // A card can grant status in a program it has nothing else to do with.
+        hertzProgram.Paths.Add(new StatusPath { TierName = "Five Star", Kind = StatusPathKind.HoldCard, Card = chaseIhg, Notes = "benefit of the IHG Premier card" });
+        await db.SaveChangesAsync(ct);
 
         // Placeholder year-to-date card spend (RWD-3) and program activity; replace from statements.
         foreach (var m in Enumerable.Range(1, 9))
@@ -98,13 +186,6 @@ public static class DevSeed
                 new CardSpend { Card = hiltonSurpass, Period = period, Category = restaurants, Amount = 550m },
                 new CardSpend { Card = hiltonSurpass, Period = period, Category = travel, Amount = 300m });
         }
-        var ihgProgram = await db.LoyaltyPrograms.FirstAsync(p => p.Name == CardCatalog.Ihg, ct);
-        var hiltonProgram = await db.LoyaltyPrograms.FirstAsync(p => p.Name == CardCatalog.Hilton, ct);
-        ihgProgram.CurrentTier = "Platinum"; ihgProgram.PointsBalance = 85_000m;
-        ihgProgram.Progress.Add(new LoyaltyProgress { Year = 2026, Nights = 12, QualifyingPoints = 30_000m });
-        hiltonProgram.CurrentTier = "Gold"; hiltonProgram.PointsBalance = 120_000m;
-        hiltonProgram.Progress.Add(new LoyaltyProgress { Year = 2026, Nights = 18, Stays = 9, ProgramSpend = 4_200m });
-
         db.Bills.AddRange(
             new Bill { Name = "Mortgage", Category = housing, DueDay = 1, ProjectedAmount = 2_100m, IsAutopay = true, PaymentMethod = PaymentMethodKind.Account, PaymentAccount = chaseMain, FundingAccount = chaseMain, IsCardEligible = false },
             new Bill { Name = "Water", Category = utilities, DueDay = 20, ProjectedAmount = 60m, IsAutopay = true, PaymentAccount = automatedBills, FundingAccount = automatedBills },
@@ -135,6 +216,9 @@ public static class DevSeed
         });
 
         db.CategoryRules.AddRange(
+            new CategoryRule { Pattern = "AMAZON", CategoryId = merchandise.Id, LabelId = amazon.Id, Priority = 5 },
+            new CategoryRule { Pattern = "AMZN", CategoryId = merchandise.Id, LabelId = amazon.Id, Priority = 5 },
+            new CategoryRule { Pattern = "COSTCO", CategoryId = merchandise.Id, LabelId = costco.Id, Priority = 5 },
             new CategoryRule { Pattern = "HULU", CategoryId = subscriptions.Id, Priority = 10 },
             new CategoryRule { Pattern = "AMEREN", Priority = 10 },
             new CategoryRule { Pattern = "PAYMENT THANK YOU", MarkAsTransfer = true, Priority = 1 });

@@ -28,6 +28,33 @@ public static class BillEndpoints
             return Results.Ok(c.ToDto());
         });
 
+        var labels = api.MapGroup("/labels");
+        labels.MapGet("/", async (BudgetDbContext db) => (await db.Labels.OrderBy(l => l.Name).ToListAsync()).Select(ToDto));
+        labels.MapPost("/", async (LabelDto dto, BudgetDbContext db) =>
+        {
+            var l = new Label { Name = dto.Name.Trim() };
+            Apply(l, dto);
+            db.Labels.Add(l);
+            await db.SaveChangesAsync();
+            return Results.Created($"/api/labels/{l.Id}", ToDto(l));
+        });
+        labels.MapPut("/{id:int}", async (int id, LabelDto dto, BudgetDbContext db) =>
+        {
+            var l = await db.Labels.FindAsync(id);
+            if (l is null) return Results.NotFound();
+            Apply(l, dto);
+            await db.SaveChangesAsync();
+            return Results.Ok(ToDto(l));
+        });
+        labels.MapDelete("/{id:int}", async (int id, BudgetDbContext db) =>
+        {
+            var l = await db.Labels.FindAsync(id);
+            if (l is null) return Results.NotFound();
+            db.Labels.Remove(l);
+            await db.SaveChangesAsync();
+            return Results.NoContent();
+        });
+
         var g = api.MapGroup("/bills");
 
         g.MapGet("/", async (BudgetDbContext db) => (await db.Bills.OrderBy(b => b.Name).ToListAsync()).Select(b => b.ToDto()));
@@ -127,6 +154,13 @@ public static class BillEndpoints
         });
 
         return api;
+    }
+
+    private static LabelDto ToDto(Label l) => new() { Id = l.Id, Name = l.Name, CategoryId = l.CategoryId, PlannedMonthly = l.PlannedMonthly, IsActive = l.IsActive, Notes = l.Notes };
+
+    private static void Apply(Label l, LabelDto d)
+    {
+        l.Name = d.Name.Trim(); l.CategoryId = d.CategoryId; l.PlannedMonthly = d.PlannedMonthly; l.IsActive = d.IsActive; l.Notes = d.Notes;
     }
 
     internal static async Task<List<UpcomingBillDto>> Upcoming(BudgetDbContext db, DateOnly asOf, int days)

@@ -76,10 +76,14 @@ in-memory database resets on every restart either way.)
 
 ## Phase 3: rewards
 
-- **Cards → Add from catalog.** Pick a card; it arrives with its earn rules, spend thresholds, and
-  its program's status paths. Then open *Rewards* on the card to correct anything against the
-  issuer's current terms. Any card can have rules: a 2% cash-back card is one rule at 2× and 1¢.
-- **Rewards → Programs.** Set each program's priority (1 = chase first), current and target tier,
+- **Cards → New card**, then the ★ icon for its rewards: the loyalty program it earns into (blank
+  for cash back, with a point value of 1¢ so points come out in dollars), an earn rule per category
+  and optionally per label, plus one with neither as the base rate, and any calendar-year spend
+  thresholds. A rule with a label beats one with only a category, so "General merchandise at Amazon
+  5×" and "General merchandise 1×" live side by side. Earn rules and
+  thresholds take an optional year range, so a promo rate for one year doesn't skew other years.
+- **Admin → Loyalty programs.** One program per points currency (IHG One Rewards, Hilton Honors, Delta
+  SkyMiles). Set each program's priority (1 = chase first), current and target tier,
   point value, and this year's nights / stays / program spend. Paths list every way to each tier.
 - **Rewards → Card spend.** Type each card's monthly spend by category from statements. This is
   the year-to-date figure every threshold and card-spend path uses.
@@ -90,6 +94,12 @@ in-memory database resets on every restart either way.)
   the per-month figure. Plan allocates spend to goals in priority order and shows gaps with the
   other paths. Bills says card or bank per bill, weighing the bank-autopay discount. Earnings shows
   points and dollars per card net of fees. Use the year arrows to see next year's plan from zero.
+- **Calculators → Points vs cash.** Standing at a booking page, price the stay both ways and enter
+  the two totals. It returns cents per point and tells you to pay cash under 0.45¢, calls it a wash
+  between 0.45¢ and 0.55¢, and says use the points at 0.55¢ and up. Enter the cash price all-in
+  including taxes, because an award stay doesn't pay them. Open the earning section and it also
+  subtracts the points a cash stay would have earned, which is usually worth most of a band.
+  Enter totals for the whole stay so a fourth- or fifth-night-free benefit is already counted.
 
 ## Phase 4: import and history
 
@@ -99,6 +109,11 @@ in-memory database resets on every restart either way.)
   already imported are marked as duplicates and left out. A line matched to a bill sets that
   month's actual on the Bills grid; card lines feed the Rewards card-spend figures. Undo removes a
   whole file's lines.
+- **Labels** (Admin → Categories) say *where* a purchase happened next to the category's *what kind*:
+  Amazon vs Costco within General merchandise, or IHG vs Hilton within Travel. Give a label a usual
+  category and a planned monthly amount and the rewards plan splits that category, sending the
+  labelled part to whichever card pays best for it. A categorization rule can apply a label
+  automatically, so every Amazon line is tagged on import.
 - **Transactions.** Browse by month or year, filter to uncategorized or to entries that still need
   reconciling, search, edit a line's category/bill/transfer. A transfer you typed on Accounts shows
   here as "manual" and "unreconciled" until a statement import brings the bank's line for it; the

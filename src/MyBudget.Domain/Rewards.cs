@@ -57,7 +57,12 @@ public class StatusPath
     /// <summary>For CardSpend and HoldCard: which card.</summary>
     public int? CardId { get; set; }
     public Card? Card { get; set; }
+    /// <summary>Years this path was offered; null means always. Programs change their qualification rules.</summary>
+    public int? StartYear { get; set; }
+    public int? EndYear { get; set; }
     public string? Notes { get; set; }
+
+    public bool AppliesIn(int year) => (StartYear is null || year >= StartYear) && (EndYear is null || year <= EndYear);
 }
 
 /// <summary>Year-to-date qualifying activity entered by hand (nights, stays, program spend, qualifying points).</summary>
@@ -81,10 +86,18 @@ public class EarnRule
     public Card? Card { get; set; }
     public int? CategoryId { get; set; }
     public Category? Category { get; set; }
+    /// <summary>Narrows the rule to purchases carrying this label. Category + label beats label, which beats category, which beats the base rate.</summary>
+    public int? LabelId { get; set; }
+    public Label? Label { get; set; }
     public decimal PointsPerDollar { get; set; }
     /// <summary>Annual spend cap for this rate, if any; spend past it earns the base rate (not enforced in v1, shown as a note).</summary>
     public decimal? AnnualSpendCap { get; set; }
+    /// <summary>Years this rate was in force; null means always. Issuers change earn rates, so old years keep their own numbers.</summary>
+    public int? StartYear { get; set; }
+    public int? EndYear { get; set; }
     public string? Notes { get; set; }
+
+    public bool AppliesIn(int year) => (StartYear is null || year >= StartYear) && (EndYear is null || year <= EndYear);
 }
 
 /// <summary>A calendar-year spend threshold on a card and what it unlocks (RWD-1): free night at $15K, Diamond at $40K, $100 credit at $20K.</summary>
@@ -100,6 +113,32 @@ public class SpendThreshold
     public decimal? ValueDollars { get; set; }
     /// <summary>For Status rewards: the tier granted (matches a StatusPath of kind CardSpend).</summary>
     public string? TierName { get; set; }
+    /// <summary>Years this threshold was offered; null means always.</summary>
+    public int? StartYear { get; set; }
+    public int? EndYear { get; set; }
+
+    public bool AppliesIn(int year) => (StartYear is null || year >= StartYear) && (EndYear is null || year <= EndYear);
+}
+
+/// <summary>
+/// Something a card gives you for simply holding it, with no spend threshold and no loyalty program:
+/// a TSA PreCheck or Global Entry credit, a travel credit, free checked bags. Counted in the card's
+/// yearly value so the annual fee can be judged against it.
+/// </summary>
+public class CardPerk
+{
+    public int Id { get; set; }
+    public int CardId { get; set; }
+    public Card? Card { get; set; }
+    public required string Description { get; set; }
+    /// <summary>What it is worth to you over a year.</summary>
+    public decimal AnnualValue { get; set; }
+    /// <summary>Years the perk was offered; null means always.</summary>
+    public int? StartYear { get; set; }
+    public int? EndYear { get; set; }
+    public string? Notes { get; set; }
+
+    public bool AppliesIn(int year) => (StartYear is null || year >= StartYear) && (EndYear is null || year <= EndYear);
 }
 
 /// <summary>Actual spend on a card in a month, by category, entered from statements until import exists (RWD-3, RWD-5).</summary>
@@ -111,6 +150,8 @@ public class CardSpend
     public DateOnly Period { get; set; }
     public int? CategoryId { get; set; }
     public Category? Category { get; set; }
+    public int? LabelId { get; set; }
+    public Label? Label { get; set; }
     public decimal Amount { get; set; }
     public string? Notes { get; set; }
 }

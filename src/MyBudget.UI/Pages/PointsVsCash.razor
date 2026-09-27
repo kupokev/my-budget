@@ -1,0 +1,89 @@
+@page "/points-vs-cash"
+@using MyBudget.Engines.Rewards
+
+<div class="row">
+    <section class="panel grow">
+        <p class="muted">
+            Price the same stay both ways on the booking page and enter the two totals. Totals for the whole stay, not per night,
+            so a fourth- or fifth-night-free benefit is already counted. Works for any program: what a point is worth swings more
+            than two to one with the cash price, so the judgement belongs on the booking rather than on the program.
+        </p>
+
+        <div class="row">
+            <div class="field">
+                <label>Cash total <span class="muted">(all-in, with taxes)</span></label>
+                <input type="number" step="0.01" min="0" @bind="cash" @bind:event="oninput" />
+            </div>
+            <div class="field">
+                <label>Points total</label>
+                <input type="number" step="500" min="0" @bind="points" @bind:event="oninput" />
+            </div>
+        </div>
+        <p class="muted">An award stay pays no taxes, so the taxes are part of what redeeming saves you. Use the all-in price, not the room rate.</p>
+
+        <details>
+            <summary>Points you'd give up by not paying cash</summary>
+            <p class="muted">A cash stay earns program points, your elite bonus and the card's rate. Booking with points forfeits all of it, which on a real booking moved the answer by most of a band. Leave blank to skip.</p>
+            <div class="row">
+                <div class="field">
+                    <label>Points the cash stay would earn</label>
+                    <input type="number" step="500" min="0" @bind="earned" @bind:event="oninput" />
+                </div>
+                <div class="field">
+                    <label>Worth per point (¢)</label>
+                    <input type="number" step="0.01" min="0" class="narrow" @bind="earnedValue" @bind:event="oninput" />
+                </div>
+            </div>
+        </details>
+    </section>
+
+    <section class="panel grow verdict @Css(result.Verdict)">
+        <h2>@Headline(result.Verdict)</h2>
+        <p class="big">@result.CentsPerPoint.ToString("0.###")¢ <span class="muted">per point</span></p>
+        <p>@Advice(result.Verdict)</p>
+
+        @if (result.ForgoneValue > 0)
+        {
+            <table class="compact">
+                <tbody>
+                    <tr><td>Straight off the booking page</td><td class="money">@result.GrossCentsPerPoint.ToString("0.###")¢</td></tr>
+                    <tr><td>Value of points given up</td><td class="money">@Fmt.Money(result.ForgoneValue)</td></tr>
+                    <tr><td>Cash actually avoided</td><td class="money">@Fmt.Money(result.NetCashAvoided)</td></tr>
+                </tbody>
+            </table>
+        }
+
+        <p class="muted formula">@result.Formula</p>
+
+        <div class="bands">
+            <span class="band poor @(result.Verdict == RedemptionVerdict.Poor ? "on" : "")">under 0.45¢ · pay cash</span>
+            <span class="band marginal @(result.Verdict == RedemptionVerdict.Marginal ? "on" : "")">0.45–0.55¢ · a wash</span>
+            <span class="band good @(result.Verdict == RedemptionVerdict.Good ? "on" : "")">0.55¢ and up · use points</span>
+        </div>
+    </section>
+</div>
+
+@code {
+    private decimal cash = 199m;
+    private decimal points = 30_500m;
+    private decimal earned;
+    private decimal earnedValue = 0.55m;
+
+    private RedemptionResult result => RedemptionCalculator.Evaluate(new(cash, points, earned, earnedValue));
+
+    private static string Css(RedemptionVerdict v) => v.ToString().ToLowerInvariant();
+
+    private static string Headline(RedemptionVerdict v) => v switch
+    {
+        RedemptionVerdict.Good => "Use the points",
+        RedemptionVerdict.Marginal => "Close either way",
+        _ => "Pay cash",
+    };
+
+    private static string Advice(RedemptionVerdict v) => v switch
+    {
+        RedemptionVerdict.Good => "The points are doing better here than they usually do. Book it with points and keep the cash.",
+        RedemptionVerdict.Marginal => "The points aren't earning their keep or wasting themselves. Decide on cancellation terms, availability or which balance you'd rather run down.",
+        _ => "The points are worth more somewhere else. Pay cash, earn on the stay, and save the balance for a night that prices better.",
+    };
+}

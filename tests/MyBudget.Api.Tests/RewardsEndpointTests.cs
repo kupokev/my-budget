@@ -10,21 +10,44 @@ public class RewardsEndpointTests : IClassFixture<ApiFixture>
     public RewardsEndpointTests(ApiFixture api) => _api = api;
 
     [Fact]
-    public async Task Catalog_cards_come_with_earn_rules_thresholds_and_program_paths()
+    public async Task A_card_carries_its_own_earn_rules_thresholds_and_program_link()
     {
-        var catalog = await _api.Get<List<CatalogEntryDto>>("api/card-catalog");
-        Assert.Contains(catalog, c => c.Key == "chase-ihg-premier" && c.Program == "IHG One Rewards");
-
         var cards = await _api.Get<List<CardDto>>("api/cards");
-        var ihg = cards.Single(c => c.CatalogKey == "chase-ihg-premier");
+        var ihg = cards.Single(c => c.Name == "Chase IHG One Rewards Premier");
         var rewards = await _api.Get<CardRewardsDto>($"api/cards/{ihg.Id}/rewards");
         Assert.Contains(rewards.EarnRules, r => r.CategoryId is null && r.PointsPerDollar == 3m);
         Assert.Contains(rewards.Thresholds, t => t.Amount == 40_000m && t.TierName == "Diamond");
+        Assert.NotNull(rewards.LoyaltyProgramId);
 
         var programs = await _api.Get<List<LoyaltyProgramDto>>("api/loyalty-programs");
         var ihgProg = programs.Single(p => p.Name == "IHG One Rewards");
         Assert.Contains(ihgProg.Paths, x => x.Kind == StatusPathKind.CardSpend && x.CardId == ihg.Id && x.Threshold == 40_000m);
         Assert.Contains(ihgProg.Paths, x => x.Kind == StatusPathKind.HoldCard && x.TierName == "Platinum");
+
+        // A cash-back card is the same machinery: no program, a point worth 1¢.
+        var citi = cards.Single(c => c.Name == "Citi Double Cash");
+        var citiRewards = await _api.Get<CardRewardsDto>($"api/cards/{citi.Id}/rewards");
+        Assert.Null(citiRewards.LoyaltyProgramId);
+        Assert.Equal(1.0m, citiRewards.PointValueCents);
+        Assert.Equal(2m, Assert.Single(citiRewards.EarnRules).PointsPerDollar);
+    }
+
+    [Fact]
+    public async Task An_earn_rule_carries_the_years_it_covers()
+    {
+        var cards = await _api.Get<List<CardDto>>("api/cards");
+        var freedom = cards.Single(c => c.Name == "Chase Freedom Unlimited");
+        var rewards = await _api.Get<CardRewardsDto>($"api/cards/{freedom.Id}/rewards");
+        var promo = rewards.EarnRules.Single(r => r.StartYear == 2026 && r.EndYear == 2026);
+        Assert.Equal(5m, promo.PointsPerDollar);
+        Assert.Contains(rewards.EarnRules, r => r.CategoryId is null && r.StartYear is null && r.PointsPerDollar == 1.5m);
+
+        // Editing keeps the years.
+        rewards.EarnRules.Add(new EarnRuleDto { PointsPerDollar = 4, StartYear = 2027 });
+        var saved = await _api.Put($"api/cards/{freedom.Id}/rewards", rewards);
+        Assert.Contains(saved.EarnRules, r => r.PointsPerDollar == 4m && r.StartYear == 2027 && r.EndYear is null);
+        saved.EarnRules.RemoveAll(r => r.PointsPerDollar == 4m);
+        await _api.Put($"api/cards/{freedom.Id}/rewards", saved);
     }
 
     [Fact]
@@ -33,10 +56,17 @@ public class RewardsEndpointTests : IClassFixture<ApiFixture>
         var r = await _api.Get<RewardsReportDto>("api/rewards/report?year=2026&asOf=2026-09-26");
         Assert.Equal(4, r.Plan.MonthsLeft);
         var ihg = r.Programs.Single(p => p.Name == "IHG One Rewards");
-        Assert.Equal("Platinum", ihg.HeldTier);
-        Assert.NotNull(ihg.PlannedPath);
-        Assert.Equal(9 * 1_390m, ihg.PlannedPath!.Current);           // seeded YTD spend
-        Assert.NotEmpty(r.Plan.Gaps);                                   // both Diamonds can't be hit on the seed's planned spend
+        Assert.Equal("Platinum", ihg.HeldTier);                         // Platinum comes free with the card
+        Assert.True(ihg.TargetReached);                                 // Diamond was bought with 2025's $40,000 and is held all of 2026
+        Assert.Contains("already Diamond", ihg.HowReached);
+        Assert.Equal(9 * 1_390m, ihg.Paths.Single(x => x.Kind == StatusPathKind.CardSpend).Current);   // seeded YTD spend
+        // Status from a card that belongs to another brand entirely.
+        var hertz = r.Programs.Single(p => p.Name == "Hertz Gold Plus Rewards");
+        Assert.True(hertz.TargetReached);
+        Assert.Equal("Five Star", hertz.HeldTier);
+        // A benefit with no spend threshold behind it still offsets the fee.
+        var premier = r.Earnings.Single(e => e.CardName == "Chase IHG One Rewards Premier");
+        Assert.Equal(170m, premier.PerksValue);
         Assert.Contains(r.Bills, b => b.BillName == "AT&T" && b.BankDiscount == 5m);
         Assert.DoesNotContain(r.Bills, b => b.BillName == "Mortgage"); // not card-eligible
         Assert.Contains(r.Earnings, e => e.YtdPoints > 0);
@@ -51,7 +81,7 @@ public class RewardsEndpointTests : IClassFixture<ApiFixture>
     public async Task Card_spend_upsert_changes_threshold_progress()
     {
         var cards = await _api.Get<List<CardDto>>("api/cards");
-        var surpass = cards.Single(c => c.CatalogKey == "amex-hilton-surpass");
+        var surpass = cards.Single(c => c.Name == "Amex Hilton Honors Surpass");
         var before = (await _api.Get<RewardsReportDto>("api/rewards/report?year=2026&asOf=2026-09-26")).Thresholds.Single(t => t.CardId == surpass.Id && t.Amount == 15_000m);
 
         var r = await _api.Client.PutAsJsonAsync("api/card-spend", new CardSpendDto { CardId = surpass.Id, Period = new(2026, 9, 15), CategoryId = null, Amount = 1_000m }, ApiFixture.Json);
@@ -63,14 +93,26 @@ public class RewardsEndpointTests : IClassFixture<ApiFixture>
     }
 
     [Fact]
-    public async Task Adding_the_Aspire_from_the_catalog_makes_Hilton_Diamond_held()
+    public async Task Adding_a_card_by_hand_and_giving_it_a_hold_the_card_path_grants_the_tier()
     {
-        var created = await _api.Post<object, CardDto>("api/cards/from-catalog/amex-hilton-aspire", new { });
-        Assert.Equal("Amex Hilton Honors Aspire", created.Name);
+        // Exactly the flow on the page: New card, then a status path on the program that says holding it grants Diamond.
+        var created = await _api.Post("api/cards", new CardDto { Name = "Amex Hilton Honors Aspire", Issuer = "American Express", Network = "Amex", AnnualFee = 550m, AnnualFeeMonth = 1, StatementDay = 5, DueDay = 2 });
+        var hiltonProgram = (await _api.Get<List<LoyaltyProgramDto>>("api/loyalty-programs")).Single(p => p.Name == "Hilton Honors");
+        await _api.Put($"api/cards/{created.Id}/rewards", new CardRewardsDto
+        {
+            CardId = created.Id, LoyaltyProgramId = hiltonProgram.Id,
+            EarnRules = [new EarnRuleDto { PointsPerDollar = 3 }],
+        });
+        hiltonProgram.Paths.Add(new StatusPathDto { TierName = "Diamond", Kind = StatusPathKind.HoldCard, CardId = created.Id, Notes = "for holding the Aspire" });
+        await _api.Put($"api/loyalty-programs/{hiltonProgram.Id}", hiltonProgram);
+
         var r = await _api.Get<RewardsReportDto>("api/rewards/report?year=2026&asOf=2026-09-26");
         var hilton = r.Programs.Single(p => p.Name == "Hilton Honors");
         Assert.True(hilton.TargetReached);
         Assert.Equal("Diamond", hilton.HeldTier);
+
+        hiltonProgram.Paths.RemoveAll(x => x.CardId == created.Id);
+        await _api.Put($"api/loyalty-programs/{hiltonProgram.Id}", hiltonProgram);
         await _api.Client.DeleteAsync($"api/cards/{created.Id}");
     }
 }

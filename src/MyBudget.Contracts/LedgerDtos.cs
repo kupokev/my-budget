@@ -70,7 +70,6 @@ public sealed class CardDto
     public decimal? LatestBalance { get; set; }
     public DateOnly? LatestBalanceAsOf { get; set; }
     public int? LoyaltyProgramId { get; set; }
-    public string? CatalogKey { get; set; }
 }
 
 public sealed class CardBalanceDto
@@ -79,6 +78,17 @@ public sealed class CardBalanceDto
     public int CardId { get; set; }
     public DateOnly AsOf { get; set; }
     public decimal Balance { get; set; }
+}
+
+public sealed class LabelDto
+{
+    public int Id { get; set; }
+    [Required, StringLength(60)] public string Name { get; set; } = "";
+    /// <summary>The category these usually fall in.</summary>
+    public int? CategoryId { get; set; }
+    public decimal? PlannedMonthly { get; set; }
+    public bool IsActive { get; set; } = true;
+    public string? Notes { get; set; }
 }
 
 public sealed class CategoryDto

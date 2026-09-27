@@ -42,7 +42,7 @@ internal static class Mapping
         PayingAccountId = c.PayingAccountId, Notes = c.Notes, IsActive = c.IsActive,
         LatestBalance = c.Balances.OrderByDescending(b => b.AsOf).FirstOrDefault()?.Balance,
         LatestBalanceAsOf = c.Balances.OrderByDescending(b => b.AsOf).FirstOrDefault()?.AsOf,
-        LoyaltyProgramId = c.LoyaltyProgramId, CatalogKey = c.CatalogKey,
+        LoyaltyProgramId = c.LoyaltyProgramId,
     };
 
     public static void Apply(this Card c, CardDto d)

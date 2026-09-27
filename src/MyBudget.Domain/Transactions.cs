@@ -43,6 +43,9 @@ public class Transaction
     public string? Merchant { get; set; }
     public int? CategoryId { get; set; }
     public Category? Category { get; set; }
+    /// <summary>Where it was: Amazon, Costco, an IHG property. Sharpens rewards rates (see <see cref="Label"/>).</summary>
+    public int? LabelId { get; set; }
+    public Label? Label { get; set; }
     /// <summary>The tracked bill this line pays, if any (BIL-3 actuals come from these).</summary>
     public int? BillId { get; set; }
     public Bill? Bill { get; set; }
@@ -84,6 +87,8 @@ public class CategoryRule
     public RuleMatch Match { get; set; } = RuleMatch.Contains;
     public int? CategoryId { get; set; }
     public Category? Category { get; set; }
+    public int? LabelId { get; set; }
+    public Label? Label { get; set; }
     public int? BillId { get; set; }
     public Bill? Bill { get; set; }
     public bool MarkAsTransfer { get; set; }

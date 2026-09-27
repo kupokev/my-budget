@@ -9,33 +9,39 @@
 }
 else
 {
-    <div class="toolbar">
-        <button type="button" @onclick="() => Edit(new CardDto())">New card</button>
-        <label class="inline">Add from catalog
-            <select @bind="catalogKey"><option value="">—</option>@foreach (var e in catalog ?? []) { <option value="@e.Key">@e.Name (@e.Issuer)</option> }</select>
-        </label>
-        <button class="secondary" type="button" disabled="@string.IsNullOrEmpty(catalogKey)" @onclick="AddFromCatalog">Add</button>
-        @if (!string.IsNullOrEmpty(catalogKey) && catalog?.FirstOrDefault(e => e.Key == catalogKey) is { } ce) { <span class="muted">@ce.Summary</span> }
-    </div>
+    <div class="toolbar"><button type="button" @onclick="() => Edit(new CardDto())">New card</button></div>
 
     <table>
-        <thead><tr><th>Card</th><th>Bills on card</th><th class="money">Monthly bill spend</th><th class="money">Balance</th><th>As of</th><th class="money">Utilization</th><th>Stmt / due</th><th>Paid by</th><th></th></tr></thead>
+        <thead><tr><th>Card</th><th class="money">Monthly bill spend</th><th class="money">Balance</th><th>As of</th><th class="money">Utilization</th><th>Stmt / due</th><th>Paid by</th><th></th></tr></thead>
         <tbody>
         @foreach (var s in summary)
         {
             <tr>
-                <td>@s.CardName <MaskedNumber Value="@cards.First(c => c.Id == s.CardId).AccountNumber" /></td>
-                <td class="muted">@(s.Bills.Count == 0 ? "—" : string.Join(", ", s.Bills))</td>
+                <td>
+                    <span class="tip">@s.CardName
+                        <span class="tip-box">
+                            <b>@s.CardName</b>
+                            @if (s.Bills.Count == 0) { <span class="muted">No bills charged to this card</span> }
+                            else
+                            {
+                                <span>Bills on this card:</span>
+                                @foreach (var b in s.Bills) { <span class="indent">· @b</span> }
+                                <span class="muted">@Fmt.Money(s.MonthlyBillSpend) a month</span>
+                            }
+                        </span>
+                    </span>
+                    <MaskedNumber Value="@cards.First(c => c.Id == s.CardId).AccountNumber" />
+                </td>
                 <td><Money Value="s.MonthlyBillSpend" /></td>
                 <td class="money">@Fmt.Money(s.LatestBalance)</td>
                 <td>@Fmt.Date(s.LatestBalanceAsOf)</td>
                 <td class="money">@Fmt.Pct(s.Utilization)</td>
                 <td>@s.StatementDay / @s.DueDay</td>
                 <td>@(s.PayingAccount ?? "—")</td>
-                <td class="actions">
-                    <button class="secondary" type="button" @onclick="() => Edit(cards.First(c => c.Id == s.CardId))">Edit</button>
-                    <button class="secondary" type="button" @onclick="() => OpenBalance(s.CardId)">Balance</button>
-                    <button class="secondary" type="button" @onclick="() => OpenRewards(s.CardId)">Rewards</button>
+                <td class="actions icons">
+                    <button class="link" type="button" title="Edit card" @onclick="() => Edit(cards.First(c => c.Id == s.CardId))">✎</button>
+                    <button class="link" type="button" title="Record a statement balance" @onclick="() => OpenBalance(s.CardId)">⇄</button>
+                    <button class="link" type="button" title="Earn rates and spend thresholds" @onclick="() => OpenRewards(s.CardId)">★</button>
                 </td>
             </tr>
         }
@@ -54,9 +60,9 @@ else
 
     <section class="panel">
         <h2>Yearly cost vs value · @DateTime.Today.Year</h2>
-        <p class="muted">Cost = annual fee + interest if the latest balance were carried all year at the card's APR (promo APR while it lasts). Value = points earned this year at your point value + reached threshold rewards. Worst first.</p>
+        <p class="muted">Cost = annual fee + interest if the latest balance were carried all year at the card's APR (promo APR while it lasts). Value = points earned this year at your point value, plus reached threshold rewards, plus benefits you get for simply holding the card. Worst first.</p>
         <table>
-            <thead><tr><th>Card</th><th class="money">Annual fee</th><th class="money">Est. interest / yr</th><th class="money">Yearly cost</th><th class="money">Rewards value YTD</th><th class="money">Thresholds</th><th class="money">Net</th><th>Verdict</th></tr></thead>
+            <thead><tr><th>Card</th><th class="money">Annual fee</th><th class="money">Est. interest / yr</th><th class="money">Yearly cost</th><th class="money">Rewards value YTD</th><th class="money">Thresholds</th><th class="money">Perks</th><th class="money">Net</th><th>Verdict</th></tr></thead>
             <tbody>
             @foreach (var row in CostRows())
             {
@@ -67,12 +73,13 @@ else
                     <td><Money Value="row.Cost" /></td>
                     <td><Money Value="row.Value" /></td>
                     <td class="money">@(row.Thresholds > 0 ? Fmt.Money(row.Thresholds) : "—")</td>
+                    <td class="money">@(row.Perks > 0 ? Fmt.Money(row.Perks) : "—")</td>
                     <td><Money Value="row.Net" Signed="true" /></td>
                     <td class="@(row.Net < 0 ? "neg" : row.Net == 0 ? "muted" : "pos")">@row.Verdict</td>
                 </tr>
             }
             </tbody>
-            <tfoot><tr><th>All cards</th><th><Money Value="CostRows().Sum(r => r.Fee)" /></th><th><Money Value="CostRows().Sum(r => r.Interest)" /></th><th><Money Value="CostRows().Sum(r => r.Cost)" /></th><th><Money Value="CostRows().Sum(r => r.Value)" /></th><th><Money Value="CostRows().Sum(r => r.Thresholds)" /></th><th><Money Value="CostRows().Sum(r => r.Net)" Signed="true" /></th><th></th></tr></tfoot>
+            <tfoot><tr><th>All cards</th><th><Money Value="CostRows().Sum(r => r.Fee)" /></th><th><Money Value="CostRows().Sum(r => r.Interest)" /></th><th><Money Value="CostRows().Sum(r => r.Cost)" /></th><th><Money Value="CostRows().Sum(r => r.Value)" /></th><th><Money Value="CostRows().Sum(r => r.Thresholds)" /></th><th><Money Value="CostRows().Sum(r => r.Perks)" /></th><th><Money Value="CostRows().Sum(r => r.Net)" Signed="true" /></th><th></th></tr></tfoot>
         </table>
     </section>
 
@@ -98,16 +105,19 @@ else
                 <div class="field"><label>Loyalty program</label><select @bind="rw.LoyaltyProgramId"><option value="">— (cash back / other)</option>@foreach (var p in programs ?? []) { <option value="@p.Id">@p.Name</option> }</select></div>
                 <div class="field"><label>Point value ¢ <span class="muted">(blank = program's)</span></label><input type="number" step="0.01" class="narrow" @bind="rw.PointValueCents" /></div>
             </div>
-            <h4>Earn rules <span class="muted">(no category = everything else)</span></h4>
+            <h4>Earn rules <span class="muted">(no category = everything else; a label narrows it to where you shopped, and beats a category-only rule)</span></h4>
             <table class="compact">
-                <thead><tr><th>Category</th><th>Points / $</th><th>Annual cap</th><th>Notes</th><th></th></tr></thead>
+                <thead><tr><th>Category</th><th>Label</th><th>Points / $</th><th>Annual cap</th><th>From year</th><th>Until year</th><th>Notes</th><th></th></tr></thead>
                 <tbody>
                 @foreach (var r in rw.EarnRules)
                 {
                     <tr>
                         <td><select @bind="r.CategoryId"><option value="">everything else</option>@foreach (var c in categories ?? []) { <option value="@c.Id">@c.Name</option> }</select></td>
+                        <td><select @bind="r.LabelId"><option value="">any</option>@foreach (var l in labels ?? []) { <option value="@l.Id">@l.Name</option> }</select></td>
                         <td><input type="number" step="0.5" class="narrow" @bind="r.PointsPerDollar" /></td>
                         <td><input type="number" step="1" class="narrow-money" @bind="r.AnnualSpendCap" /></td>
+                        <td><input type="number" class="narrow" placeholder="any" @bind="r.StartYear" /></td>
+                        <td><input type="number" class="narrow" placeholder="any" @bind="r.EndYear" /></td>
                         <td><input type="text" @bind="r.Notes" /></td>
                         <td><button class="secondary" type="button" @onclick="() => rw.EarnRules.Remove(r)">✕</button></td>
                     </tr>
@@ -116,8 +126,28 @@ else
             </table>
             <button class="secondary" type="button" @onclick="() => rw.EarnRules.Add(new EarnRuleDto())">Add earn rule</button>
             <h4>Spend thresholds</h4>
+            <h3>Just for holding the card</h3>
+            <p class="muted">Benefits with no spend threshold and no loyalty program behind them: a TSA PreCheck or Global Entry credit, a travel credit, free bags. Worth what it saves you in a year, counted against the annual fee.</p>
             <table class="compact">
-                <thead><tr><th>Calendar-year spend</th><th>Reward</th><th>Description</th><th>Worth $</th><th>Tier (status)</th><th></th></tr></thead>
+                <thead><tr><th>Benefit</th><th class="money">Worth / year</th><th>From year</th><th>Until year</th><th>Notes</th><th></th></tr></thead>
+                <tbody>
+                @foreach (var k in rw.Perks)
+                {
+                    <tr>
+                        <td><input type="text" @bind="k.Description" /></td>
+                        <td><input type="number" step="1" class="narrow-money" @bind="k.AnnualValue" /></td>
+                        <td><input type="number" class="narrow" placeholder="any" @bind="k.StartYear" /></td>
+                        <td><input type="number" class="narrow" placeholder="any" @bind="k.EndYear" /></td>
+                        <td><input type="text" @bind="k.Notes" /></td>
+                        <td><button class="secondary" type="button" @onclick="() => rw.Perks.Remove(k)">✕</button></td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+            <button class="secondary" type="button" @onclick="() => rw.Perks.Add(new CardPerkDto())">Add benefit</button>
+            <h3>Spend thresholds</h3>
+            <table class="compact">
+                <thead><tr><th>Calendar-year spend</th><th>Reward</th><th>Description</th><th>Worth $</th><th>Tier (status)</th><th>From year</th><th>Until year</th><th></th></tr></thead>
                 <tbody>
                 @foreach (var t in rw.Thresholds)
                 {
@@ -127,6 +157,8 @@ else
                         <td><input type="text" @bind="t.Description" /></td>
                         <td><input type="number" step="1" class="narrow-money" @bind="t.ValueDollars" /></td>
                         <td><input type="text" class="narrow" @bind="t.TierName" /></td>
+                        <td><input type="number" class="narrow" placeholder="any" @bind="t.StartYear" /></td>
+                        <td><input type="number" class="narrow" placeholder="any" @bind="t.EndYear" /></td>
                         <td><button class="secondary" type="button" @onclick="() => rw.Thresholds.Remove(t)">✕</button></td>
                     </tr>
                 }
@@ -134,7 +166,7 @@ else
             </table>
             <button class="secondary" type="button" @onclick="() => rw.Thresholds.Add(new SpendThresholdDto())">Add threshold</button>
             <div class="actions-row">
-                    <span class="muted push-left">A status threshold also needs a matching card-spend path on the program (Rewards → Programs).</span>
+                    <span class="muted push-left">A status threshold also needs a matching card-spend path on the program. Holding this card can also grant status in a program it isn't tied to: add a <em>hold card</em> path there. <a href="loyalty-programs">Admin → Loyalty programs</a>.</span>
                     <button class="secondary" type="button" @onclick="() => rewards = null">Close</button>
                     <button type="button" @onclick="SaveRewards">Save rewards</button>
                 </div>
@@ -190,15 +222,14 @@ else
     private List<AccountDto>? accounts;
     private CardDto? editing;
     private int? balanceFor;
-    private List<CatalogEntryDto>? catalog;
     private List<LoyaltyProgramDto>? programs;
     private List<CategoryDto>? categories;
-    private string catalogKey = "";
+    private List<LabelDto>? labels;
     private CardRewardsDto? rewards;
     private RewardsReportDto? report;
     private List<AlertDto>? rewardAlerts;
 
-    private sealed record CostRow(string Name, decimal Fee, decimal Interest, decimal Cost, decimal Value, decimal Thresholds, decimal Net, string Verdict, string Formula);
+    private sealed record CostRow(string Name, decimal Fee, decimal Interest, decimal Cost, decimal Value, decimal Thresholds, decimal Perks, decimal Net, string Verdict, string Formula);
 
     private IEnumerable<CostRow> CostRows()
     {
@@ -212,11 +243,12 @@ else
             var e = report?.Earnings.FirstOrDefault(x => x.CardId == c.Id);
             var value = e?.YtdDollars ?? 0m;
             var thresholds = e?.ThresholdRewardsValue ?? 0m;
+            var perks = e?.PerksValue ?? 0m;
             var cost = c.AnnualFee + interest;
-            var net = value + thresholds - cost;
-            var verdict = cost == 0 && value == 0 ? "free, unused" : net < 0 ? (value == 0 ? "costing you, no rewards recorded" : "costing more than it returns") : net == 0 ? "break-even" : "earning its keep";
-            var formula = $"fee {c.AnnualFee:C} + {balance:C} × {apr:0.##}% = {cost:C} cost; {value:C} rewards" + (thresholds > 0 ? $" + {thresholds:C} thresholds" : "") + $" → {net:C}";
-            return new CostRow(c.Name, c.AnnualFee, interest, cost, value, thresholds, net, verdict, formula);
+            var net = value + thresholds + perks - cost;
+            var verdict = cost == 0 && value == 0 && perks == 0 ? "free, unused" : net < 0 ? (value == 0 ? "costing you, no rewards recorded" : "costing more than it returns") : net == 0 ? "break-even" : "earning its keep";
+            var formula = $"fee {c.AnnualFee:C} + {balance:C} × {apr:0.##}% = {cost:C} cost; {value:C} rewards" + (thresholds > 0 ? $" + {thresholds:C} thresholds" : "") + (perks > 0 ? $" + {perks:C} perks for holding it" : "") + $" → {net:C}";
+            return new CostRow(c.Name, c.AnnualFee, interest, cost, value, thresholds, perks, net, verdict, formula);
         }).OrderBy(r => r.Net).ThenByDescending(r => r.Cost);
     }
     private CardBalanceDto newBalance = new();
@@ -231,18 +263,12 @@ else
             cards = await Api.GetCardsAsync();
             summary = await Api.GetCardSummaryAsync();
             accounts = await Api.GetAccountsAsync();
-            catalog ??= await Api.GetCardCatalogAsync();
             programs = await Api.GetLoyaltyProgramsAsync();
             categories = await Api.GetCategoriesAsync();
+            labels = await Api.GetLabelsAsync();
             report = await Api.GetRewardsReportAsync(DateTime.Today.Year);
             rewardAlerts = await Api.GetAlertsAsync("rewards");
         }
-        catch (Exception ex) { error = ex.Message; }
-    }
-
-    private async Task AddFromCatalog()
-    {
-        try { await Api.AddCardFromCatalogAsync(catalogKey, accounts?.FirstOrDefault(a => a.Type == MyBudget.Domain.AccountType.Checking)?.Id); catalogKey = ""; await Load(); }
         catch (Exception ex) { error = ex.Message; }
     }
 

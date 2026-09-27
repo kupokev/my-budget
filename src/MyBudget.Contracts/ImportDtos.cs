@@ -19,6 +19,7 @@ public sealed class ImportRowDto
     public string? Memo { get; set; }
     public bool IsDuplicate { get; set; }
     public int? CategoryId { get; set; }
+    public int? LabelId { get; set; }
     public int? BillId { get; set; }
     public bool IsTransfer { get; set; }
     /// <summary>Why the category/bill/transfer flag was suggested (rule, source category, bill name).</summary>
@@ -47,13 +48,15 @@ public sealed record ImportBatchDto(int Id, string FileName, ImportFormat Format
 
 public sealed record TransactionDto(int Id, int? AccountId, int? CardId, string SourceName, DateOnly Date, DateOnly? PostedDate, decimal Amount,
     string Description, string? Merchant, int? CategoryId, string? CategoryName, int? BillId, string? BillName, bool IsTransfer, string? Notes, bool IsManuallyCategorized,
-    TransactionOrigin Origin, string? CounterpartyName, int? ReconciledWithId, string? ReconciledWithSummary, int? RepaymentFromPersonId, string? RepaymentFromPersonName);
+    TransactionOrigin Origin, string? CounterpartyName, int? ReconciledWithId, string? ReconciledWithSummary, int? RepaymentFromPersonId, string? RepaymentFromPersonName,
+    int? LabelId, string? LabelName);
 
 public sealed record ReconcileCandidateDto(TransactionDto Transaction, int DaysApart, decimal AmountDifference);
 
 public sealed class TransactionUpdateDto
 {
     public int? CategoryId { get; set; }
+    public int? LabelId { get; set; }
     public int? BillId { get; set; }
     public bool IsTransfer { get; set; }
     public string? Notes { get; set; }
@@ -72,6 +75,7 @@ public sealed class CategoryRuleDto
     [Required, StringLength(200)] public string Pattern { get; set; } = "";
     public RuleMatch Match { get; set; } = RuleMatch.Contains;
     public int? CategoryId { get; set; }
+    public int? LabelId { get; set; }
     public int? BillId { get; set; }
     public bool MarkAsTransfer { get; set; }
     public int Priority { get; set; } = 100;

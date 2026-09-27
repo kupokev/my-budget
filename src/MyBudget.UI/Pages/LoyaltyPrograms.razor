@@ -1,0 +1,130 @@
+@page "/loyalty-programs"
+@inject ApiClient Api
+@using MyBudget.Domain
+
+<ErrorBanner @bind-Message="error" />
+
+@if (programs is null || cards is null)
+{
+    <p class="muted">Loading…</p>
+}
+else
+{
+    <section class="panel">
+        <p class="muted">Every program with a status ladder: hotels, airlines, rental cars. <strong>Current tier</strong> is what you hold today, including status you earned last year, so setting it at or above the target marks this year as already earned and asks for no more spend. A <strong>hold card</strong> path can point at <em>any</em> card, including one from a different brand, which is how an IHG card grants Hertz status. Paths carry from/until years because programs change their rules.</p>
+        <div class="toolbar"><button type="button" @onclick="() => programEdit = new LoyaltyProgramDto()">New program</button></div>
+        <table>
+            <thead><tr><th>Program</th><th>Priority</th><th>Now</th><th>Target</th><th class="money">¢/pt</th><th class="money">Points</th><th></th></tr></thead>
+            <tbody>
+            @foreach (var p in programs)
+            {
+                <tr class="@(p.IsActive ? "" : "muted")"><td>@p.Name</td><td>@p.Priority</td><td>@p.CurrentTier</td><td>@p.TargetTier</td><td class="money">@p.PointValueCents.ToString("0.##")</td><td class="money">@p.PointsBalance.ToString("N0")</td>
+                    <td class="actions"><button class="link" type="button" title="Edit program" @onclick="() => EditProgram(p)">✎</button></td></tr>
+            }
+            </tbody>
+        </table>
+    </section>
+    @if (programEdit is { } pe)
+    {
+        <section class="panel">
+            <h2>@(pe.Id == 0 ? "New program" : pe.Name)</h2>
+            <div class="row">
+                <div class="field"><label>Name</label><input type="text" @bind="pe.Name" /></div>
+                <div class="field"><label>Priority (1 = first)</label><input type="number" class="narrow" @bind="pe.Priority" /></div>
+                <div class="field"><label>Current tier <span class="muted">(held now, incl. earned last year)</span></label><input type="text" @bind="pe.CurrentTier" /></div>
+                <div class="field"><label>Target tier</label><input type="text" @bind="pe.TargetTier" /></div>
+                <div class="field"><label>Point value ¢</label><input type="number" step="0.01" class="narrow" @bind="pe.PointValueCents" /></div>
+                <div class="field"><label>Points balance</label><input type="number" step="1" @bind="pe.PointsBalance" /></div>
+                <div class="field"><label class="inline"><input type="checkbox" @bind="pe.IsActive" /> Active</label></div>
+            </div>
+            <div class="field"><label>Tiers, lowest first (comma-separated)</label><input type="text" value="@string.Join(", ", pe.Tiers)" @onchange="SetTiers" /></div>
+            <h3>Paths to each tier</h3>
+            <table>
+                <thead><tr><th>Tier</th><th>How</th><th class="money">Threshold</th><th>Card</th><th>From year</th><th>Until year</th><th>Notes</th><th></th></tr></thead>
+                <tbody>
+                @foreach (var x in pe.Paths)
+                {
+                    <tr>
+                        <td><input type="text" class="narrow" @bind="x.TierName" /></td>
+                        <td><select @bind="x.Kind">@foreach (var k in Enum.GetValues<StatusPathKind>()) { <option value="@k">@Fmt.Words(k)</option> }</select></td>
+                        <td><input type="number" step="1" class="narrow-money" @bind="x.Threshold" /></td>
+                        <td>@if (x.Kind is StatusPathKind.CardSpend or StatusPathKind.HoldCard) { <select @bind="x.CardId"><option value="">—</option>@foreach (var c in cards) { <option value="@c.Id">@Fmt.Label(c.Name, c.AccountNumber)</option> }</select> }</td>
+                        <td><input type="number" class="narrow" placeholder="any" @bind="x.StartYear" /></td>
+                        <td><input type="number" class="narrow" placeholder="any" @bind="x.EndYear" /></td>
+                        <td><input type="text" @bind="x.Notes" /></td>
+                        <td><button class="secondary" type="button" @onclick="() => pe.Paths.Remove(x)">✕</button></td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+            <button class="secondary" type="button" @onclick="AddPath">Add path</button>
+            <h3>Year-to-date activity</h3>
+            <table>
+                <thead><tr><th>Year</th><th>Nights</th><th>Stays</th><th class="money">Program spend</th><th class="money">Qualifying points</th><th></th></tr></thead>
+                <tbody>
+                @foreach (var g in pe.Progress)
+                {
+                    <tr><td><input type="number" class="narrow" @bind="g.Year" /></td><td><input type="number" class="narrow" @bind="g.Nights" /></td><td><input type="number" class="narrow" @bind="g.Stays" /></td>
+                        <td><input type="number" step="0.01" class="narrow-money" @bind="g.ProgramSpend" /></td><td><input type="number" step="1" class="narrow-money" @bind="g.QualifyingPoints" /></td>
+                        <td><button class="secondary" type="button" @onclick="() => pe.Progress.Remove(g)">✕</button></td></tr>
+                }
+                </tbody>
+            </table>
+            <button class="secondary" type="button" @onclick="() => pe.Progress.Add(new LoyaltyProgressDto { Year = year })">Add year</button>
+            <div class="field"><label>Notes</label><input type="text" @bind="pe.Notes" /></div>
+            <div class="actions-row">
+                @if (pe.Id != 0) { <button class="link danger" type="button" @onclick="DeleteProgram">Delete</button> }
+                <button class="secondary" type="button" @onclick="() => programEdit = null">Cancel</button>
+                <button type="button" @onclick="SaveProgram">Save</button>
+            </div>
+        </section>
+    }
+}
+
+@code {
+    [Parameter, SupplyParameterFromQuery(Name = "program")] public int? ProgramId { get; set; }
+
+    private List<LoyaltyProgramDto>? programs;
+    private List<CardDto>? cards;
+    private LoyaltyProgramDto? programEdit;
+    private int year = DateTime.Today.Year;
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Load();
+        // Rewards → Progress links straight to one program's setup.
+        if (ProgramId is { } id && programs?.FirstOrDefault(x => x.Id == id) is { } p) EditProgram(p);
+    }
+
+    private async Task Load()
+    {
+        try { cards = await Api.GetCardsAsync(); programs = await Api.GetLoyaltyProgramsAsync(); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private void EditProgram(LoyaltyProgramDto p) => programEdit = new()
+    {
+        Id = p.Id, Name = p.Name, PointValueCents = p.PointValueCents, PointsBalance = p.PointsBalance, CurrentTier = p.CurrentTier, TargetTier = p.TargetTier, Priority = p.Priority, IsActive = p.IsActive, Notes = p.Notes,
+        Tiers = p.Tiers.ToList(),
+        Paths = p.Paths.Select(x => new StatusPathDto { Id = x.Id, TierName = x.TierName, Kind = x.Kind, Threshold = x.Threshold, CardId = x.CardId, StartYear = x.StartYear, EndYear = x.EndYear, Notes = x.Notes }).ToList(),
+        Progress = p.Progress.Select(x => new LoyaltyProgressDto { Year = x.Year, Nights = x.Nights, Stays = x.Stays, ProgramSpend = x.ProgramSpend, QualifyingPoints = x.QualifyingPoints }).ToList(),
+    };
+
+    private void SetTiers(ChangeEventArgs e)
+        => programEdit!.Tiers = ((string?)e.Value ?? string.Empty).Split(',').Select(t => t.Trim()).Where(t => t.Length > 0).ToList();
+
+    private void AddPath() => programEdit!.Paths.Add(new StatusPathDto { TierName = programEdit.TargetTier ?? string.Empty });
+
+    private async Task SaveProgram()
+    {
+        try { await Api.SaveLoyaltyProgramAsync(programEdit!); programEdit = null; await Load(); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task DeleteProgram()
+    {
+        try { await Api.DeleteLoyaltyProgramAsync(programEdit!.Id); programEdit = null; await Load(); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+}

@@ -35,7 +35,7 @@ else
                     var cat = c;
                     <label class="inline"><input type="radio" name="catf" checked="@(categoryFilter == cat.Id)" @onchange="() => categoryFilter = cat.Id" /> @cat.Name <span class="muted">@bills.Count(b => b.CategoryId == cat.Id)</span></label>
                 }
-                <a class="muted" href="categories">Manage categories…</a>
+                <a class="muted" href="categories">Manage categories and labels…</a>
             </div>
         </details>
         <label class="inline"><input type="checkbox" @bind="showInactive" /> Show inactive</label>

@@ -29,7 +29,7 @@ public class HistoryEndpointTests : IClassFixture<ApiFixture>
     public async Task Preview_suggests_rules_bills_transfers_and_statement_categories_then_commit_fills_bill_actuals_and_card_spend()
     {
         var cards = await _api.Get<List<CardDto>>("api/cards");
-        var ihg = cards.Single(c => c.CatalogKey == "chase-ihg-premier");
+        var ihg = cards.Single(c => c.Name == "Chase IHG One Rewards Premier");
         var bills = await _api.Get<List<BillDto>>("api/bills");
         var hulu = bills.Single(b => b.Name == "Hulu");
         var categories = await _api.Get<List<CategoryDto>>("api/categories");
@@ -69,7 +69,7 @@ public class HistoryEndpointTests : IClassFixture<ApiFixture>
     public async Task Categorizing_with_a_rule_applies_to_existing_lines_and_spending_summary_reflects_it()
     {
         var cards = await _api.Get<List<CardDto>>("api/cards");
-        var surpass = cards.Single(c => c.CatalogKey == "amex-hilton-surpass");
+        var surpass = cards.Single(c => c.Name == "Amex Hilton Honors Surpass");
         var categories = await _api.Get<List<CategoryDto>>("api/categories");
         var restaurants = categories.Single(c => c.Name == "Restaurants").Id;
         const string csv = "Date,Description,Amount\n07/02/2026,TST* PAPPYS SMOKEHOUSE ST LOUIS MO,32.10\n07/20/2026,TST* PAPPYS SMOKEHOUSE ST LOUIS MO,28.40\n07/21/2026,KROGER #0456,84.12\n";

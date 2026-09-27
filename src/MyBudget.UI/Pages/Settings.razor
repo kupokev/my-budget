@@ -4,7 +4,7 @@
 
 <ErrorBanner @bind-Message="error" />
 
-@if (categories is null || bills is null)
+@if (categories is null || bills is null || labels is null)
 {
     <p class="muted">Loading…</p>
 }
@@ -36,17 +36,48 @@ else
         </div>
     </section>
 
+    <section class="panel">
+        <h2>Labels</h2>
+        <p class="muted">Where a purchase happened, next to the category that says what kind it was: "General merchandise" at <em>Amazon</em> vs at <em>Costco</em>, or Travel at <em>IHG</em> vs <em>Hilton</em>. A card can pay a different rate per label, and a categorization rule can apply one automatically on import.</p>
+        <table class="compact">
+            <thead><tr><th>Name</th><th>Usual category</th><th class="money">Planned / month</th><th>Transactions</th><th>Active</th><th></th></tr></thead>
+            <tbody>
+            @foreach (var l in labels.OrderBy(l => !l.IsActive).ThenBy(l => l.Name))
+            {
+                <tr class="@(l.IsActive ? "" : "muted")">
+                    <td><input type="text" @bind="l.Name" /></td>
+                    <td><select @bind="l.CategoryId"><option value="">—</option>@foreach (var c in categories.Where(c => c.IsActive)) { <option value="@c.Id">@c.Name</option> }</select></td>
+                    <td><input type="number" step="1" class="narrow-money" @bind="l.PlannedMonthly" /></td>
+                    <td class="muted">@(labelCounts.TryGetValue(l.Id, out var n) ? n.ToString() : "0")</td>
+                    <td><input type="checkbox" @bind="l.IsActive" /></td>
+                    <td class="actions"><button class="secondary" type="button" @onclick="() => SaveLabel(l)">Save</button> <button class="link danger" type="button" title="Delete" @onclick="() => DeleteLabel(l)">✕</button></td>
+                </tr>
+            }
+            </tbody>
+        </table>
+        <div class="row" style="margin-top:10px">
+            <input type="text" placeholder="New label" @bind="newLabel" @onkeydown="OnLabelKey" />
+            <button type="button" @onclick="AddLabel" disabled="@string.IsNullOrWhiteSpace(newLabel)">Add</button>
+        </div>
+        <p class="muted">A label's planned monthly spend is carved out of its category's, so the rewards plan can send the labelled part to one card and the rest of that category to another.</p>
+    </section>
+
 }
 
 @code {
     private List<CategoryDto>? categories;
     private List<BillDto>? bills;
+    private List<LabelDto>? labels;
+    private string newLabel = "";
+    private Dictionary<int, int> labelCounts = [];
     private string newName = "";
     private string? saved, error;
 
     protected override async Task OnInitializedAsync()
     {
-        try { categories = await Api.GetCategoriesAsync(); bills = await Api.GetBillsAsync(); }
+        try { categories = await Api.GetCategoriesAsync(); bills = await Api.GetBillsAsync(); labels = await Api.GetLabelsAsync();
+            labelCounts = (await Api.GetTransactionsAsync()).Where(t => t.LabelId is not null).GroupBy(t => t.LabelId!.Value).ToDictionary(g => g.Key, g => g.Count());
+        }
         catch (Exception ex) { error = ex.Message; }
     }
 
@@ -54,6 +85,31 @@ else
     {
         if (string.IsNullOrWhiteSpace(c.Name)) return;
         try { await Api.SaveCategoryAsync(c); saved = $"Saved {c.Name}"; categories = await Api.GetCategoriesAsync(); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task SaveLabel(LabelDto l)
+    {
+        if (string.IsNullOrWhiteSpace(l.Name)) return;
+        try { await Api.SaveLabelAsync(l); saved = $"Saved {l.Name}"; labels = await Api.GetLabelsAsync();
+            labelCounts = (await Api.GetTransactionsAsync()).Where(t => t.LabelId is not null).GroupBy(t => t.LabelId!.Value).ToDictionary(g => g.Key, g => g.Count());
+        }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task OnLabelKey(KeyboardEventArgs e) { if (e.Key == "Enter") await AddLabel(); }
+
+    private async Task DeleteLabel(LabelDto l)
+    {
+        try { if (l.Id != 0) await Api.DeleteLabelAsync(l.Id); labels = await Api.GetLabelsAsync(); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task AddLabel()
+    {
+        try { await Api.SaveLabelAsync(new LabelDto { Name = newLabel.Trim() }); newLabel = ""; labels = await Api.GetLabelsAsync();
+            labelCounts = (await Api.GetTransactionsAsync()).Where(t => t.LabelId is not null).GroupBy(t => t.LabelId!.Value).ToDictionary(g => g.Key, g => g.Count());
+        }
         catch (Exception ex) { error = ex.Message; }
     }
 

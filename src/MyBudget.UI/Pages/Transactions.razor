@@ -28,7 +28,7 @@ else
         <section class="panel">
             <h3>Categorization rules <span class="muted">(run in priority order; a match sets category, bill, transfer)</span></h3>
             <table class="compact">
-                <thead><tr><th>Priority</th><th>Match</th><th>Pattern</th><th>Category</th><th>Bill</th><th>Transfer</th><th>Active</th><th></th></tr></thead>
+                <thead><tr><th>Priority</th><th>Match</th><th>Pattern</th><th>Category</th><th>Label</th><th>Bill</th><th>Transfer</th><th>Active</th><th></th></tr></thead>
                 <tbody>
                 @foreach (var r in rules)
                 {
@@ -37,6 +37,7 @@ else
                         <td><select @bind="r.Match">@foreach (var m in Enum.GetValues<RuleMatch>()) { <option value="@m">@Fmt.Words(m)</option> }</select></td>
                         <td><input type="text" @bind="r.Pattern" /></td>
                         <td><select @bind="r.CategoryId"><option value="">—</option>@foreach (var c in categories) { <option value="@c.Id">@c.Name</option> }</select></td>
+                        <td><select @bind="r.LabelId"><option value="">—</option>@foreach (var l in labels ?? []) { <option value="@l.Id">@l.Name</option> }</select></td>
                         <td><select @bind="r.BillId"><option value="">—</option>@foreach (var b in bills) { <option value="@b.Id">@b.Name</option> }</select></td>
                         <td><input type="checkbox" @bind="r.MarkAsTransfer" /></td>
                         <td><input type="checkbox" @bind="r.IsActive" /></td>
@@ -57,8 +58,8 @@ else
     else
     {
         <table class="tx">
-            <colgroup><col class="c-date" /><col class="c-src" /><col class="c-desc" /><col class="c-amt" /><col class="c-cat" /><col class="c-bill" /><col class="c-xfer" /><col class="c-rec" /><col class="c-act" /></colgroup>
-            <thead><tr><th>Date</th><th>Source</th><th>Description</th><th class="money">Amount</th><th>Category</th><th>Bill</th><th>Transfer</th><th>Rec.</th><th></th></tr></thead>
+            <colgroup><col class="c-date" /><col class="c-src" /><col class="c-desc" /><col class="c-amt" /><col class="c-cat" /><col class="c-label" /><col class="c-bill" /><col class="c-xfer" /><col class="c-rec" /><col class="c-act" /></colgroup>
+            <thead><tr><th>Date</th><th>Source</th><th>Description</th><th class="money">Amount</th><th>Category</th><th>Label</th><th>Bill</th><th>Transfer</th><th>Rec.</th><th></th></tr></thead>
             <tbody>
             @foreach (var t in rows)
             {
@@ -68,6 +69,7 @@ else
                     <td class="ellipsis" title="@t.Description">@(t.Merchant ?? t.Description) @if (t.Origin == MyBudget.Domain.TransactionOrigin.Manual) { <span class="chip small">manual</span> }</td>
                     <td class="money"><Money Value="t.Amount" Signed="true" /></td>
                     <td class="ellipsis">@(t.RepaymentFromPersonName is { } who ? $"Repayment · {who}" : t.CategoryName ?? (t.IsTransfer ? "" : "—"))</td>
+                    <td class="ellipsis muted">@t.LabelName</td>
                     <td class="ellipsis">@t.BillName</td>
                     <td class="center muted">@(t.IsTransfer ? "✓" : "")</td>
                     <td class="center">
@@ -90,6 +92,7 @@ else
                 <fieldset class="group">
                     <legend>File it under</legend>
                     <div class="field"><label>Category</label><select @bind="editDto.CategoryId"><option value="">—</option>@foreach (var c in categories) { <option value="@c.Id">@c.Name</option> }</select></div>
+                    <div class="field"><label>Label <span class="muted">(where)</span></label><select @bind="editDto.LabelId"><option value="">—</option>@foreach (var l in labels ?? []) { <option value="@l.Id">@l.Name</option> }</select></div>
                     <div class="field"><label>Bill it pays</label><select @bind="editDto.BillId"><option value="">—</option>@foreach (var b in bills) { <option value="@b.Id">@b.Name</option> }</select></div>
                     @if (et.Amount > 0)
                     {
@@ -145,6 +148,7 @@ else
     private List<AccountDto>? accounts;
     private List<CardDto>? cards;
     private List<PersonDto>? people;
+    private List<LabelDto>? labels;
     private List<CategoryRuleDto> rules = [];
     private TransactionDto? edit;
     private TransactionUpdateDto editDto = new();
@@ -152,7 +156,7 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        try { categories = await Api.GetCategoriesAsync(); bills = await Api.GetBillsAsync(); accounts = await Api.GetAccountsAsync(); cards = await Api.GetCardsAsync(); people = await Api.GetPeopleAsync(); }
+        try { categories = await Api.GetCategoriesAsync(); bills = await Api.GetBillsAsync(); accounts = await Api.GetAccountsAsync(); cards = await Api.GetCardsAsync(); people = await Api.GetPeopleAsync(); labels = await Api.GetLabelsAsync(); }
         catch (Exception ex) { error = ex.Message; }
         await Load();
     }
@@ -172,7 +176,7 @@ else
         catch (Exception ex) { error = ex.Message; }
     }
 
-    private void StartEdit(TransactionDto t) { edit = t; editDto = new() { CategoryId = t.CategoryId, BillId = t.BillId, IsTransfer = t.IsTransfer, Notes = t.Notes, RepaymentFromPersonId = t.RepaymentFromPersonId }; }
+    private void StartEdit(TransactionDto t) { edit = t; editDto = new() { CategoryId = t.CategoryId, LabelId = t.LabelId, BillId = t.BillId, IsTransfer = t.IsTransfer, Notes = t.Notes, RepaymentFromPersonId = t.RepaymentFromPersonId }; }
 
     private async Task SaveEdit()
     {

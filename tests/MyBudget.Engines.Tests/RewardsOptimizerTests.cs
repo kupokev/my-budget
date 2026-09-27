@@ -52,8 +52,8 @@ public class RewardsOptimizerTests
             new CardSpend { CardId = surpass.Id, Period = new(2026, m, 1), CategoryId = 4, Amount = 300m },
         }).ToList();
 
-    private static RewardsInput Input(DateOnly asOf, List<Card> cards, List<LoyaltyProgram> programs, List<CardSpend> spend, List<Bill>? bills = null, Dictionary<int, decimal>? accrual = null)
-        => new(2026, asOf, cards, programs, spend, [Restaurants, Groceries, Gas, Other, Utilities, Housing], bills ?? [], accrual ?? new());
+    private static RewardsInput Input(DateOnly asOf, List<Card> cards, List<LoyaltyProgram> programs, List<CardSpend> spend, List<Bill>? bills = null, Dictionary<int, decimal>? accrual = null, List<Label>? labels = null)
+        => new(2026, asOf, cards, programs, spend, [Restaurants, Groceries, Gas, Other, Utilities, Housing], labels ?? [], bills ?? [], accrual ?? new());
 
     [Fact]
     public void Both_diamonds_cannot_be_hit_on_the_projected_spend_and_the_report_says_so_in_priority_order()
@@ -154,6 +154,79 @@ public class RewardsOptimizerTests
     }
 
     [Fact]
+    public void An_earn_rule_only_counts_in_the_years_it_covers()
+    {
+        // A promo rate for 2026 only; every other year falls back to the card's base rate.
+        var card = new Card
+        {
+            Id = 20, Name = "Cash back", PointValueCents = 1.0m,
+            EarnRules = [new() { CategoryId = 4, PointsPerDollar = 5, StartYear = 2026, EndYear = 2026 }, new() { PointsPerDollar = 1.5m }],
+        };
+        var spend2026 = new List<CardSpend> { new() { CardId = 20, Period = new(2026, 3, 1), CategoryId = 4, Amount = 1_000m } };
+        var spend2027 = new List<CardSpend> { new() { CardId = 20, Period = new(2027, 3, 1), CategoryId = 4, Amount = 1_000m } };
+
+        var promo = RewardsOptimizer.Run(Input(new(2026, 12, 31), [card], [], spend2026));
+        Assert.Equal(5_000m, promo.Earnings.Single().YtdPoints);
+        Assert.Equal(50m, promo.Earnings.Single().YtdDollars);
+
+        var after = RewardsOptimizer.Run(Input(new(2027, 12, 31), [card], [], spend2027) with { Year = 2027 });
+        Assert.Equal(1_500m, after.Earnings.Single().YtdPoints);
+
+        Assert.Equal(5m, RewardsOptimizer.EarnRate(card, 4, null, 2026));
+        Assert.Equal(1.5m, RewardsOptimizer.EarnRate(card, 4, null, 2027));
+        Assert.Equal(5m, RewardsOptimizer.EarnRate(card, 4));           // no year given: first matching rule
+    }
+
+    [Fact]
+    public void A_threshold_only_counts_in_the_years_it_covers()
+    {
+        var card = new Card
+        {
+            Id = 21, Name = "Promo card", PointValueCents = 1.0m, EarnRules = [new() { PointsPerDollar = 1 }],
+            Thresholds = [new() { Id = 30, Amount = 10_000m, RewardKind = ThresholdRewardKind.Credit, Description = "2026 only credit", StartYear = 2026, EndYear = 2026 },
+                          new() { Id = 31, Amount = 5_000m, RewardKind = ThresholdRewardKind.Credit, Description = "always" }],
+        };
+        var r2026 = RewardsOptimizer.Run(Input(new(2026, 6, 1), [card], [], []));
+        Assert.Equal(2, r2026.Thresholds.Count);
+        var r2027 = RewardsOptimizer.Run(Input(new(2027, 6, 1), [card], [], []) with { Year = 2027 });
+        Assert.Equal("always", Assert.Single(r2027.Thresholds).Description);
+    }
+
+    [Fact]
+    public void A_label_beats_the_category_rate_so_the_same_category_can_earn_differently()
+    {
+        // "General merchandise" earns 1× everywhere, except at Amazon where this card pays 5×.
+        var amazon = new Label { Id = 1, Name = "Amazon", CategoryId = 4, PlannedMonthly = 300m };
+        var card = new Card
+        {
+            Id = 30, Name = "Cash back", PointValueCents = 1.0m,
+            EarnRules = [new() { CategoryId = 4, LabelId = 1, PointsPerDollar = 5 }, new() { CategoryId = 4, PointsPerDollar = 1 }, new() { PointsPerDollar = 1 }],
+        };
+        Assert.Equal(5m, RewardsOptimizer.EarnRate(card, 4, 1));        // General merchandise at Amazon
+        Assert.Equal(1m, RewardsOptimizer.EarnRate(card, 4, null));     // same category at Costco
+        Assert.Equal(1m, RewardsOptimizer.EarnRate(card, 9, 1));        // a different category at Amazon → no match, base rate
+
+        // A label-only rule covers that label in any category.
+        var anywhere = new Card { Id = 31, Name = "Label card", PointValueCents = 1.0m, EarnRules = [new() { LabelId = 1, PointsPerDollar = 4 }, new() { PointsPerDollar = 1 }] };
+        Assert.Equal(4m, RewardsOptimizer.EarnRate(anywhere, 9, 1));
+        Assert.Equal(1m, RewardsOptimizer.EarnRate(anywhere, 9, null));
+
+        // Earnings use the label on each spend row.
+        var spend = new List<CardSpend> { new() { CardId = 30, Period = new(2026, 3, 1), CategoryId = 4, LabelId = 1, Amount = 200m }, new() { CardId = 30, Period = new(2026, 3, 1), CategoryId = 4, Amount = 100m } };
+        var r = RewardsOptimizer.Run(Input(new(2026, 12, 31), [card], [], spend, labels: [amazon]));
+        Assert.Equal(200m * 5 + 100m * 1, r.Earnings.Single().YtdPoints);
+
+        // Planning splits the category: the label's planned spend is carved out, not added on top.
+        var plan = RewardsOptimizer.Run(Input(new(2026, 12, 31), [card], [], [], labels: [amazon]));
+        Assert.Equal(2_350m, plan.Plan.ProjectedMonthly);                 // unchanged total
+        var amazonRoute = plan.Plan.Routing.Single(x => x.LabelId == 1);
+        Assert.Equal(300m, amazonRoute.Monthly);
+        Assert.Equal(5m, amazonRoute.PointsPerDollar);
+        Assert.Equal("Other · Amazon", amazonRoute.Category);
+        Assert.Equal(500m, plan.Plan.Routing.Single(x => x.CategoryId == 4 && x.LabelId is null).Monthly);  // 800 planned − 300 to Amazon
+    }
+
+    [Fact]
     public void Monthly_earnings_use_category_rates_and_net_out_the_annual_fee()
     {
         var (ihg, surpass, sapphire, ihgProg, hiltonProg) = Fixture();
@@ -170,5 +243,62 @@ public class RewardsOptimizerTests
         var i = r.Earnings.Single(e => e.CardId == ihg.Id);
         // 650 groceries × 3 (no grocery rule → base) + 240 gas × 5 + 500 other × 3 = 1,950 + 1,200 + 1,500 = 4,650 pts/mo
         Assert.Equal(4_650m, i.Months[0].Points);
+    }
+
+    [Fact]
+    public void Status_earned_last_year_is_held_this_year_without_spending_again()
+    {
+        var (ihg, surpass, sapphire, ihgProg, hiltonProg) = Fixture();
+        ihgProg.CurrentTier = "Diamond";   // $40,000 spent in 2025 bought Diamond for 2026
+        var r = RewardsOptimizer.Run(Input(new(2026, 9, 26), [ihg, surpass, sapphire], [ihgProg, hiltonProg], Spend(ihg, surpass, 9)));
+        var ihgStatus = r.Programs.Single(p => p.ProgramId == 1);
+        Assert.True(ihgStatus.TargetReached);
+        Assert.Contains("already Diamond", ihgStatus.HowReached);
+        // With IHG settled, the projected spend is free to chase Hilton instead.
+        Assert.Contains("Hilton", string.Join(" ", r.Plan.Steps));
+    }
+
+    [Fact]
+    public void Next_years_plan_still_asks_for_the_spend_because_status_lapses()
+    {
+        var (ihg, surpass, sapphire, ihgProg, hiltonProg) = Fixture();
+        ihgProg.CurrentTier = "Diamond";
+        var input = new RewardsInput(2027, new(2027, 1, 1), [ihg, surpass, sapphire], [ihgProg, hiltonProg], [],
+            [Restaurants, Groceries, Gas, Other, Utilities, Housing], [], [], new Dictionary<int, decimal>(), CarryCurrentTier: false);
+        var status = RewardsOptimizer.Run(input).Programs.Single(p => p.ProgramId == 1);
+        Assert.False(status.TargetReached);
+    }
+
+    [Fact]
+    public void Holding_a_card_can_grant_status_in_a_program_that_card_has_nothing_to_do_with()
+    {
+        var (ihg, surpass, sapphire, ihgProg, _) = Fixture();
+        var hertz = new LoyaltyProgram { Id = 3, Name = "Hertz Gold Plus Rewards", Priority = 5, TargetTier = "Five Star",
+            Tiers = [new() { Name = "Gold", Rank = 0 }, new() { Name = "Five Star", Rank = 1 }],
+            Paths = [new() { Id = 20, TierName = "Five Star", Kind = StatusPathKind.HoldCard, CardId = ihg.Id, Card = ihg }] };
+        var status = RewardsOptimizer.Run(Input(new(2026, 9, 26), [ihg, surpass, sapphire], [ihgProg, hertz], [])).Programs.Single(p => p.ProgramId == 3);
+        Assert.True(status.TargetReached);
+        Assert.Equal("Five Star", status.HeldTier);
+    }
+
+    [Fact]
+    public void A_status_path_the_program_has_since_dropped_is_ignored()
+    {
+        var (ihg, surpass, sapphire, ihgProg, hiltonProg) = Fixture();
+        ihgProg.Paths.Single(x => x.Kind == StatusPathKind.Nights).EndYear = 2025;
+        var status = RewardsOptimizer.Run(Input(new(2026, 9, 26), [ihg, surpass, sapphire], [ihgProg, hiltonProg], [])).Programs.Single(p => p.ProgramId == 1);
+        Assert.DoesNotContain(status.Paths, x => x.Kind == StatusPathKind.Nights);
+    }
+
+    [Fact]
+    public void A_perk_for_simply_holding_the_card_counts_toward_its_yearly_value()
+    {
+        var (ihg, surpass, sapphire, ihgProg, hiltonProg) = Fixture();
+        ihg.Perks = [new() { Description = "TSA PreCheck credit", AnnualValue = 20m },
+                     new() { Description = "Expired offer", AnnualValue = 500m, EndYear = 2024 }];
+        var e = RewardsOptimizer.Run(Input(new(2026, 9, 26), [ihg, surpass, sapphire], [ihgProg, hiltonProg], Spend(ihg, surpass, 9))).Earnings.Single(x => x.CardId == ihg.Id);
+        Assert.Equal(20m, e.PerksValue);
+        Assert.Equal(e.YtdDollars + e.ThresholdRewardsValue + 20m - e.AnnualFee, e.NetValue);
+        Assert.Contains("perks", e.Formula);
     }
 }

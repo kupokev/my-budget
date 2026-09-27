@@ -9,8 +9,13 @@ public sealed class EarnRuleDto
 {
     public int Id { get; set; }
     public int? CategoryId { get; set; }
+    /// <summary>Narrows the rule to purchases carrying this label.</summary>
+    public int? LabelId { get; set; }
     [Range(0, 100)] public decimal PointsPerDollar { get; set; } = 1;
     public decimal? AnnualSpendCap { get; set; }
+    /// <summary>Years this rate applies; blank means always.</summary>
+    public int? StartYear { get; set; }
+    public int? EndYear { get; set; }
     public string? Notes { get; set; }
 }
 
@@ -22,6 +27,18 @@ public sealed class SpendThresholdDto
     [Required, StringLength(200)] public string Description { get; set; } = "";
     public decimal? ValueDollars { get; set; }
     public string? TierName { get; set; }
+    public int? StartYear { get; set; }
+    public int? EndYear { get; set; }
+}
+
+public sealed class CardPerkDto
+{
+    public int Id { get; set; }
+    [Required, StringLength(200)] public string Description { get; set; } = "";
+    [Range(0, 100_000)] public decimal AnnualValue { get; set; }
+    public int? StartYear { get; set; }
+    public int? EndYear { get; set; }
+    public string? Notes { get; set; }
 }
 
 /// <summary>Rewards side of a card, edited separately from the CC-1 basics.</summary>
@@ -30,12 +47,10 @@ public sealed class CardRewardsDto
     public int CardId { get; set; }
     public int? LoyaltyProgramId { get; set; }
     public decimal? PointValueCents { get; set; }
-    public string? CatalogKey { get; set; }
     public List<EarnRuleDto> EarnRules { get; set; } = [];
     public List<SpendThresholdDto> Thresholds { get; set; } = [];
+    public List<CardPerkDto> Perks { get; set; } = [];
 }
-
-public sealed record CatalogEntryDto(string Key, string Name, string Issuer, string Network, decimal AnnualFee, string? Program, decimal PointValueCents, string Summary, string? Notes);
 
 public sealed class StatusPathDto
 {
@@ -44,6 +59,8 @@ public sealed class StatusPathDto
     public StatusPathKind Kind { get; set; }
     public decimal Threshold { get; set; }
     public int? CardId { get; set; }
+    public int? StartYear { get; set; }
+    public int? EndYear { get; set; }
     public string? Notes { get; set; }
 }
 
@@ -79,6 +96,7 @@ public sealed class CardSpendDto
     public int CardId { get; set; }
     public DateOnly Period { get; set; }
     public int? CategoryId { get; set; }
+    public int? LabelId { get; set; }
     public decimal Amount { get; set; }
     public string? Notes { get; set; }
 }
@@ -98,7 +116,7 @@ public sealed record AllocationDto(int CardId, string CardName, decimal Monthly,
 
 public sealed record GapDto(string Program, string Tier, decimal RequiredMonthly, decimal AllocatedMonthly, decimal ShortfallMonthly, IReadOnlyList<string> Alternatives);
 
-public sealed record CategoryRouteDto(int? CategoryId, string Category, decimal Monthly, int? CardId, string CardName, decimal PointsPerDollar, decimal CentsPerDollar, string Reason);
+public sealed record CategoryRouteDto(int? CategoryId, int? LabelId, string Category, decimal Monthly, int? CardId, string CardName, decimal PointsPerDollar, decimal CentsPerDollar, string Reason);
 
 public sealed record SpendPlanDto(int Year, DateOnly AsOf, int MonthsLeft, decimal ProjectedMonthly, string ProjectedMonthlySource,
     IReadOnlyList<AllocationDto> Allocations, IReadOnlyList<CategoryRouteDto> Routing, IReadOnlyList<GapDto> Gaps, IReadOnlyList<string> Steps);
@@ -108,7 +126,7 @@ public sealed record BillRecommendationDto(int BillId, string BillName, decimal 
 public sealed record MonthEarningsDto(DateOnly Period, decimal Spend, decimal Points, decimal Dollars);
 
 public sealed record CardEarningsDto(int CardId, string CardName, decimal PointValueCents, IReadOnlyList<MonthEarningsDto> Months,
-    decimal YtdSpend, decimal YtdPoints, decimal YtdDollars, decimal AnnualFee, decimal ThresholdRewardsValue, decimal NetValue, string Formula);
+    decimal YtdSpend, decimal YtdPoints, decimal YtdDollars, decimal AnnualFee, decimal ThresholdRewardsValue, decimal PerksValue, decimal NetValue, string Formula);
 
 public sealed record RewardsReportDto(int Year, DateOnly AsOf, IReadOnlyList<ThresholdProgressDto> Thresholds, IReadOnlyList<ProgramStatusDto> Programs,
     SpendPlanDto Plan, IReadOnlyList<BillRecommendationDto> Bills, IReadOnlyList<CardEarningsDto> Earnings, IReadOnlyList<string> Warnings);

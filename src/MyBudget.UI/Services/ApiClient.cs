@@ -32,6 +32,9 @@ public sealed class ApiClient(HttpClient http)
 
     // Categories & bills
     public Task<List<CategoryDto>> GetCategoriesAsync() => Get<List<CategoryDto>>("api/categories");
+    public Task<List<LabelDto>> GetLabelsAsync() => Get<List<LabelDto>>("api/labels");
+    public Task<LabelDto> SaveLabelAsync(LabelDto l) => l.Id == 0 ? Post("api/labels", l) : Put($"api/labels/{l.Id}", l);
+    public Task DeleteLabelAsync(int id) => Delete($"api/labels/{id}");
     public Task<CategoryDto> SaveCategoryAsync(CategoryDto c) => c.Id == 0 ? Post("api/categories", c) : Put($"api/categories/{c.Id}", c);
     public Task<List<BillDto>> GetBillsAsync() => Get<List<BillDto>>("api/bills");
     public Task<BillDto> SaveBillAsync(BillDto b) => b.Id == 0 ? Post("api/bills", b) : Put($"api/bills/{b.Id}", b);
@@ -80,8 +83,6 @@ public sealed class ApiClient(HttpClient http)
     public Task<LoanProjectionDto> GetLoanProjectionAsync(int id, decimal? extra = null) => Get<LoanProjectionDto>(extra is { } e ? $"api/loans/{id}/projection?extra={e}" : $"api/loans/{id}/projection");
 
     // Rewards (Phase 3)
-    public Task<List<CatalogEntryDto>> GetCardCatalogAsync() => Get<List<CatalogEntryDto>>("api/card-catalog");
-    public Task<CardDto> AddCardFromCatalogAsync(string key, int? payingAccountId) => Post<object, CardDto>(Q($"api/cards/from-catalog/{key}", ("payingAccountId", payingAccountId)), new { });
     public Task<CardRewardsDto> GetCardRewardsAsync(int cardId) => Get<CardRewardsDto>($"api/cards/{cardId}/rewards");
     public Task<CardRewardsDto> SaveCardRewardsAsync(CardRewardsDto r) => Put($"api/cards/{r.CardId}/rewards", r);
     public Task<List<LoyaltyProgramDto>> GetLoyaltyProgramsAsync() => Get<List<LoyaltyProgramDto>>("api/loyalty-programs");

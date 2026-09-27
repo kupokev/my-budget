@@ -86,6 +86,7 @@ public sealed class ImportService(BudgetDbContext db)
         if (rule is not null)
         {
             row.CategoryId = rule.CategoryId ?? rule.Bill?.CategoryId;
+            row.LabelId = rule.LabelId;
             row.BillId = rule.BillId;
             row.IsTransfer = rule.MarkAsTransfer;
             row.SuggestionSource = $"rule \"{rule.Pattern}\"";
@@ -149,7 +150,7 @@ public sealed class ImportService(BudgetDbContext db)
             var t = new Transaction
             {
                 AccountId = req.AccountId, CardId = req.CardId, Date = r.Date, PostedDate = r.PostedDate, Amount = r.Amount, Description = r.Description.Trim(),
-                Merchant = r.Merchant, ExternalId = r.ExternalId, CategoryId = r.CategoryId, BillId = r.BillId, IsTransfer = r.IsTransfer, ImportBatch = batch,
+                Merchant = r.Merchant, ExternalId = r.ExternalId, CategoryId = r.CategoryId, LabelId = r.LabelId, BillId = r.BillId, IsTransfer = r.IsTransfer, ImportBatch = batch,
                 Notes = r.Memo, Origin = TransactionOrigin.Imported,
             };
             db.Transactions.Add(t);
@@ -187,6 +188,7 @@ public sealed class ImportService(BudgetDbContext db)
         imported.IsTransfer = imported.IsTransfer || manual.IsTransfer;
         imported.CounterpartyAccountId ??= manual.CounterpartyAccountId;
         imported.CategoryId ??= manual.CategoryId;
+        imported.LabelId ??= manual.LabelId;
         imported.BillId ??= manual.BillId;
         if (string.IsNullOrWhiteSpace(imported.Notes)) imported.Notes = manual.Notes;
     }
@@ -212,10 +214,10 @@ public sealed class ImportService(BudgetDbContext db)
         {
             var end = period.AddMonths(1);
             var sums = await db.Transactions.Where(t => t.CardId == cardId && t.Date >= period && t.Date < end && t.Amount < 0 && !t.IsTransfer)
-                .GroupBy(t => t.CategoryId).Select(g => new { CategoryId = g.Key, Sum = g.Sum(t => -t.Amount) }).ToListAsync();
+                .GroupBy(t => new { t.CategoryId, t.LabelId }).Select(g => new { g.Key.CategoryId, g.Key.LabelId, Sum = g.Sum(t => -t.Amount) }).ToListAsync();
             var rows = await db.CardSpend.Where(s => s.CardId == cardId && s.Period == period).ToListAsync();
             db.CardSpend.RemoveRange(rows);
-            db.CardSpend.AddRange(sums.Select(s => new CardSpend { CardId = cardId, Period = period, CategoryId = s.CategoryId, Amount = Math.Round(s.Sum, 2), Notes = "from import" }));
+            db.CardSpend.AddRange(sums.Select(s => new CardSpend { CardId = cardId, Period = period, CategoryId = s.CategoryId, LabelId = s.LabelId, Amount = Math.Round(s.Sum, 2), Notes = "from import" }));
         }
         await db.SaveChangesAsync();
         return (billMonths.Count, cardMonths.Count);
@@ -233,8 +235,8 @@ public sealed class ImportService(BudgetDbContext db)
             var rule = rules.FirstOrDefault(r => Matches(r, text));
             if (rule is null) continue;
             var cat = rule.CategoryId ?? rule.Bill?.CategoryId;
-            if (t.CategoryId == cat && t.BillId == rule.BillId && t.IsTransfer == rule.MarkAsTransfer) continue;
-            t.CategoryId = cat; t.BillId = rule.BillId; t.IsTransfer = rule.MarkAsTransfer;
+            if (t.CategoryId == cat && t.LabelId == rule.LabelId && t.BillId == rule.BillId && t.IsTransfer == rule.MarkAsTransfer) continue;
+            t.CategoryId = cat; t.LabelId = rule.LabelId; t.BillId = rule.BillId; t.IsTransfer = rule.MarkAsTransfer;
             changed.Add(t);
         }
         await db.SaveChangesAsync();
