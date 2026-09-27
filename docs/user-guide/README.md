@@ -133,6 +133,14 @@ in-memory database resets on every restart either way.)
   totals, a loan balance) or a typed value.
   The on-track target is prorated by date; the bar is progress and the tick is elapsed time.
   Non-financial goals just carry a status.
+- **Assets.** Under Wealth. Houses, vehicles and anything else valued by hand. Use ＋ on a row to
+  record a value for a date; recording the same date twice replaces that entry. The ▸ button opens
+  the valuation history: a bar per record and a table showing each change and percent change. Attach
+  the loans secured against an asset there too, and the page shows equity as the value less what is
+  still owed. The link lives on the loan, so it can also be set under Admin → Loans with each loan's
+  *Secured against* picker; a loan can only be secured against one asset, but an asset can carry several. Net worth counts the asset and the loans separately, so attaching one changes nothing
+  but the display.
+
 - **Reports.** Year over year by category and by bill, net worth with 24 months of history, and
   CSV export (transactions, bills grid, accounts) through a save dialog.
 

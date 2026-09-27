@@ -41,3 +41,23 @@
 ## Status
 
 Built 2026-09-26: engine (7 tests), API (2 endpoint tests), Investments page, assets tab on Reports.
+
+
+## Assets moved out of Reports (2026-09-27)
+
+`Home & vehicles` was a tab on Reports. It is now its own **Assets** page under Wealth, because it is
+a thing you maintain rather than a report you read.
+
+Two additions came with the move:
+
+- **Valuation history is visible, not just recorded.** `AssetValue` always stored a series; nothing
+  showed it. The asset DTO now returns the whole series newest-first, each record carrying the change
+  and percent change from the one before, plus the move since the previous record and since roughly a
+  year earlier. The page draws a bar per record scaled to that asset's own range, so a house and a car
+  both read well, and lists the records with their changes beneath it.
+- **Loans can be secured against an asset.** `Loan.AssetId` is optional and many loans may point at one
+  asset, which is what a house with both a mortgage and an equity loan needs. Equity is the latest
+  value less those loans' latest balances, with the subtraction shown as a formula.
+
+Net worth is unchanged: it still counts assets and loans separately, so equity is a view of the same
+numbers rather than a second source of them. Attaching a loan to an asset does not move net worth.

@@ -70,7 +70,26 @@ public sealed class AssetDto
     public bool IsActive { get; set; } = true;
     public decimal? LatestValue { get; set; }
     public DateOnly? LatestAsOf { get; set; }
+
+    /// <summary>Every recorded value, newest first, each with the change from the one before it.</summary>
+    public List<AssetValuePointDto> History { get; set; } = [];
+    /// <summary>Loans secured against this asset, with their latest balances.</summary>
+    public List<AssetLoanDto> Loans { get; set; } = [];
+    /// <summary>Sum of the attached loans' latest balances.</summary>
+    public decimal LoanBalance { get; set; }
+    /// <summary>Latest value less what is still owed against it. Null until a value has been recorded.</summary>
+    public decimal? Equity { get; set; }
+    /// <summary>How the equity figure was reached.</summary>
+    public string? EquityFormula { get; set; }
+    /// <summary>Change since the previous recorded value, and since roughly a year before the latest one.</summary>
+    public decimal? ChangeSincePrior { get; set; }
+    public decimal? ChangeOverYear { get; set; }
 }
+
+/// <summary>One recorded valuation, with the move from the previous record.</summary>
+public sealed record AssetValuePointDto(int Id, DateOnly AsOf, decimal Value, decimal? Change, decimal? ChangePercent);
+
+public sealed record AssetLoanDto(int LoanId, string Name, LoanKind Kind, decimal Balance, DateOnly? BalanceAsOf);
 
 public sealed class AssetValueDto
 {

@@ -133,7 +133,7 @@ public class BuildoutEndpointTests : IClassFixture<ApiFixture>
 
         await _api.Client.PostAsync("api/investments/prices?ticker=VTI&date=2026-09-25&price=300", null); // seeded holding gets a price
         var nw = await _api.Get<NetWorthDto>("api/reports/net-worth");
-        Assert.Contains(nw.Lines, l => l.Kind == "home" && l.Balance == 385_000m);
+        Assert.Contains(nw.Lines, l => l.Kind == "home" && l.Balance == 371_200m);   // latest of the seeded monthly valuations
         Assert.Contains(nw.Lines, l => l.Kind == "investments");
     }
 
@@ -145,5 +145,56 @@ public class BuildoutEndpointTests : IClassFixture<ApiFixture>
         Assert.Contains("spend_by_category", s.Tools);
         var r = await _api.Client.PostAsJsonAsync("api/ai/chat", new ChatRequest { Messages = [new() { Role = "user", Content = "hi" }] }, ApiFixture.Json);
         Assert.Equal(System.Net.HttpStatusCode.BadRequest, r.StatusCode);
+    }
+
+    [Fact]
+    public async Task An_asset_carries_its_valuation_history_and_the_loans_secured_against_it()
+    {
+        var assets = await _api.Get<List<AssetDto>>("api/assets");
+        var house = assets.Single(a => a.Name == "House");
+
+        // History is newest first, and each record knows the move from the one before it.
+        Assert.Equal(21, house.History.Count);
+        Assert.Equal(new DateOnly(2026, 9, 1), house.History[0].AsOf);
+        Assert.Equal(371_200m, house.History[0].Value);
+        Assert.Equal(2_100m, house.History[0].Change);
+        Assert.Null(house.History[^1].Change);                       // the first record has nothing to compare to
+        Assert.Contains(house.History, p => p.Change < 0);           // the market dips as well as rises
+
+        // Both loans are secured against it, so equity is value less what's owed.
+        Assert.Equal(2, house.Loans.Count);
+        Assert.Equal(314_400m, house.LoanBalance);                   // 283,000 mortgage + 31,400 equity loan
+        Assert.Equal(56_800m, house.Equity);
+        Assert.Contains("Home equity loan", house.EquityFormula);
+
+        // The car has no loan against it, so its equity is simply its value.
+        var car = assets.Single(a => a.Name == "Car");
+        Assert.Empty(car.Loans);
+        Assert.Equal(18_500m, car.Equity);
+        Assert.Contains("nothing secured against it", car.EquityFormula!);
+        Assert.True(car.ChangeSincePrior < 0);                        // it depreciates
+    }
+
+    [Fact]
+    public async Task Recording_and_removing_a_valuation_reshapes_the_history()
+    {
+        var car = (await _api.Get<List<AssetDto>>("api/assets")).Single(a => a.Name == "Car");
+        var before = car.History.Count;
+
+        var added = await _api.Post<AssetValueDto, AssetDto>($"api/assets/{car.Id}/values",
+            new AssetValueDto { AssetId = car.Id, AsOf = new(2026, 10, 1), Value = 18_100m });
+        Assert.Equal(before + 1, added.History.Count);
+        Assert.Equal(18_100m, added.History[0].Value);
+        Assert.Equal(-400m, added.History[0].Change);
+
+        // Recording the same date again replaces rather than duplicates.
+        var replaced = await _api.Post<AssetValueDto, AssetDto>($"api/assets/{car.Id}/values",
+            new AssetValueDto { AssetId = car.Id, AsOf = new(2026, 10, 1), Value = 18_000m });
+        Assert.Equal(before + 1, replaced.History.Count);
+        Assert.Equal(18_000m, replaced.History[0].Value);
+
+        var removed = await _api.Client.DeleteAsync($"api/assets/{car.Id}/values/{replaced.History[0].Id}");
+        removed.EnsureSuccessStatusCode();
+        Assert.Equal(before, (await _api.Get<List<AssetDto>>("api/assets")).Single(a => a.Name == "Car").History.Count);
     }
 }

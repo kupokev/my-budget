@@ -23,6 +23,9 @@ public class Loan
     /// <summary>The line that carries this loan's payment in the ledger, if any.</summary>
     public int? BudgetLineId { get; set; }
     public BudgetLine? BudgetLine { get; set; }
+    /// <summary>The asset this loan is secured against, if any. A house can carry both a mortgage and an equity loan.</summary>
+    public int? AssetId { get; set; }
+    public Asset? Asset { get; set; }
     public string? Notes { get; set; }
     public bool IsActive { get; set; } = true;
     public List<LoanBalance> Balances { get; set; } = [];

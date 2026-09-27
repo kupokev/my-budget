@@ -353,3 +353,13 @@ table.tx td.center { text-align: center; }
 .tip-box .tip-note { margin-top: 8px; padding-top: 7px; border-top: 1px solid var(--border);
   color: var(--fg-muted); white-space: normal; max-width: 280px; }
 .chip.small { font-size: 11px; padding: 1px 7px; }
+
+/* Assets: a bare sparkline for a valuation history, scaled to the asset's own range. */
+.spark { display: flex; align-items: flex-end; gap: 3px; height: 64px; margin: 4px 0 12px;
+  padding: 6px 8px; background: var(--bg-elev, transparent); border: 1px solid var(--border); border-radius: var(--radius); }
+.spark-bar { flex: 1 1 0; min-width: 4px; background: var(--accent); border-radius: 2px 2px 0 0; opacity: .85; }
+.spark-bar:hover { opacity: 1; }
+.spark-bar.down { background: var(--warn); }
+tr.detail > td { background: color-mix(in srgb, var(--accent) 5%, transparent); padding: 10px 12px; }
+tr.detail .panel { margin: 0; }
+tr.selected > td { border-bottom-color: transparent; }

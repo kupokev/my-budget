@@ -158,6 +158,7 @@ public sealed class ApiClient(HttpClient http)
     public Task<AssetDto> SaveAssetAsync(AssetDto a) => a.Id == 0 ? Post("api/assets", a) : Put($"api/assets/{a.Id}", a);
     public Task DeleteAssetAsync(int id) => Delete($"api/assets/{id}");
     public Task<AssetDto> SaveAssetValueAsync(int id, AssetValueDto v) => Post<AssetValueDto, AssetDto>($"api/assets/{id}/values", v);
+    public Task<AssetDto> DeleteAssetValueAsync(int id, int valueId) => Delete<AssetDto>($"api/assets/{id}/values/{valueId}");
     public Task<List<PersonDto>> GetPeopleAsync() => Get<List<PersonDto>>("api/people");
     public Task<List<PersonLedgerDto>> GetLedgersAsync() => Get<List<PersonLedgerDto>>("api/people/ledgers");
     public Task<PersonDto> SavePersonAsync(PersonDto p) => p.Id == 0 ? Post("api/people", p) : Put($"api/people/{p.Id}", p);
@@ -213,6 +214,13 @@ public sealed class ApiClient(HttpClient http)
     {
         var r = await http.DeleteAsync(url);
         await ThrowIfFailed(r);
+    }
+
+    private async Task<T> Delete<T>(string url)
+    {
+        var r = await http.DeleteAsync(url);
+        await ThrowIfFailed(r);
+        return (await r.Content.ReadFromJsonAsync<T>(Json))!;
     }
 
     private static async Task ThrowIfFailed(HttpResponseMessage r)

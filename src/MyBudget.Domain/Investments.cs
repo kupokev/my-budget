@@ -71,6 +71,8 @@ public class Asset
     public string? Notes { get; set; }
     public bool IsActive { get; set; } = true;
     public List<AssetValue> Values { get; set; } = [];
+    /// <summary>Loans secured against this asset. Their balances come off its value to give equity.</summary>
+    public List<Loan> Loans { get; set; } = [];
 }
 
 public class AssetValue

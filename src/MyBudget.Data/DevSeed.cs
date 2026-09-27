@@ -165,8 +165,7 @@ public static class DevSeed
         var citi = C("Citi Double Cash", "Citi", "Mastercard", 10, 7, centsPerPoint: 1.0m);
         citi.EarnRules.Add(new EarnRule { PointsPerDollar = 2 });
 
-        db.Cards.AddRange(chaseIhg, hiltonSurpass, amexDelta, sapphire, freedom, citi,
-            C("HICV", "Comenity", "Visa", 27, 24));
+        db.Cards.AddRange(chaseIhg, hiltonSurpass, amexDelta, sapphire, freedom, citi);
         await db.SaveChangesAsync(ct);
 
         // Status paths: how each tier can be earned, including the card ones.
@@ -239,6 +238,13 @@ public static class DevSeed
             StartDate = new(2022, 6, 1), ScheduledPayment = 1_896.20m,
             Balances = [new LoanBalance { AsOf = new(2026, 9, 1), Balance = 283_000m }],
         });
+        db.Loans.Add(new Loan
+        {
+            Name = "Home equity loan", Kind = LoanKind.Heloc, Lender = "Placeholder Bank", OriginalPrincipal = 40_000m,
+            AnnualRate = 0.0789m, TermMonths = 120, StartDate = new(2024, 4, 1), ScheduledPayment = 484.31m,
+            Notes = "Kitchen and roof",
+            Balances = [new LoanBalance { AsOf = new(2026, 9, 1), Balance = 31_400m }],
+        });
 
         db.CategoryRules.AddRange(
             new CategoryRule { Pattern = "AMAZON", CategoryId = merchandise.Id, LabelId = amazon.Id, Priority = 5 },
@@ -261,8 +267,34 @@ public static class DevSeed
             Ticker = "VTI", Name = "Vanguard Total Stock Market ETF", Account = brokerage, Drip = true,
             Trades = [new Trade { Date = new(2025, 3, 3), Kind = TradeKind.Buy, Shares = 10, Price = 280.00m, Fees = 0, Notes = "placeholder lot" }],
         });
-        db.Assets.Add(new Asset { Name = "House", Kind = AssetKind.Home, Values = [new AssetValue { AsOf = new(2026, 9, 1), Value = 385_000m }] });
-        db.Assets.Add(new Asset { Name = "Car", Kind = AssetKind.Vehicle, Values = [new AssetValue { AsOf = new(2026, 9, 1), Value = 18_500m }] });
+        // Monthly valuations, because a house moves with the market and the point is to see that.
+        // Roughly 4% annual drift with a soft patch in the spring.
+        var houseMoves = new[] { 0m, 900m, 1_400m, 600m, -700m, -1_100m, 400m, 1_500m, 1_800m, 1_200m, 900m, 700m,
+                                 500m, 1_300m, 1_600m, 900m, -400m, -900m, 800m, 1_700m, 2_100m };
+        var house = new Asset { Name = "House", Kind = AssetKind.Home, Notes = "Bought 2022" };
+        var houseValue = 356_000m;
+        for (var i = 0; i < houseMoves.Length; i++)
+        {
+            houseValue += houseMoves[i];
+            var month = new DateOnly(2025, 1, 1).AddMonths(i);
+            house.Values.Add(new AssetValue { AsOf = month, Value = houseValue });
+        }
+        db.Assets.Add(house);
+
+        // A car depreciates instead, recorded a couple of times a year.
+        db.Assets.Add(new Asset
+        {
+            Name = "Car", Kind = AssetKind.Vehicle,
+            Values = [new AssetValue { AsOf = new(2025, 1, 1), Value = 24_200m },
+                      new AssetValue { AsOf = new(2025, 7, 1), Value = 22_100m },
+                      new AssetValue { AsOf = new(2026, 1, 1), Value = 20_400m },
+                      new AssetValue { AsOf = new(2026, 9, 1), Value = 18_500m }],
+        });
+        await db.SaveChangesAsync(ct);
+
+        // Both loans are secured against the house, which is what makes equity worth showing.
+        foreach (var loan in db.Loans.Local.Where(l => l.Kind is LoanKind.Mortgage or LoanKind.Heloc))
+            loan.Asset = house;
         var amexLoanLine = new BudgetLine { Name = "Amex loan", Category = housing, DueDay = 5, ProjectedAmount = 250m, IsAutopay = true, PaymentAccount = chaseMain, FundingAccount = chaseMain, IsCardEligible = false, Notes = "Sam repays 100% each month" };
         db.BudgetLines.Add(amexLoanLine);
         db.People.AddRange(

@@ -120,7 +120,7 @@ public static class InvestmentEndpoints
 
         // ---- Assets (ACC-4a) ----
         var a = api.MapGroup("/assets");
-        a.MapGet("/", async (BudgetDbContext db) => (await db.Assets.Include(x => x.Values).OrderBy(x => x.Name).ToListAsync()).Select(ToDto));
+        a.MapGet("/", async (BudgetDbContext db) => (await db.Assets.Include(x => x.Values).Include(x => x.Loans).ThenInclude(l => l.Balances).OrderBy(x => x.Name).ToListAsync()).Select(ToDto));
         a.MapPost("/", async (AssetDto dto, BudgetDbContext db) =>
         {
             var e = new Asset { Name = dto.Name.Trim(), Kind = dto.Kind, Notes = dto.Notes, IsActive = dto.IsActive };
@@ -130,7 +130,7 @@ public static class InvestmentEndpoints
         });
         a.MapPut("/{id:int}", async (int id, AssetDto dto, BudgetDbContext db) =>
         {
-            var e = await db.Assets.Include(x => x.Values).FirstOrDefaultAsync(x => x.Id == id);
+            var e = await db.Assets.Include(x => x.Values).Include(x => x.Loans).ThenInclude(l => l.Balances).FirstOrDefaultAsync(x => x.Id == id);
             if (e is null) return Results.NotFound();
             e.Name = dto.Name.Trim(); e.Kind = dto.Kind; e.Notes = dto.Notes; e.IsActive = dto.IsActive;
             await db.SaveChangesAsync();
@@ -146,7 +146,7 @@ public static class InvestmentEndpoints
         });
         a.MapPost("/{id:int}/values", async (int id, AssetValueDto dto, BudgetDbContext db) =>
         {
-            var e = await db.Assets.Include(x => x.Values).FirstOrDefaultAsync(x => x.Id == id);
+            var e = await db.Assets.Include(x => x.Values).Include(x => x.Loans).ThenInclude(l => l.Balances).FirstOrDefaultAsync(x => x.Id == id);
             if (e is null) return Results.NotFound();
             var v = e.Values.FirstOrDefault(x => x.AsOf == dto.AsOf) ?? new AssetValue { AsOf = dto.AsOf };
             v.Value = dto.Value;
@@ -154,13 +154,68 @@ public static class InvestmentEndpoints
             await db.SaveChangesAsync();
             return Results.Ok(ToDto(e));
         });
+        // A mistyped valuation should be removable without deleting the asset.
+        a.MapDelete("/{id:int}/values/{valueId:int}", async (int id, int valueId, BudgetDbContext db) =>
+        {
+            var e = await db.Assets.Include(x => x.Values).Include(x => x.Loans).ThenInclude(l => l.Balances).FirstOrDefaultAsync(x => x.Id == id);
+            if (e is null) return Results.NotFound();
+            var v = e.Values.FirstOrDefault(x => x.Id == valueId);
+            if (v is null) return Results.NotFound();
+            e.Values.Remove(v);
+            db.Remove(v);
+            await db.SaveChangesAsync();
+            return Results.Ok(ToDto(e));
+        });
 
         return api;
     }
 
+    /// <summary>
+    /// An asset with its valuation history and whatever is secured against it. Equity is the latest
+    /// value less the attached loans' latest balances; net worth still counts the asset and the loans
+    /// separately, so this is a view of the same numbers, not a second source of them.
+    /// </summary>
     private static AssetDto ToDto(Asset e)
     {
-        var latest = e.Values.OrderByDescending(v => v.AsOf).FirstOrDefault();
-        return new() { Id = e.Id, Name = e.Name, Kind = e.Kind, Notes = e.Notes, IsActive = e.IsActive, LatestValue = latest?.Value, LatestAsOf = latest?.AsOf };
+        var ordered = e.Values.OrderByDescending(v => v.AsOf).ToList();
+        var latest = ordered.FirstOrDefault();
+
+        var history = new List<AssetValuePointDto>();
+        for (var i = 0; i < ordered.Count; i++)
+        {
+            var prior = i + 1 < ordered.Count ? ordered[i + 1] : null;
+            decimal? change = prior is null ? null : Math.Round(ordered[i].Value - prior.Value, 2);
+            decimal? pct = prior is null || prior.Value == 0 ? null : Math.Round((ordered[i].Value - prior.Value) / prior.Value * 100m, 2);
+            history.Add(new AssetValuePointDto(ordered[i].Id, ordered[i].AsOf, ordered[i].Value, change, pct));
+        }
+
+        var loans = e.Loans.Where(l => l.IsActive).Select(l =>
+        {
+            var b = l.Balances.OrderByDescending(x => x.AsOf).FirstOrDefault();
+            return new AssetLoanDto(l.Id, l.Name, l.Kind, b?.Balance ?? 0m, b?.AsOf);
+        }).OrderByDescending(l => l.Balance).ToList();
+
+        var owed = Math.Round(loans.Sum(l => l.Balance), 2);
+        decimal? equity = latest is null ? null : Math.Round(latest.Value - owed, 2);
+        var formula = latest is null ? null
+            : loans.Count == 0 ? $"{latest.Value:C} valued {latest.AsOf:yyyy-MM-dd}, nothing secured against it"
+            : $"{latest.Value:C} − {string.Join(" − ", loans.Select(l => $"{l.Name} {l.Balance:C}"))} = {equity:C}";
+
+        // A year-on-year move needs the closest record to twelve months before the latest one.
+        decimal? overYear = null;
+        if (latest is not null)
+        {
+            var target = latest.AsOf.AddYears(-1);
+            var prior = ordered.Where(v => v.AsOf <= target).OrderByDescending(v => v.AsOf).FirstOrDefault();
+            if (prior is not null) overYear = Math.Round(latest.Value - prior.Value, 2);
+        }
+
+        return new()
+        {
+            Id = e.Id, Name = e.Name, Kind = e.Kind, Notes = e.Notes, IsActive = e.IsActive,
+            LatestValue = latest?.Value, LatestAsOf = latest?.AsOf,
+            History = history, Loans = loans, LoanBalance = owed, Equity = equity, EquityFormula = formula,
+            ChangeSincePrior = history.FirstOrDefault()?.Change, ChangeOverYear = overYear,
+        };
     }
 }

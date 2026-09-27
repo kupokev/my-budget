@@ -1,0 +1,284 @@
+@page "/assets"
+@inject ApiClient Api
+@using MyBudget.Domain
+
+<ErrorBanner @bind-Message="error" />
+
+@if (assets is null || loans is null)
+{
+    <p class="muted">Loading…</p>
+}
+else
+{
+    <div class="toolbar">
+        <button type="button" @onclick="() => edit = new AssetDto()">New asset</button>
+        <label class="inline"><input type="checkbox" @bind="showInactive" /> Show inactive</label>
+        <span class="muted push-left">Valued by hand, since no free Zillow or KBB feed exists. The latest value on or before a date feeds net worth.</span>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Asset</th><th>Kind</th>
+                <th class="money">Latest value</th><th>As of</th>
+                <th class="money" title="Change from the previous recorded value">Last move</th>
+                <th class="money" title="Change from the closest record about a year earlier">Over a year</th>
+                <th class="money">Owed against it</th>
+                <th class="money">Equity</th>
+                <th class="center">Active</th><th></th>
+            </tr>
+        </thead>
+        <tbody>
+        @foreach (var a in assets.Where(a => showInactive || a.IsActive))
+        {
+            <tr class="@(a.IsActive ? "" : "muted") @(selected == a.Id ? "selected" : "")">
+                <td>
+                    <span class="tip">@a.Name
+                        <span class="tip-box">
+                            <span class="tip-head"><b>@a.Name</b><span class="chip small">@Fmt.Words(a.Kind)</span></span>
+                            <span class="tip-grid">
+                                <span>Latest value</span><span class="num">@Fmt.Money(a.LatestValue)</span>
+                                <span>Valued</span><span>@Fmt.Date(a.LatestAsOf)</span>
+                                <span>Records</span><span class="num">@a.History.Count</span>
+                                @foreach (var l in a.Loans)
+                                {
+                                    <span>@l.Name</span><span class="num">−@Fmt.Money(l.Balance)</span>
+                                }
+                                <span>Equity</span><span class="num">@Fmt.Money(a.Equity)</span>
+                            </span>
+                            @if (!string.IsNullOrWhiteSpace(a.EquityFormula)) { <span class="tip-note">@a.EquityFormula</span> }
+                            @if (!string.IsNullOrWhiteSpace(a.Notes)) { <span class="tip-note">@a.Notes</span> }
+                        </span>
+                    </span>
+                </td>
+                <td>@Fmt.Words(a.Kind)</td>
+                <td class="money">@Fmt.Money(a.LatestValue)</td>
+                <td class="muted">@Fmt.Date(a.LatestAsOf)</td>
+                <td class="money @Sign(a.ChangeSincePrior)">@Signed(a.ChangeSincePrior)</td>
+                <td class="money @Sign(a.ChangeOverYear)">@Signed(a.ChangeOverYear)</td>
+                <td class="money">@(a.LoanBalance > 0 ? Fmt.Money(a.LoanBalance) : "—")</td>
+                <td class="money" title="@a.EquityFormula">@Fmt.Money(a.Equity)</td>
+                <td class="center">@if (a.IsActive) { <span class="tick">✓</span> } else { <span class="muted">—</span> }</td>
+                <td class="actions icons">
+                    <button class="link" type="button" title="Value history" @onclick="() => Toggle(a.Id)">@(selected == a.Id ? "▾" : "▸")</button>
+                    <button class="link" type="button" title="Record a value" @onclick="() => OpenValue(a)">＋</button>
+                    <button class="link" type="button" title="Edit asset" @onclick="() => Edit(a)">✎</button>
+                </td>
+            </tr>
+
+            @if (selected == a.Id)
+            {
+                <tr class="detail">
+                    <td colspan="10">
+                        <div class="row">
+                            <section class="panel grow">
+                                <h3>Value history</h3>
+                                @if (a.History.Count == 0)
+                                {
+                                    <p class="muted">Nothing recorded yet. Use ＋ on the row to add the first valuation.</p>
+                                }
+                                else
+                                {
+                                    <div class="spark">
+                                        @foreach (var p in a.History.AsEnumerable().Reverse())
+                                        {
+                                            <span class="spark-bar @(p.Change < 0 ? "down" : "")"
+                                                  style="height:@(BarHeight(a, p.Value))%"
+                                                  title="@($"{p.AsOf:MMM yyyy}  {Fmt.Money(p.Value)}")"></span>
+                                        }
+                                    </div>
+                                    <table class="compact">
+                                        <thead><tr><th>As of</th><th class="money">Value</th><th class="money">Change</th><th class="money">%</th><th></th></tr></thead>
+                                        <tbody>
+                                        @foreach (var p in a.History)
+                                        {
+                                            <tr>
+                                                <td>@Fmt.Date(p.AsOf)</td>
+                                                <td class="money">@Fmt.Money(p.Value)</td>
+                                                <td class="money @Sign(p.Change)">@Signed(p.Change)</td>
+                                                <td class="money @Sign(p.Change)">@(p.ChangePercent is { } pc ? $"{pc:0.0}%" : "")</td>
+                                                <td class="actions"><button class="link danger" type="button" title="Remove this valuation" @onclick="() => DeleteValue(a.Id, p.Id)">✕</button></td>
+                                            </tr>
+                                        }
+                                        </tbody>
+                                    </table>
+                                }
+                            </section>
+                            <section class="panel">
+                                <h3>Secured against it</h3>
+                                @if (a.Loans.Count == 0)
+                                {
+                                    <p class="muted">No loans attached. Use the picker below, or set it on the loan itself under <a href="loans">Admin → Loans</a>.</p>
+                                }
+                                else
+                                {
+                                    <table class="compact">
+                                        <thead><tr><th>Loan</th><th>Kind</th><th class="money">Balance</th><th>As of</th><th></th></tr></thead>
+                                        <tbody>
+                                        @foreach (var l in a.Loans)
+                                        {
+                                            <tr>
+                                                <td>@l.Name</td><td>@Fmt.Words(l.Kind)</td>
+                                                <td class="money">@Fmt.Money(l.Balance)</td>
+                                                <td class="muted">@Fmt.Date(l.BalanceAsOf)</td>
+                                                <td class="actions"><button class="link danger" type="button" title="Detach from this asset" @onclick="() => Attach(l.LoanId, null)">✕</button></td>
+                                            </tr>
+                                        }
+                                        </tbody>
+                                        <tfoot><tr><th colspan="2">Owed</th><th class="money"><Money Value="a.LoanBalance" /></th><th colspan="2"></th></tr></tfoot>
+                                    </table>
+                                }
+                                <div class="row" style="margin-top:8px">
+                                    <select @bind="attachLoanId" disabled="@(Unattached().Count == 0)">
+                                        <option value="0">@(Unattached().Count == 0 ? "No unattached loans" : "Attach a loan…")</option>
+                                        @foreach (var l in Unattached()) { <option value="@l.Id">@l.Name</option> }
+                                    </select>
+                                    <button class="secondary" type="button" disabled="@(attachLoanId == 0)" @onclick="() => Attach(attachLoanId, a.Id)">Attach</button>
+                                </div>
+                                <p class="muted" style="margin-top:10px">
+                                    @if (Unattached().Count == 0) { <text>Every active loan is already secured against something. </text>}
+                                    This can also be set from the loan itself, under <a href="loans">Admin → Loans</a>, where each loan has a <em>Secured against</em> picker.
+                                </p>
+                                <p class="muted">@a.EquityFormula</p>
+                            </section>
+                        </div>
+                    </td>
+                </tr>
+            }
+        }
+        </tbody>
+        <tfoot>
+            <tr>
+                <th colspan="2">Totals</th>
+                <th class="money"><Money Value="Active().Sum(a => a.LatestValue ?? 0)" /></th>
+                <th colspan="3"></th>
+                <th class="money"><Money Value="Active().Sum(a => a.LoanBalance)" /></th>
+                <th class="money"><Money Value="Active().Sum(a => a.Equity ?? 0)" /></th>
+                <th colspan="2"></th>
+            </tr>
+        </tfoot>
+    </table>
+
+    @if (valueFor is { } vf)
+    {
+        <Modal Title="@($"Record a value for {vf.Name}")" Subtitle="Recording the same date twice replaces that entry." OnClose="() => valueFor = null">
+            <ChildContent>
+                <div class="row">
+                    <div class="field"><label>As of</label><input type="date" @bind="newValue.AsOf" /></div>
+                    <div class="field"><label>Value</label><input type="number" step="1" class="narrow-money" @bind="newValue.Value" /></div>
+                </div>
+                @if (vf.LatestValue is { } lv)
+                {
+                    <p class="muted">Last recorded @Fmt.Money(lv) on @Fmt.Date(vf.LatestAsOf). This entry would be @Signed(newValue.Value - lv).</p>
+                }
+            </ChildContent>
+            <Footer>
+                <button class="secondary" type="button" @onclick="() => valueFor = null">Cancel</button>
+                <button type="button" @onclick="SaveValue">Save</button>
+            </Footer>
+        </Modal>
+    }
+
+    @if (edit is { } ae)
+    {
+        <Modal Title="@(ae.Id == 0 ? "New asset" : ae.Name)" OnClose="() => edit = null">
+            <ChildContent>
+                <div class="row">
+                    <div class="field"><label>Name</label><input type="text" @bind="ae.Name" /></div>
+                    <div class="field"><label>Kind</label><select @bind="ae.Kind">@foreach (var k in Enum.GetValues<AssetKind>()) { <option value="@k">@Fmt.Words(k)</option> }</select></div>
+                    <div class="field"><label class="inline"><input type="checkbox" @bind="ae.IsActive" /> Active</label></div>
+                </div>
+                <div class="field"><label>Notes</label><input type="text" @bind="ae.Notes" /></div>
+            </ChildContent>
+            <Footer>
+                @if (ae.Id != 0) { <button class="link danger push-left" type="button" @onclick="DeleteAsset">Delete</button> }
+                <button class="secondary" type="button" @onclick="() => edit = null">Cancel</button>
+                <button type="button" @onclick="SaveAsset">Save</button>
+            </Footer>
+        </Modal>
+    }
+}
+
+@code {
+    private List<AssetDto>? assets;
+    private List<LoanDto>? loans;
+    private AssetDto? edit;
+    private AssetDto? valueFor;
+    private AssetValueDto newValue = new();
+    private int? selected;
+    private int attachLoanId;
+    private bool showInactive;
+    private string? error;
+
+    protected override Task OnInitializedAsync() => Load();
+
+    private async Task Load()
+    {
+        try { assets = await Api.GetAssetsAsync(); loans = await Api.GetLoansAsync(); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private IEnumerable<AssetDto> Active() => assets!.Where(a => a.IsActive);
+
+    /// <summary>Loans not already secured against something, so one can't be attached twice.</summary>
+    private List<LoanDto> Unattached() => loans!.Where(l => l.IsActive && l.AssetId is null).ToList();
+
+    private void Toggle(int id) { selected = selected == id ? null : id; }
+
+    private void Edit(AssetDto a) => edit = new AssetDto { Id = a.Id, Name = a.Name, Kind = a.Kind, Notes = a.Notes, IsActive = a.IsActive };
+
+    private void OpenValue(AssetDto a)
+    {
+        valueFor = a;
+        newValue = new AssetValueDto { AssetId = a.Id, AsOf = DateOnly.FromDateTime(DateTime.Today), Value = a.LatestValue ?? 0m };
+    }
+
+    /// <summary>Bar height as a share of the asset's own range, so a house and a car both read well.</summary>
+    private static int BarHeight(AssetDto a, decimal value)
+    {
+        var values = a.History.Select(h => h.Value).ToList();
+        if (values.Count == 0) return 0;
+        decimal min = values.Min(), max = values.Max();
+        if (max == min) return 100;
+        // Floor at 12% so the smallest bar is still visible.
+        return (int)(12 + (value - min) / (max - min) * 88);
+    }
+
+    private static string Sign(decimal? v) => v is null or 0 ? "" : v > 0 ? "pos" : "neg";
+    private static string Signed(decimal? v) => v is null ? "" : v == 0 ? Fmt.Money(0) : (v > 0 ? "+" : "−") + Fmt.Money(Math.Abs(v.Value));
+
+    private async Task SaveAsset()
+    {
+        if (string.IsNullOrWhiteSpace(edit!.Name)) return;
+        try { await Api.SaveAssetAsync(edit); edit = null; await Load(); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task DeleteAsset()
+    {
+        try { await Api.DeleteAssetAsync(edit!.Id); edit = null; selected = null; await Load(); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task SaveValue()
+    {
+        try { await Api.SaveAssetValueAsync(valueFor!.Id, newValue); selected = valueFor.Id; valueFor = null; await Load(); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task DeleteValue(int assetId, int valueId)
+    {
+        try { await Api.DeleteAssetValueAsync(assetId, valueId); await Load(); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    /// <summary>Attaching or detaching is a change to the loan, which is the side that owns the link.</summary>
+    private async Task Attach(int loanId, int? assetId)
+    {
+        var loan = loans!.FirstOrDefault(l => l.Id == loanId);
+        if (loan is null) return;
+        loan.AssetId = assetId;
+        try { await Api.SaveLoanAsync(loan); attachLoanId = 0; await Load(); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+}

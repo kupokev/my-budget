@@ -102,6 +102,7 @@ public sealed class BudgetDbContext(DbContextOptions<BudgetDbContext> options) :
 
         mb.Entity<Loan>(e =>
         {
+            e.HasOne(x => x.Asset).WithMany(x => x.Loans).HasForeignKey(x => x.AssetId).OnDelete(DeleteBehavior.SetNull);
             e.Property(x => x.Name).HasMaxLength(100);
             e.Property(x => x.AccountNumber).HasMaxLength(60);
             e.Property(x => x.AnnualRate).HasPrecision(8, 5);
