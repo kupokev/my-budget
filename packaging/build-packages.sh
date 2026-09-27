@@ -4,7 +4,7 @@
 #   packaging/build-packages.sh <version> <publish-dir> <output-dir>
 #
 # Runs the same way locally and in CI, so a release can be reproduced without pushing a tag.
-# Needs: fpm (deb/rpm/pacman), appimagetool (AppImage), rsvg-convert or ImageMagick (icon).
+# Needs: nfpm (deb/rpm/pacman), appimagetool (AppImage), rsvg-convert or ImageMagick (icon).
 set -euo pipefail
 
 VERSION=${1:?version, e.g. 1.0.0}
@@ -81,35 +81,24 @@ ARCH=x86_64 appimagetool --no-appstream "$APPDIR" "$OUT/MyBudget-${VERSION}-x86_
 PKGROOT="$STAGE/pkgroot"
 build_root "$PKGROOT"
 
-fpm_common=(
-  -s dir -C "$PKGROOT"
-  --name mybudget
-  --version "$VERSION"
-  --license MIT
-  --vendor "MyBudget"
-  --maintainer "MyBudget"
-  --url "https://github.com/kupokev/my-budget"
-  --description "Personal budget app: budget, paycheck estimates, HSA planning and card rewards, running entirely on your own machine."
-  --category Office
-  -f
-)
+if ! command -v nfpm >/dev/null; then
+  echo "nfpm is not installed; see https://github.com/goreleaser/nfpm/releases" >&2
+  exit 1
+fi
 
+# nfpm does not expand environment variables inside contents.src, so the config is rendered with the
+# staging path and version filled in. It lands in $STAGE, which the trap above cleans up.
+NFPM_CONFIG="$STAGE/nfpm.yaml"
+sed -e "s|\${PKGROOT}|$PKGROOT|g" -e "s|\${VERSION}|$VERSION|g" "$HERE/nfpm.yaml" > "$NFPM_CONFIG"
+
+# Explicit file names rather than nfpm's defaults, because the release notes and the README name
+# these files. nfpm's default deb name carries the "-1" release, which those docs do not.
 echo "==> deb"
-fpm "${fpm_common[@]}" -t deb \
-  --depends "libwebkit2gtk-4.1-0 | libwebkit2gtk-4.0-37" \
-  --deb-no-default-config-files \
-  -p "$OUT/mybudget_${VERSION}_amd64.deb" .
-
+nfpm package -f "$NFPM_CONFIG" -p deb       -t "$OUT/mybudget_${VERSION}_amd64.deb"
 echo "==> rpm"
-fpm "${fpm_common[@]}" -t rpm \
-  --depends "webkit2gtk4.1" \
-  --rpm-digest sha256 \
-  -p "$OUT/mybudget-${VERSION}-1.x86_64.rpm" .
-
+nfpm package -f "$NFPM_CONFIG" -p rpm       -t "$OUT/mybudget-${VERSION}-1.x86_64.rpm"
 echo "==> pacman"
-fpm "${fpm_common[@]}" -t pacman \
-  --depends "webkit2gtk-4.1" \
-  -p "$OUT/mybudget-${VERSION}-1-x86_64.pkg.tar.zst" .
+nfpm package -f "$NFPM_CONFIG" -p archlinux -t "$OUT/mybudget-${VERSION}-1-x86_64.pkg.tar.zst"
 
 echo
 echo "Built:"

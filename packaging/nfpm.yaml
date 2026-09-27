@@ -1,0 +1,40 @@
+# deb / rpm / Arch packaging for MyBudget.
+#
+# Replaces fpm: nfpm is a single static binary with no Ruby, and it writes the Arch package itself
+# rather than shelling out to bsdtar, which is what broke the pacman target under fpm.
+#
+# Fed the staged tree that packaging/build-packages.sh assembles, so all three packages contain
+# exactly the same files as the AppImage. That script substitutes ${PKGROOT} and ${VERSION} before
+# calling nfpm, because nfpm does not expand environment variables inside contents.src.
+name: mybudget
+arch: amd64
+platform: linux
+version: ${VERSION}
+release: "1"
+section: utils
+priority: optional
+maintainer: MyBudget
+vendor: MyBudget
+homepage: https://github.com/kupokev/my-budget
+license: MIT
+description: |
+  Personal budget app: budget, paycheck estimates, HSA planning and card rewards,
+  running entirely on your own machine.
+
+contents:
+  - src: ${PKGROOT}/usr
+    dst: /usr
+    type: tree
+
+# WebKitGTK is Photino's renderer and is deliberately not bundled, so each package names its own
+# distribution's spelling of it.
+overrides:
+  deb:
+    depends:
+      - libwebkit2gtk-4.1-0 | libwebkit2gtk-4.0-37
+  rpm:
+    depends:
+      - webkit2gtk4.1
+  archlinux:
+    depends:
+      - webkit2gtk-4.1
