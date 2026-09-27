@@ -70,7 +70,7 @@ A sub-1%-of-payment residual after the final scheduled month is folded into that
 
 ### UI
 
-Paycheck page with tabs: Estimate (check + year side by side), What-if, Year (every check), Bonus,
+Paycheck page with tabs: Estimate (check + year side by side), Year (every check), Bonus,
 Actual stubs (enter a stub, compare line by line, within-$5 flag). HSA page: click-to-cycle month
 grid, plan with steps, contributions. Loans page: list, editor, balance entry, projection with an
 extra-principal try box and the full schedule. Tax tables page: edit everything, mark verified,
@@ -91,3 +91,15 @@ pages. Stub verification pending Kevin's real numbers (see `docs/audit/`).
 
 - `docs/reference/paycheck-calculation.md` for the formulas and the figures used
 - DD-0002 for pay dates (the paycheck year view reuses `PayDates`)
+
+
+## What-if moved to Calculators (2026-09-27)
+
+It was a tab on Paycheck. It is now its own page, `/paycheck-what-if`, under the Calculators group,
+because Calculators means a tool you feed inputs to for an estimate, and every other Paycheck tab
+shows something real instead: the check you are actually getting, the year as configured, a bonus,
+your entered stubs, your 1099 income.
+
+The page is read-only against the database. It posts a `WhatIfRequest` and shows the response beside
+the baseline; nothing it holds is persisted. The real salary, elections and W-4 stay under
+Admin → Income sources, and both pages link to the other.

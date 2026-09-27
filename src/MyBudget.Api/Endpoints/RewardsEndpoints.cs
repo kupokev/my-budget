@@ -58,32 +58,6 @@ public static class RewardsEndpoints
             return Results.NoContent();
         });
 
-        // ---- Card spend by month (RWD-3 input until import exists) ----
-        var s = api.MapGroup("/card-spend");
-        s.MapGet("/", async (int? year, int? cardId, BudgetDbContext db) =>
-        {
-            var q = db.CardSpend.AsQueryable();
-            if (year is { } y) q = q.Where(x => x.Period.Year == y);
-            if (cardId is { } c) q = q.Where(x => x.CardId == c);
-            return (await q.OrderByDescending(x => x.Period).ThenBy(x => x.CardId).ToListAsync()).Select(x => new CardSpendDto { Id = x.Id, CardId = x.CardId, Period = x.Period, CategoryId = x.CategoryId, LabelId = x.LabelId, Amount = x.Amount, Notes = x.Notes });
-        });
-        // Upsert by (card, month, category); amount 0 deletes.
-        s.MapPut("/", async (CardSpendDto dto, BudgetDbContext db) =>
-        {
-            var period = new DateOnly(dto.Period.Year, dto.Period.Month, 1);
-            var row = await db.CardSpend.FirstOrDefaultAsync(x => x.CardId == dto.CardId && x.Period == period && x.CategoryId == dto.CategoryId && x.LabelId == dto.LabelId);
-            if (dto.Amount == 0)
-            {
-                if (row is not null) { db.CardSpend.Remove(row); await db.SaveChangesAsync(); }
-                return Results.NoContent();
-            }
-            row ??= db.CardSpend.Add(new CardSpend { CardId = dto.CardId, Period = period, CategoryId = dto.CategoryId, LabelId = dto.LabelId }).Entity;
-            row.Amount = dto.Amount; row.Notes = dto.Notes;
-            await db.SaveChangesAsync();
-            return Results.Ok(new CardSpendDto { Id = row.Id, CardId = row.CardId, Period = row.Period, CategoryId = row.CategoryId, LabelId = row.LabelId, Amount = row.Amount, Notes = row.Notes });
-        });
-
-
         // ---- The report (RWD-3..6) ----
         api.MapGet("/rewards/report", async (int? year, DateOnly? asOf, BudgetDbContext db, TimeProvider clock) =>
         {
@@ -101,12 +75,34 @@ public static class RewardsEndpoints
     {
         var cards = await db.Cards.Include(c => c.EarnRules).ThenInclude(r => r.Category).Include(c => c.EarnRules).ThenInclude(r => r.Label).Include(c => c.Thresholds).Include(c => c.Perks).Include(c => c.LoyaltyProgram).Where(c => c.IsActive).ToListAsync();
         var programs = await Programs(db).Where(p => p.IsActive).ToListAsync();
-        var spend = await db.CardSpend.Where(s => s.Period.Year == year).ToListAsync();
+        var spend = await CardSpendFor(db, year);
         var categories = await db.Categories.ToListAsync();
         var labels = await db.Labels.ToListAsync();
         var lines = await db.BudgetLines.Include(b => b.Category).Include(b => b.Periods).Where(b => b.IsActive).ToListAsync();
         var accrual = lines.ToDictionary(b => b.Id, b => SinkingFund.MonthlyAccrual(b, asOf).Monthly);
         return RewardsOptimizer.Run(new RewardsInput(year, asOf, cards, programs, spend, categories, labels, lines, accrual, carryCurrentTier));
+    }
+
+    /// <summary>
+    /// A card's spend by month, category and label, summed from its transactions. This used to be a
+    /// stored table that only an import ever refreshed, which left anything entered by hand invisible
+    /// to the thresholds. Deriving it means the figures are always current.
+    /// </summary>
+    internal static async Task<List<CardSpend>> CardSpendFor(BudgetDbContext db, int year)
+    {
+        var from = new DateOnly(year, 1, 1);
+        var to = new DateOnly(year + 1, 1, 1);
+        var rows = await db.Transactions
+            .Where(t => t.CardId != null && !t.IsTransfer && t.Amount < 0 && t.Date >= from && t.Date < to)
+            .Where(t => t.Origin != TransactionOrigin.Manual || t.ReconciledWithId == null)   // a reconciled pair counts once
+            .GroupBy(t => new { t.CardId, t.Date.Year, t.Date.Month, t.CategoryId, t.LabelId })
+            .Select(g => new { g.Key.CardId, g.Key.Year, g.Key.Month, g.Key.CategoryId, g.Key.LabelId, Sum = g.Sum(t => -t.Amount) })
+            .ToListAsync();
+        return rows.Select(r => new CardSpend
+        {
+            CardId = r.CardId!.Value, Period = new DateOnly(r.Year, r.Month, 1),
+            CategoryId = r.CategoryId, LabelId = r.LabelId, Amount = Math.Round(r.Sum, 2),
+        }).ToList();
     }
 
     private static IQueryable<LoyaltyProgram> Programs(BudgetDbContext db)

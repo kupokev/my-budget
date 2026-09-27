@@ -21,6 +21,16 @@ public static class CardEndpoints
             var asOf = DateOnly.FromDateTime(clock.GetLocalNow().DateTime);
             var cards = await db.Cards.Include(c => c.Balances).Include(c => c.PayingAccount).Where(c => c.IsActive).OrderBy(c => c.Name).ToListAsync();
             var lines = await db.BudgetLines.Where(b => b.IsActive && b.PaymentMethod == PaymentMethodKind.Card).ToListAsync();
+
+            // Actual spend on each card, this month and last, straight from its transactions.
+            var thisMonth = new DateOnly(asOf.Year, asOf.Month, 1);
+            var lastMonth = thisMonth.AddMonths(-1);
+            var spend = (await db.Transactions
+                    .Where(t => t.CardId != null && !t.IsTransfer && t.Amount < 0 && t.Date >= lastMonth && t.Date < thisMonth.AddMonths(1))
+                    .Where(t => t.Origin != TransactionOrigin.Manual || t.ReconciledWithId == null)
+                    .Select(t => new { t.CardId, t.Date, t.Amount }).ToListAsync())
+                .GroupBy(t => (t.CardId!.Value, new DateOnly(t.Date.Year, t.Date.Month, 1)))
+                .ToDictionary(g => g.Key, g => Math.Round(g.Sum(x => -x.Amount), 2));
             return cards.Select(c =>
             {
                 var mine = lines.Where(b => b.PaymentCardId == c.Id).ToList();
@@ -30,7 +40,9 @@ public static class CardEndpoints
                     latest?.Balance, latest?.AsOf, c.CreditLimit,
                     latest is not null && c.CreditLimit > 0 ? Math.Round(latest.Balance / c.CreditLimit, 4) : null,
                     mine.Select(b => b.Name).OrderBy(n => n).ToList(),
-                    Math.Round(mine.Sum(b => SinkingFund.MonthlyAccrual(b, asOf).Monthly), 2));
+                    Math.Round(mine.Sum(b => SinkingFund.MonthlyAccrual(b, asOf).Monthly), 2),
+                    spend.GetValueOrDefault((c.Id, thisMonth)),
+                    spend.GetValueOrDefault((c.Id, lastMonth)));
             });
         });
 

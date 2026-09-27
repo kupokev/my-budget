@@ -16,7 +16,7 @@ else
         </span>
         <span class="muted">@(year > DateTime.Today.Year ? $"Plan for {year} from January 1 with zero year-to-date spend." : $"As of {Fmt.Date(report.AsOf)} · {report.Plan.MonthsLeft} months left.")</span>
         <span class="tabs">
-            @foreach (var t in new[] { "Progress", "Plan", "Budget lines", "Earnings", "Card spend" })
+            @foreach (var t in new[] { "Progress", "Plan", "Budget lines", "Earnings" })
             {
                 <button type="button" class="@(tab == t ? "" : "secondary")" @onclick="() => tab = t">@t</button>
             }
@@ -157,38 +157,6 @@ else
             }
         </section>
     }
-    else if (tab == "Card spend")
-    {
-        <section class="panel">
-            <h2>Card spend @year by month and category</h2>
-            <p class="muted">From statements, until import exists. Enter an amount and press Enter; 0 clears it.</p>
-            <div class="toolbar">
-                <label class="inline">Card <select @onchange="OnSpendCardChanged">@foreach (var c in cards.Where(c => c.IsActive)) { <option value="@c.Id" selected="@(c.Id == spendCardId)">@c.Name</option> }</select></label>
-            </div>
-            <div class="scroll-x">
-            <table class="grid">
-                <thead><tr><th>Category</th>@for (var m = 1; m <= 12; m++) { <th class="money">@Fmt.Month(new DateOnly(year, m, 1))</th> }<th class="money">YTD</th></tr></thead>
-                <tbody>
-                @foreach (var cat in categories.Where(c => c.IsActive && c.IsCardEligible).Append(new CategoryDto { Id = 0, Name = "Uncategorized" }))
-                {
-                    var catId = cat.Id == 0 ? (int?)null : cat.Id;
-                    <tr>
-                        <td>@cat.Name</td>
-                        @for (var m = 1; m <= 12; m++)
-                        {
-                            var period = new DateOnly(year, m, 1);
-                            var row = spend.FirstOrDefault(s => s.CardId == spendCardId && s.Period == period && s.CategoryId == catId);
-                            <td class="cell"><input class="cell-input" type="number" step="0.01" value="@(row?.Amount.ToString("0.00") ?? "")" @onchange="e => SaveSpend(period, catId, e)" /></td>
-                        }
-                        <td><Money Value="spend.Where(s => s.CardId == spendCardId && s.CategoryId == catId).Sum(s => s.Amount)" /></td>
-                    </tr>
-                }
-                </tbody>
-                <tfoot><tr><th>Total</th>@for (var m = 1; m <= 12; m++) { var period = new DateOnly(year, m, 1); <th><Money Value="spend.Where(s => s.CardId == spendCardId && s.Period == period).Sum(s => s.Amount)" /></th> }<th><Money Value="spend.Where(s => s.CardId == spendCardId).Sum(s => s.Amount)" /></th></tr></tfoot>
-            </table>
-            </div>
-        </section>
-    }
 }
 
 @code {
@@ -197,8 +165,6 @@ else
     private RewardsReportDto? report;
     private List<CardDto>? cards;
     private List<CategoryDto>? categories;
-    private List<CardSpendDto> spend = [];
-    private int spendCardId;
     private string? error;
 
     protected override Task OnInitializedAsync() => Load();
@@ -209,8 +175,6 @@ else
         {
             cards = await Api.GetCardsAsync();
             categories = await Api.GetCategoriesAsync();
-            spend = await Api.GetCardSpendAsync(year);
-            if (spendCardId == 0) spendCardId = cards.FirstOrDefault(c => c.IsActive)?.Id ?? 0;
             report = await Api.GetRewardsReportAsync(year);
         }
         catch (Exception ex) { error = ex.Message; }
@@ -224,18 +188,5 @@ else
 
     private static string Num(StatusPathKind k, decimal v) => k is StatusPathKind.CardSpend or StatusPathKind.ProgramSpend ? Fmt.Money(v) : k == StatusPathKind.HoldCard ? (v >= 1 ? "held" : "—") : v.ToString("N0");
 
-    private void OnSpendCardChanged(ChangeEventArgs e) => spendCardId = int.Parse((string)e.Value!);
-
-    private async Task SaveSpend(DateOnly period, int? categoryId, ChangeEventArgs e)
-    {
-        var amount = decimal.TryParse((string?)e.Value, out var v) ? v : 0m;
-        try
-        {
-            await Api.SaveCardSpendAsync(new CardSpendDto { CardId = spendCardId, Period = period, CategoryId = categoryId, Amount = amount });
-            spend = await Api.GetCardSpendAsync(year);
-            report = await Api.GetRewardsReportAsync(year);
-        }
-        catch (Exception ex) { error = ex.Message; }
-    }
 
 }

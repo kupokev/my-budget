@@ -95,13 +95,15 @@ in-memory database resets on every restart either way.)
 - **Admin → Loyalty programs.** Set up once and rarely touched, so it lives in Admin. One program per points currency (IHG One Rewards, Hilton Honors, Delta
   SkyMiles). Set each program's priority (1 = chase first), current and target tier,
   point value, and this year's nights / stays / program spend. Paths list every way to each tier.
-- **Rewards status → Card spend.** Type each card's monthly spend by category from statements. This is
-  the year-to-date figure every threshold and card-spend path uses.
 - **Rewards status → Progress / Plan / Budget lines / Earnings.** Progress shows each program you're in,
   the tier you hold and what that tier gets you, then every path and threshold with
   the per-month figure. Plan allocates spend to goals in priority order and shows gaps with the
   other paths. Budget lines says card or bank per line, weighing the bank-autopay discount. Earnings shows
   points and dollars per card net of fees. Use the year arrows to see next year's plan from zero.
+- **Calculators → Paycheck what-if.** Was a tab on Paycheck. Change a salary, a 401(k) percent, a
+  W-4 line or a benefit amount and see the check and the year side by side against what you have
+  configured today. Nothing here is saved; the real elections live under Admin → Income sources.
+
 - **Calculators → Points vs cash.** Standing at a booking page, price the stay both ways and enter
   the two totals. It returns cents per point and tells you to pay cash under 0.45¢, calls it a wash
   between 0.45¢ and 0.55¢, and says use the points at 0.55¢ and up. Enter the cash price all-in
@@ -122,7 +124,11 @@ in-memory database resets on every restart either way.)
   category and a planned monthly amount and the rewards plan splits that category, sending the
   labelled part to whichever card pays best for it. A categorization rule can apply a label
   automatically, so every Amazon line is tagged on import.
-- **Transactions.** Browse by month or year, filter to uncategorized or to entries that still need
+- **Transactions.** The one place transactions are entered. **New transaction** takes an account or
+  a card, a date, a signed amount (negative is money out) and a description. Tick *Transfer* and pick
+  another account to write both sides at once. Card charges you enter here count towards your rewards
+  thresholds straight away, and the Cards page shows what each card has taken this month and last.
+- **Transactions (filtering and editing).** Browse by month or year, filter to uncategorized or to entries that still need
   reconciling, search, edit a line's category/bill/transfer. A transfer you typed on Accounts shows
   here as "manual" and "unreconciled" until a statement import brings the bank's line for it; the
   import links them automatically when amount and date (±3 days) match, or use "reconcile…" to pick

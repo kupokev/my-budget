@@ -20,8 +20,9 @@ else
         </select></label>
         <label class="inline">Pay date <input type="date" value="@date.ToString("yyyy-MM-dd")" @onchange="OnDateChanged" /></label>
         <a class="muted" href="income">Employers, salary, elections and odd checks are edited under Income</a>
+        <a class="muted" href="paycheck-what-if">What-if is under Calculators</a>
         <span class="tabs">
-            @foreach (var t in new[] { "Estimate", "What-if", "Year", "Bonus", "Actual stubs", "1099" })
+            @foreach (var t in new[] { "Estimate", "Year", "Bonus", "Actual stubs", "1099" })
             {
                 <button type="button" class="@(tab == t ? "" : "secondary")" @onclick="() => SwitchTab(t)">@t</button>
             }
@@ -63,53 +64,6 @@ else
                         <p class="muted">Liability @Fmt.Money(yearEst.FederalLiability) vs withheld @Fmt.Money(yearEst.FederalWithheld). Hover the row for the formula.</p>
                     }
                 </section>
-            </div>
-        }
-    }
-    else if (tab == "What-if")
-    {
-        <section class="panel">
-            <h2>Change something, see the check and the year</h2>
-            <p class="muted">Blank means "as configured today". Percent fields are whole numbers.</p>
-            <div class="row">
-                <div class="field"><label>Annual salary</label><input type="number" step="0.01" @bind="whatIf.AnnualSalary" /></div>
-                <div class="field"><label>401(k) %</label><input type="number" step="0.5" @bind="whatIf.Retirement401kPercent" /></div>
-                <div class="field"><label>Federal status</label><select @bind="whatIfStatus">
-                    <option value="">(as configured)</option>
-                    @foreach (var s in Enum.GetValues<FederalFilingStatus>()) { <option value="@s">@Fmt.Words(s)</option> }
-                </select></div>
-                <div class="field"><label>Step 2 (two jobs)</label><select @bind="whatIfMultipleJobs"><option value="">(as configured)</option><option value="true">Checked</option><option value="false">Unchecked</option></select></div>
-                <div class="field"><label>Step 3 credits / yr</label><input type="number" step="1" @bind="whatIf.DependentCredits" /></div>
-                <div class="field"><label>4(a) other income / yr</label><input type="number" step="1" @bind="whatIf.OtherIncome" /></div>
-                <div class="field"><label>4(b) deductions / yr</label><input type="number" step="1" @bind="whatIf.Deductions" /></div>
-                <div class="field"><label>4(c) extra / check</label><input type="number" step="1" @bind="whatIf.ExtraWithholding" /></div>
-                <div class="field"><label>MO extra / check</label><input type="number" step="1" @bind="whatIf.MissouriExtraWithholding" /></div>
-            </div>
-            @if (estimate is not null && estimate.PreTaxDeductions.Concat(estimate.PostTaxDeductions).Any())
-            {
-                <div class="row">
-                    @foreach (var l in estimate.PreTaxDeductions.Concat(estimate.PostTaxDeductions).Where(l => !l.Formula.Contains('%')))
-                    {
-                        var name = l.Name;
-                        <div class="field"><label>@name / check <span class="muted">(now @Fmt.Money(l.Amount))</span></label>
-                            <input type="number" step="0.01" value="@(whatIf.BenefitAmounts.TryGetValue(name, out var v) ? v.ToString("0.00") : "")" @onchange="e => SetBenefit(name, e)" /></div>
-                    }
-                </div>
-            }
-            <div class="toolbar">
-                <button type="button" @onclick="RunWhatIf">Compare</button>
-                <button class="secondary" type="button" @onclick="ResetWhatIf">Reset</button>
-            </div>
-        </section>
-        @if (whatIfResult is { } w)
-        {
-            <div class="row">
-                <section class="panel"><h2>Now</h2><EstimateTable E="w.Baseline" /><p class="muted">Year net @Fmt.Money(w.BaselineYear.Net) · year-end <Money Value="w.BaselineYear.FederalRefundOrOwed" Signed="true" /></p></section>
-                <section class="panel"><h2>Scenario</h2><EstimateTable E="w.Scenario" />
-                    <p class="muted">Year net @Fmt.Money(w.ScenarioYear.Net) · year-end <Money Value="w.ScenarioYear.FederalRefundOrOwed" Signed="true" /></p>
-                    <p><strong>Per check:</strong> <Money Value="w.Scenario.Net - w.Baseline.Net" Signed="true" /> net · <strong>Per year:</strong> <Money Value="w.ScenarioYear.Net - w.BaselineYear.Net" Signed="true" /> net,
-                        <Money Value="w.ScenarioYear.FederalRefundOrOwed - w.BaselineYear.FederalRefundOrOwed" Signed="true" /> year-end</p>
-                    <Steps Items="w.Scenario.Steps" /></section>
             </div>
         }
     }
@@ -302,10 +256,6 @@ else
     private string tab = "Estimate";
     private PaycheckEstimateDto? estimate;
     private YearEstimateDto? yearEst;
-    private WhatIfRequest whatIf = new();
-    private string whatIfStatus = "";
-    private string whatIfMultipleJobs = "";
-    private WhatIfResponse? whatIfResult;
     private SupplementalRequest bonus = new() { Amount = 5_000m };
     private PaycheckEstimateDto? bonusResult;
     private List<PaycheckDto>? stubs;
@@ -353,7 +303,7 @@ else
 
     private async Task Recalc()
     {
-        estimate = null; yearEst = null; whatIfResult = null; bonusResult = null; compare = null; error = null;
+        estimate = null; yearEst = null; bonusResult = null; compare = null; error = null;
         try
         {
             estimate = await Api.GetPaycheckEstimateAsync(sourceId, date);
@@ -362,21 +312,8 @@ else
         catch (Exception ex) { error = ex.Message; }
     }
 
-    private void SetBenefit(string name, ChangeEventArgs e)
-    {
-        if (decimal.TryParse((string?)e.Value, out var v)) whatIf.BenefitAmounts[name] = v; else whatIf.BenefitAmounts.Remove(name);
-    }
 
-    private async Task RunWhatIf()
-    {
-        whatIf.IncomeSourceId = sourceId; whatIf.PayDate = date;
-        whatIf.FederalStatus = Enum.TryParse<FederalFilingStatus>(whatIfStatus, out var fs) ? fs : null;
-        whatIf.MultipleJobs = bool.TryParse(whatIfMultipleJobs, out var mj) ? mj : null;
-        try { whatIfResult = await Api.WhatIfAsync(whatIf); }
-        catch (Exception ex) { error = ex.Message; }
-    }
 
-    private void ResetWhatIf() { whatIf = new(); whatIfStatus = ""; whatIfMultipleJobs = ""; whatIfResult = null; }
 
     private async Task RunBonus()
     {

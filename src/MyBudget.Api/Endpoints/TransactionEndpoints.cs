@@ -26,6 +26,57 @@ public static class TransactionEndpoints
             return (await q.OrderByDescending(t => t.Date).ThenByDescending(t => t.Id).Take(limit ?? 500).ToListAsync()).Select(ToDto);
         });
 
+        // Entering a transaction by hand. This is the only place transactions are created outside an
+        // import: the card-spend grid and the account transfer form both used to do their own version.
+        g.MapPost("/", async (TransactionCreateDto dto, BudgetDbContext db, ImportService svc) =>
+        {
+            if ((dto.AccountId is null) == (dto.CardId is null))
+                return Results.ValidationProblem(new Dictionary<string, string[]> { ["AccountId"] = ["Pick either an account or a card, not both."] });
+            if (dto.Amount == 0)
+                return Results.ValidationProblem(new Dictionary<string, string[]> { ["Amount"] = ["Amount can't be zero."] });
+            if (dto.CounterpartyAccountId is { } cp && cp == dto.AccountId)
+                return Results.ValidationProblem(new Dictionary<string, string[]> { ["CounterpartyAccountId"] = ["The other account must be a different account."] });
+            if (dto.AccountId is { } aid && await db.Accounts.FindAsync(aid) is null) return Results.NotFound();
+            if (dto.CardId is { } cid && await db.Cards.FindAsync(cid) is null) return Results.NotFound();
+
+            var other = dto.CounterpartyAccountId is { } oid ? await db.Accounts.FindAsync(oid) : null;
+            var isTransfer = dto.IsTransfer || other is not null;
+
+            var t = new Transaction
+            {
+                AccountId = dto.AccountId, CardId = dto.CardId, Date = dto.Date, Amount = dto.Amount,
+                Description = dto.Description.Trim(), Merchant = dto.Description.Trim(),
+                CategoryId = isTransfer ? null : dto.CategoryId, LabelId = isTransfer ? null : dto.LabelId,
+                BudgetLineId = isTransfer ? null : dto.BudgetLineId,
+                IsTransfer = isTransfer, Notes = Mapping.Clean(dto.Notes),
+                Origin = TransactionOrigin.Manual, IsManuallyCategorized = true,
+                CounterpartyAccountId = other?.Id, ExternalId = "manual:" + Guid.NewGuid().ToString("N"),
+            };
+            db.Transactions.Add(t);
+
+            // A transfer has two sides, so the other account gets the mirror row and the pair is linked.
+            if (other is not null)
+            {
+                var source = dto.AccountId is { } sid ? (await db.Accounts.FindAsync(sid))!.Name : (await db.Cards.FindAsync(dto.CardId!.Value))!.Name;
+                var mirror = new Transaction
+                {
+                    AccountId = other.Id, Date = dto.Date, Amount = -dto.Amount,
+                    Description = $"{(dto.Amount > 0 ? "Transfer out to " : "Transfer in from ")}{source}",
+                    Merchant = $"{(dto.Amount > 0 ? "Transfer out to " : "Transfer in from ")}{source}",
+                    IsTransfer = true, Notes = Mapping.Clean(dto.Notes), Origin = TransactionOrigin.Manual,
+                    IsManuallyCategorized = true, CounterpartyAccountId = dto.AccountId,
+                    ExternalId = "manual:" + Guid.NewGuid().ToString("N"),
+                };
+                db.Transactions.Add(mirror);
+                await db.SaveChangesAsync();
+                t.LinkedTransactionId = mirror.Id; mirror.LinkedTransactionId = t.Id;
+            }
+
+            await db.SaveChangesAsync();
+            await svc.SyncAsync([t]);   // keeps budget-line actuals in step
+            return Results.Created($"/api/transactions/{t.Id}", ToDto(await Query(db).FirstAsync(x => x.Id == t.Id)));
+        });
+
         g.MapPut("/{id:int}", async (int id, TransactionUpdateDto dto, BudgetDbContext db, ImportService svc) =>
         {
             var t = await Query(db).FirstOrDefaultAsync(x => x.Id == id);

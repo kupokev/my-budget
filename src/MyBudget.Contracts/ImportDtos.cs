@@ -39,7 +39,7 @@ public sealed class ImportCommitRequest
     public List<ImportRowDto> Rows { get; set; } = [];
 }
 
-public sealed record ImportResultDto(int BatchId, int Imported, int Duplicates, int Skipped, int BudgetMonthsUpdated, int CardMonthsUpdated, int Reconciled);
+public sealed record ImportResultDto(int BatchId, int Imported, int Duplicates, int Skipped, int BudgetMonthsUpdated, int Reconciled);
 
 public sealed record ImportBatchDto(int Id, string FileName, ImportFormat Format, string? Profile, DateTime ImportedAt, string SourceName,
     int RowCount, int ImportedCount, int DuplicateCount, DateOnly? FirstDate, DateOnly? LastDate);
@@ -52,6 +52,28 @@ public sealed record TransactionDto(int Id, int? AccountId, int? CardId, string 
     int? LabelId, string? LabelName);
 
 public sealed record ReconcileCandidateDto(TransactionDto Transaction, int DaysApart, decimal AmountDifference);
+
+/// <summary>
+/// A transaction entered by hand. Exactly one of <see cref="AccountId"/> or <see cref="CardId"/> is set:
+/// money moves out of an account or onto a card. Setting <see cref="CounterpartyAccountId"/> makes it a
+/// transfer and creates the mirror row on the other account.
+/// </summary>
+public sealed class TransactionCreateDto
+{
+    public int? AccountId { get; set; }
+    public int? CardId { get; set; }
+    public DateOnly Date { get; set; }
+    /// <summary>Negative for money out, positive for money in.</summary>
+    public decimal Amount { get; set; }
+    [Required, StringLength(200)] public string Description { get; set; } = "";
+    public int? CategoryId { get; set; }
+    public int? LabelId { get; set; }
+    public int? BudgetLineId { get; set; }
+    public bool IsTransfer { get; set; }
+    /// <summary>The other account in a transfer; the mirror row is created there automatically.</summary>
+    public int? CounterpartyAccountId { get; set; }
+    public string? Notes { get; set; }
+}
 
 public sealed class TransactionUpdateDto
 {

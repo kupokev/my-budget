@@ -12,7 +12,7 @@ else
     <div class="toolbar"><button type="button" @onclick="() => Edit(new CardDto())">New card</button></div>
 
     <table>
-        <thead><tr><th>Card</th><th class="money">Monthly line spend</th><th class="money">Balance</th><th>As of</th><th class="money">Utilization</th><th>Stmt / due</th><th>Paid by</th><th></th></tr></thead>
+        <thead><tr><th>Card</th><th class="money" title="Budget lines charged to this card, per month">Monthly line spend</th><th class="money" title="Actually charged this month, from transactions">Spent this month</th><th class="money">Last month</th><th class="money">Balance</th><th>As of</th><th class="money">Utilization</th><th>Stmt / due</th><th>Paid by</th><th></th></tr></thead>
         <tbody>
         @foreach (var s in summary)
         {
@@ -33,6 +33,8 @@ else
                     <MaskedNumber Value="@cards.First(c => c.Id == s.CardId).AccountNumber" />
                 </td>
                 <td><Money Value="s.MonthlyBudgetSpend" /></td>
+                <td class="money"><a href="@($"transactions?card={s.CardId}")" title="See these on Transactions">@Fmt.Money(s.SpentThisMonth)</a></td>
+                <td class="money muted">@Fmt.Money(s.SpentLastMonth)</td>
                 <td class="money">@Fmt.Money(s.LatestBalance)</td>
                 <td>@Fmt.Date(s.LatestBalanceAsOf)</td>
                 <td class="money">@Fmt.Pct(s.Utilization)</td>

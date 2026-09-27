@@ -88,9 +88,6 @@ public sealed class ApiClient(HttpClient http)
     public Task<List<LoyaltyProgramDto>> GetLoyaltyProgramsAsync() => Get<List<LoyaltyProgramDto>>("api/loyalty-programs");
     public Task<LoyaltyProgramDto> SaveLoyaltyProgramAsync(LoyaltyProgramDto p) => p.Id == 0 ? Post("api/loyalty-programs", p) : Put($"api/loyalty-programs/{p.Id}", p);
     public Task DeleteLoyaltyProgramAsync(int id) => Delete($"api/loyalty-programs/{id}");
-    public Task<List<CardSpendDto>> GetCardSpendAsync(int year, int? cardId = null) => Get<List<CardSpendDto>>(Q("api/card-spend", ("year", year), ("cardId", cardId)));
-    public Task SaveCardSpendAsync(CardSpendDto s) => http.PutAsJsonAsync("api/card-spend", s, Json).ContinueWith(t => ThrowIfFailed(t.Result)).Unwrap();
-    public Task<CategoryDto> SaveCategoryPlanAsync(CategoryDto c) => Put($"api/categories/{c.Id}/plan", c);
     public Task<RewardsReportDto> GetRewardsReportAsync(int year) => Get<RewardsReportDto>($"api/rewards/report?year={year}");
 
     // Import & history (Phase 4)
@@ -115,6 +112,7 @@ public sealed class ApiClient(HttpClient http)
     public Task<TransactionDto> ReconcileAsync(int id, int otherId) => Post<object, TransactionDto>($"api/transactions/{id}/reconcile/{otherId}", new { });
     public Task UnreconcileAsync(int id) => Delete($"api/transactions/{id}/reconcile");
     public Task<TransactionDto> UpdateTransactionAsync(int id, TransactionUpdateDto u) => Put<TransactionUpdateDto, TransactionDto>($"api/transactions/{id}", u);
+    public Task<TransactionDto> CreateTransactionAsync(TransactionCreateDto t) => Post<TransactionCreateDto, TransactionDto>("api/transactions", t);
     public Task DeleteTransactionAsync(int id) => Delete($"api/transactions/{id}");
     public Task<List<CategoryRuleDto>> GetCategoryRulesAsync() => Get<List<CategoryRuleDto>>("api/category-rules");
     public Task<CategoryRuleDto> SaveCategoryRuleAsync(CategoryRuleDto r) => r.Id == 0 ? Post("api/category-rules", r) : Put($"api/category-rules/{r.Id}", r);

@@ -32,7 +32,11 @@ public sealed record BudgetHistoryDto(int BudgetLineId, string LineName, decimal
 public sealed record CardSummaryDto(
     int CardId, string CardName, string? PayingAccount, int StatementDay, int DueDay,
     decimal? LatestBalance, DateOnly? LatestBalanceAsOf, decimal CreditLimit, decimal? Utilization,
-    IReadOnlyList<string> BudgetLines, decimal MonthlyBudgetSpend);
+    IReadOnlyList<string> BudgetLines, decimal MonthlyBudgetSpend,
+    /// <summary>What was actually charged to the card this month, summed from its transactions.</summary>
+    decimal SpentThisMonth,
+    /// <summary>The same figure for the month before, so the two can be read against each other.</summary>
+    decimal SpentLastMonth);
 
 public sealed record HomeDto(
     DateOnly AsOf,

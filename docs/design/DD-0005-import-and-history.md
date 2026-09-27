@@ -118,3 +118,15 @@ earlier. The page therefore loads both this year's and last year's history.
 
 The `spending/*` API endpoints stayed. The AI's `spend_by_category` tool calls
 `SpendingEndpoints.Summary` directly, and the dashboard tile uses the summary figures.
+
+
+## Transactions are created in one place (2026-09-27)
+
+`POST /api/transactions` is the only way to create one by hand. It takes an account **or** a card,
+never both, and an optional counterparty account, which writes the mirror row and links the pair.
+The Transactions page has the editor; it is the single place transactions are entered.
+
+Two other places used to create them and no longer do. The rewards card-spend grid wrote monthly
+aggregates into a separate table (now derived, see DD-0004). The Accounts ledger had a form that
+recorded transfers as well as statement balances; it keeps the balances, which are reconciliation
+points rather than movements, and points at Transactions for anything that moves money.

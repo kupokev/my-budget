@@ -143,7 +143,9 @@ public class CardPerk
     public bool AppliesIn(int year) => (StartYear is null || year >= StartYear) && (EndYear is null || year <= EndYear);
 }
 
-/// <summary>Actual spend on a card in a month, by category, entered from statements until import exists (RWD-3, RWD-5).</summary>
+/// <summary>Actual spend on a card in a month, by category and label (RWD-3, RWD-5).
+/// Derived from transactions on read, never stored: a stored copy only an import refreshed left
+/// hand-entered card transactions out of the rewards figures.</summary>
 public class CardSpend
 {
     public int Id { get; set; }

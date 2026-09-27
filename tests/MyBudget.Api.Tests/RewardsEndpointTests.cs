@@ -82,18 +82,32 @@ public class RewardsEndpointTests : IClassFixture<ApiFixture>
     }
 
     [Fact]
-    public async Task Card_spend_upsert_changes_threshold_progress()
+    public async Task A_card_transaction_entered_by_hand_moves_the_threshold_straight_away()
     {
         var cards = await _api.Get<List<CardDto>>("api/cards");
         var surpass = cards.Single(c => c.Name == "Amex Hilton Honors Surpass");
-        var before = (await _api.Get<RewardsReportDto>("api/rewards/report?year=2026&asOf=2026-09-26")).Thresholds.Single(t => t.CardId == surpass.Id && t.Amount == 15_000m);
+        Threshold Before() => new(_api, surpass.Id);
+        var before = await Before().Read();
 
-        var r = await _api.Client.PutAsJsonAsync("api/card-spend", new CardSpendDto { CardId = surpass.Id, Period = new(2026, 9, 15), CategoryId = null, Amount = 1_000m }, ApiFixture.Json);
-        r.EnsureSuccessStatusCode();
-        var after = (await _api.Get<RewardsReportDto>("api/rewards/report?year=2026&asOf=2026-09-26")).Thresholds.Single(t => t.CardId == surpass.Id && t.Amount == 15_000m);
-        Assert.Equal(before.YtdSpend + 1_000m, after.YtdSpend);
+        // There is no card-spend table any more: the figures are summed from transactions, so a row
+        // typed on the Transactions page counts immediately.
+        var created = await _api.Post<TransactionCreateDto, TransactionDto>("api/transactions", new TransactionCreateDto
+        {
+            CardId = surpass.Id, Date = new(2026, 9, 15), Amount = -1_000m, Description = "Hotel stay",
+        });
+        var after = await Before().Read();
+        Assert.Equal(before + 1_000m, after);
 
-        await _api.Client.PutAsJsonAsync("api/card-spend", new CardSpendDto { CardId = surpass.Id, Period = new(2026, 9, 1), CategoryId = null, Amount = 0m }, ApiFixture.Json);
+        // And removing it takes the spend back off.
+        (await _api.Client.DeleteAsync($"api/transactions/{created.Id}")).EnsureSuccessStatusCode();
+        Assert.Equal(before, await Before().Read());
+    }
+
+    private sealed record Threshold(ApiFixture Api, int CardId)
+    {
+        public async Task<decimal> Read() =>
+            (await Api.Get<RewardsReportDto>("api/rewards/report?year=2026&asOf=2026-09-26"))
+            .Thresholds.Single(t => t.CardId == CardId && t.Amount == 15_000m).YtdSpend;
     }
 
     [Fact]

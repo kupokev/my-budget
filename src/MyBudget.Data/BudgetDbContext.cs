@@ -26,7 +26,6 @@ public sealed class BudgetDbContext(DbContextOptions<BudgetDbContext> options) :
     public DbSet<LoyaltyProgram> LoyaltyPrograms => Set<LoyaltyProgram>();
     public DbSet<EarnRule> EarnRules => Set<EarnRule>();
     public DbSet<SpendThreshold> SpendThresholds => Set<SpendThreshold>();
-    public DbSet<CardSpend> CardSpend => Set<CardSpend>();
     public DbSet<ImportBatch> ImportBatches => Set<ImportBatch>();
     public DbSet<Transaction> Transactions => Set<Transaction>();
     public DbSet<CategoryRule> CategoryRules => Set<CategoryRule>();
@@ -145,13 +144,6 @@ public sealed class BudgetDbContext(DbContextOptions<BudgetDbContext> options) :
         mb.Entity<SpendThreshold>().Property(x => x.Description).HasMaxLength(200);
         mb.Entity<CardPerk>().Property(x => x.Description).HasMaxLength(200);
         mb.Entity<LoyaltyTier>().Property(x => x.Benefits).HasMaxLength(500);
-        mb.Entity<CardSpend>(e =>
-        {
-            e.HasOne(x => x.Card).WithMany().HasForeignKey(x => x.CardId).OnDelete(DeleteBehavior.Cascade);
-            e.HasOne(x => x.Category).WithMany().HasForeignKey(x => x.CategoryId).OnDelete(DeleteBehavior.SetNull);
-            e.HasOne(x => x.Label).WithMany().HasForeignKey(x => x.LabelId).OnDelete(DeleteBehavior.SetNull);
-            e.HasIndex(x => new { x.CardId, x.Period, x.CategoryId, x.LabelId }).IsUnique();
-        });
         mb.Entity<LoyaltyProgram>(e =>
         {
             e.Property(x => x.Name).HasMaxLength(100);

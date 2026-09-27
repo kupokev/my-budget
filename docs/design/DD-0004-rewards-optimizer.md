@@ -26,7 +26,7 @@ value, and say plainly when the spend can't cover every goal and what the other 
 | `EarnRule` | Card × category × **label** → points per dollar. Most specific wins: category+label, then label, then category, then the base rate (both null). Annual cap stored, not enforced |
 | `SpendThreshold` | Card calendar-year spend → reward (status tier, free night, credit, bonus points) with a dollar value |
 | `CardPerk` | Something a card gives you for holding it, with no spend threshold and no program behind it: a TSA PreCheck credit, a travel credit, free bags. Annual dollar value, optional year range |
-| `CardSpend` | Card × month × category actual spend, from statements until import (Phase 4) fills it |
+| `CardSpend` | Card × month × category × label actual spend. **Derived from transactions on read, never stored** (see below) |
 | `Card` additions | Loyalty program, point-value override |
 | `Category` additions | `PlannedMonthly` variable spend, `IsCardEligible`. Edited on Admin → Categories & labels only; the rewards report used to carry a duplicate editor for the same two fields and no longer does |
 | `Label` | Where a purchase happened (Amazon, Costco, IHG) next to the category that says what kind it was. Optional usual category and planned monthly spend, which is **carved out** of that category's planned amount rather than added to it. Carried on transactions, categorization rules, card spend and earn rules |
@@ -146,3 +146,19 @@ page, catalog. Seeded card spend and program activity are placeholders.
 - Requirements doc, "Rewards and status" calculation rules and sources (Chase IHG, NerdWallet,
   The Points Guy, LoyaltyLobby)
 - DD-0002 (bill accruals feed the projected spend)
+
+
+## Card spend is derived, not stored (2026-09-27)
+
+`CardSpend` was a table with its own editing grid on the rewards page. Only an import ever refreshed
+it, by grouping that card's transactions by month, category and label. So it was a cache of the
+transaction table, and a card transaction entered by hand never reached it, which meant it never
+reached the spend thresholds either.
+
+The table, its endpoints and its grid are gone. `RewardsEndpoints.CardSpendFor` runs the same
+grouping over `Transactions` when the report is built, excluding transfers and counting a reconciled
+manual/imported pair once. The figures are now always current, and the seeded year of card spend is
+seeded as transactions.
+
+The Cards page gained read-only `SpentThisMonth` and `SpentLastMonth` columns from the same source,
+so "what did I put on this card this month" still has a home without a second place to type it.

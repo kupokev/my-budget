@@ -186,16 +186,22 @@ public static class DevSeed
         hertzProgram.Paths.Add(new StatusPath { TierName = "Five Star", Kind = StatusPathKind.HoldCard, Card = chaseIhg, Notes = "benefit of the IHG Premier card" });
         await db.SaveChangesAsync(ct);
 
-        // Placeholder year-to-date card spend (RWD-3) and program activity; replace from statements.
+        // Year-to-date card spend, as transactions on the cards. The rewards figures are summed from
+        // these, so there is no separate card-spend table to keep in step.
         foreach (var m in Enumerable.Range(1, 9))
         {
-            var period = new DateOnly(2026, m, 1);
-            db.CardSpend.AddRange(
-                new CardSpend { Card = chaseIhg, Period = period, Category = groceries, Amount = 650m },
-                new CardSpend { Card = chaseIhg, Period = period, Category = gas, Amount = 240m },
-                new CardSpend { Card = chaseIhg, Period = period, Category = other, Amount = 500m },
-                new CardSpend { Card = hiltonSurpass, Period = period, Category = restaurants, Amount = 550m },
-                new CardSpend { Card = hiltonSurpass, Period = period, Category = travel, Amount = 300m });
+            Transaction OnCard(Card card, int day, decimal amount, string desc, Category category) => new()
+            {
+                Card = card, Date = new DateOnly(2026, m, day), Amount = -amount, Description = desc, Merchant = desc,
+                Category = category, Origin = TransactionOrigin.Manual, IsManuallyCategorized = true,
+                ExternalId = $"seed:card:{card.Name}:{2026}{m:00}:{desc}",
+            };
+            db.Transactions.AddRange(
+                OnCard(chaseIhg, 6, 650m, "Groceries on the IHG card", groceries),
+                OnCard(chaseIhg, 11, 240m, "Fuel on the IHG card", gas),
+                OnCard(chaseIhg, 17, 500m, "Everything else on the IHG card", other),
+                OnCard(hiltonSurpass, 9, 550m, "Dining on the Surpass", restaurants),
+                OnCard(hiltonSurpass, 22, 300m, "Travel on the Surpass", travel));
         }
         BudgetLine V(string name, Category category, decimal monthly, Label? label = null) => new()
         {

@@ -161,8 +161,8 @@ public sealed class ImportService(BudgetDbContext db)
         batch.FirstDate = touched.MinBy(t => t.Date)?.Date; batch.LastDate = touched.MaxBy(t => t.Date)?.Date;
         await db.SaveChangesAsync();
         var reconciled = await AutoReconcileAsync(touched);
-        var (budgetMonths, cardMonths) = await SyncAsync(touched);
-        return new ImportResultDto(batch.Id, imported, dupes, skipped, budgetMonths, cardMonths, reconciled);
+        var budgetMonths = await SyncAsync(touched);
+        return new ImportResultDto(batch.Id, imported, dupes, skipped, budgetMonths, reconciled);
     }
 
     /// <summary>Links each new imported line to an unreconciled manual row on the same source with the same amount within the window.</summary>
@@ -194,7 +194,8 @@ public sealed class ImportService(BudgetDbContext db)
     }
 
     /// <summary>After transactions change: line actuals (BIL-3) from matched lines, card spend (RWD-3) from card lines, for the affected months.</summary>
-    public async Task<(int BudgetMonths, int CardMonths)> SyncAsync(IReadOnlyCollection<Transaction> changed)
+    /// <summary>Refreshes budget-line actuals for the months these transactions touch. Card spend needs no sync: it is summed from transactions on read.</summary>
+    public async Task<int> SyncAsync(IReadOnlyCollection<Transaction> changed)
     {
         var budgetMonths = changed.Where(t => t.BudgetLineId is not null).Select(t => (t.BudgetLineId!.Value, Period: new DateOnly(t.Date.Year, t.Date.Month, 1))).Distinct().ToList();
         foreach (var (lineId, period) in budgetMonths)
@@ -209,18 +210,8 @@ public sealed class ImportService(BudgetDbContext db)
             row.Notes ??= "from import";
         }
 
-        var cardMonths = changed.Where(t => t.CardId is not null).Select(t => (t.CardId!.Value, Period: new DateOnly(t.Date.Year, t.Date.Month, 1))).Distinct().ToList();
-        foreach (var (cardId, period) in cardMonths)
-        {
-            var end = period.AddMonths(1);
-            var sums = await db.Transactions.Where(t => t.CardId == cardId && t.Date >= period && t.Date < end && t.Amount < 0 && !t.IsTransfer)
-                .GroupBy(t => new { t.CategoryId, t.LabelId }).Select(g => new { g.Key.CategoryId, g.Key.LabelId, Sum = g.Sum(t => -t.Amount) }).ToListAsync();
-            var rows = await db.CardSpend.Where(s => s.CardId == cardId && s.Period == period).ToListAsync();
-            db.CardSpend.RemoveRange(rows);
-            db.CardSpend.AddRange(sums.Select(s => new CardSpend { CardId = cardId, Period = period, CategoryId = s.CategoryId, LabelId = s.LabelId, Amount = Math.Round(s.Sum, 2), Notes = "from import" }));
-        }
         await db.SaveChangesAsync();
-        return (budgetMonths.Count, cardMonths.Count);
+        return budgetMonths.Count;
     }
 
     /// <summary>Re-run the active rules over lines that weren't categorized by hand. Returns how many changed.</summary>
