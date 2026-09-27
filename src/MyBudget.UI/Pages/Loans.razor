@@ -10,25 +10,64 @@
 }
 else
 {
-    <div class="toolbar"><button type="button" @onclick="() => Edit(new LoanDto { StartDate = DateOnly.FromDateTime(DateTime.Today) })">New loan</button></div>
+    <div class="toolbar">
+        <button type="button" @onclick="() => Edit(new LoanDto { StartDate = DateOnly.FromDateTime(DateTime.Today) })">New loan</button>
+        <label class="inline"><input type="checkbox" @bind="showInactive" /> Show inactive</label>
+    </div>
     <table>
-        <thead><tr><th>Loan</th><th>Kind</th><th class="money">Rate</th><th class="money">Payment</th><th class="money">Latest balance</th><th>As of</th><th></th></tr></thead>
+        <thead>
+            <tr>
+                <th>Loan</th><th>Kind</th><th>Secured against</th>
+                <th class="money">Rate</th><th class="money">Payment</th>
+                <th class="money">Latest balance</th><th>As of</th>
+                <th class="center">Active</th><th></th>
+            </tr>
+        </thead>
         <tbody>
-        @foreach (var l in loans)
+        @foreach (var l in loans.Where(l => showInactive || l.IsActive))
         {
             <tr class="@(l.IsActive ? "" : "muted")">
-                <td>@l.Name <span class="muted">@l.Lender @l.AccountNumber</span></td><td>@Fmt.Words(l.Kind)</td>
+                <td>
+                    <span class="tip">@l.Name
+                        <span class="tip-box">
+                            <span class="tip-head"><b>@l.Name</b><span class="chip small">@Fmt.Words(l.Kind)</span></span>
+                            <span class="tip-grid">
+                                <span>Lender</span><span>@(string.IsNullOrWhiteSpace(l.Lender) ? "—" : l.Lender)</span>
+                                @if (!string.IsNullOrWhiteSpace(l.AccountNumber)) { <span>Account #</span><span>@l.AccountNumber</span> }
+                                <span>Original</span><span class="num">@Fmt.Money(l.OriginalPrincipal)</span>
+                                <span>Rate</span><span class="num">@l.AnnualRatePercent.ToString("0.###")%</span>
+                                <span>Term</span><span class="num">@l.TermMonths months</span>
+                                <span>Started</span><span>@Fmt.Date(l.StartDate)</span>
+                                @if (l.ExtraMonthlyPayment > 0) { <span>Extra / month</span><span class="num">@Fmt.Money(l.ExtraMonthlyPayment)</span> }
+                                <span>Secured against</span><span>@(AssetName(l) ?? "nothing")</span>
+                            </span>
+                            @if (!string.IsNullOrWhiteSpace(l.Notes)) { <span class="tip-note">@l.Notes</span> }
+                        </span>
+                    </span>
+                </td>
+                <td>@Fmt.Words(l.Kind)</td>
+                <td class="muted">@(AssetName(l) ?? "—")</td>
                 <td class="money">@l.AnnualRatePercent.ToString("0.###")%</td>
                 <td class="money">@Fmt.Money(l.ScheduledPayment)</td>
-                <td class="money">@Fmt.Money(l.LatestBalance)</td><td>@Fmt.Date(l.LatestBalanceAsOf)</td>
-                <td class="actions">
-                    <button class="secondary" type="button" @onclick="() => Project(l)">Projection</button>
-                    <button class="secondary" type="button" @onclick="() => OpenBalance(l)">Balance</button>
-                    <button class="secondary" type="button" @onclick="() => Edit(l)">Edit</button>
+                <td class="money">@Fmt.Money(l.LatestBalance)</td>
+                <td class="muted">@Fmt.Date(l.LatestBalanceAsOf)</td>
+                <td class="center">@if (l.IsActive) { <span class="tick">✓</span> } else { <span class="muted">—</span> }</td>
+                <td class="actions icons">
+                    <button class="link" type="button" title="Payoff projection" @onclick="() => Project(l)">☰</button>
+                    <button class="link" type="button" title="Record a balance" @onclick="() => OpenBalance(l)">＋</button>
+                    <button class="link" type="button" title="Edit loan" @onclick="() => Edit(l)">✎</button>
                 </td>
             </tr>
         }
         </tbody>
+        <tfoot>
+            <tr>
+                <th colspan="4">Owed</th>
+                <th class="money"><Money Value="loans.Where(l => l.IsActive).Sum(l => l.ScheduledPayment ?? 0)" /></th>
+                <th class="money"><Money Value="loans.Where(l => l.IsActive).Sum(l => l.LatestBalance ?? 0)" /></th>
+                <th colspan="3"></th>
+            </tr>
+        </tfoot>
     </table>
 
     @if (balanceFor is { } bl)
@@ -121,6 +160,9 @@ else
     private List<LoanDto>? loans;
     private List<BudgetLineDto>? lines;
     private List<AssetDto>? assets;
+    private bool showInactive;
+
+    private string? AssetName(LoanDto l) => l.AssetId is { } id ? assets!.FirstOrDefault(a => a.Id == id)?.Name : null;
     private LoanDto? editing;
     private LoanDto? balanceFor;
     private LoanBalanceDto newBalance = new();

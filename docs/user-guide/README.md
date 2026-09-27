@@ -87,7 +87,7 @@ in-memory database resets on every restart either way.)
   thresholds. A rule with a label beats one with only a category, so "General merchandise at Amazon
   5×" and "General merchandise 1×" live side by side. Earn rules and
   thresholds take an optional year range, so a promo rate for one year doesn't skew other years.
-- **Admin → Categories & labels.** As well as naming the buckets, this is where planned variable
+- **Admin → Categories & Labels.** As well as naming the buckets, this is where planned variable
   spend lives: what you expect to put on cards each month beyond tracked bills (restaurants,
   groceries, gas). It is not derived from bills. That figure plus card-eligible bill accruals is the
   whole pool the rewards plan allocates, and the table totals it for you. Untick "can go on a card"

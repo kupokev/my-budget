@@ -84,7 +84,7 @@ else
     {
         <section class="panel">
             <h2>Spend plan · @Fmt.Money(report.Plan.ProjectedMonthly)/mo card-eligible</h2>
-            <p class="muted">@report.Plan.ProjectedMonthlySource, set under <a href="categories">Admin → Categories &amp; labels</a>. Goals are filled in priority order; what's left goes to the best value per category.</p>
+            <p class="muted">@report.Plan.ProjectedMonthlySource, set under <a href="categories">Admin → Categories &amp; Labels</a>. Goals are filled in priority order; what's left goes to the best value per category.</p>
             @if (report.Plan.Gaps.Count > 0)
             {
                 <div class="warnings">

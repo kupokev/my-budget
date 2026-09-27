@@ -28,7 +28,7 @@ value, and say plainly when the spend can't cover every goal and what the other 
 | `CardPerk` | Something a card gives you for holding it, with no spend threshold and no program behind it: a TSA PreCheck credit, a travel credit, free bags. Annual dollar value, optional year range |
 | `CardSpend` | Card × month × category × label actual spend. **Derived from transactions on read, never stored** (see below) |
 | `Card` additions | Loyalty program, point-value override |
-| `Category` additions | `PlannedMonthly` variable spend, `IsCardEligible`. Edited on Admin → Categories & labels only; the rewards report used to carry a duplicate editor for the same two fields and no longer does |
+| `Category` additions | `PlannedMonthly` variable spend, `IsCardEligible`. Edited on Admin → Categories & Labels only; the rewards report used to carry a duplicate editor for the same two fields and no longer does |
 | `Label` | Where a purchase happened (Amazon, Costco, IHG) next to the category that says what kind it was. Optional usual category and planned monthly spend, which is **carved out** of that category's planned amount rather than added to it. Carried on transactions, categorization rules, card spend and earn rules |
 | `BudgetLine` additions | `IsCardEligible` (mortgage, HELOC, car: false) |
 
