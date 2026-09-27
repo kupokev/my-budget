@@ -12,7 +12,10 @@ public class Person
     public List<ReceivablePayment> Payments { get; set; } = [];
 }
 
-/// <summary>A recurring monthly amount owed (DBT-2a): a fixed amount, or a share of a tracked bill's projected amount.</summary>
+/// <summary>
+/// A recurring amount owed (DBT-2a): a fixed amount, or a share of a tracked bill's projected amount, due
+/// every <see cref="EveryMonths"/> months counting from <see cref="StartPeriod"/> (1 = monthly, 3 = quarterly).
+/// </summary>
 public class Obligation
 {
     public int Id { get; set; }
@@ -26,7 +29,20 @@ public class Obligation
     public decimal ShareOfBill { get; set; } = 1.0m;
     public DateOnly StartPeriod { get; set; }
     public DateOnly? EndPeriod { get; set; }
+    /// <summary>1 = every month, 3 = quarterly, 6 = twice a year, 12 = yearly.</summary>
+    public int EveryMonths { get; set; } = 1;
     public bool IsActive { get; set; } = true;
+
+    /// <summary>Whether this obligation falls due in the given month.</summary>
+    public bool DueIn(DateOnly period)
+    {
+        if (StartPeriod > period || (EndPeriod is { } end && end < period)) return false;
+        var every = EveryMonths <= 0 ? 1 : EveryMonths;
+        var months = (period.Year - StartPeriod.Year) * 12 + period.Month - StartPeriod.Month;
+        return months % every == 0;
+    }
+
+    public string Cadence => EveryMonths switch { <= 1 => "monthly", 3 => "quarterly", 6 => "twice a year", 12 => "yearly", var n => $"every {n} months" };
 }
 
 /// <summary>A one-off amount owed (DBT-2a): a reimbursement you fronted.</summary>

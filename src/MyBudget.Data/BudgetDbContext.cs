@@ -10,7 +10,6 @@ public sealed class BudgetDbContext(DbContextOptions<BudgetDbContext> options) :
     public DbSet<PaySchedule> PaySchedules => Set<PaySchedule>();
     public DbSet<Account> Accounts => Set<Account>();
     public DbSet<AccountBalance> AccountBalances => Set<AccountBalance>();
-    public DbSet<Transfer> Transfers => Set<Transfer>();
     public DbSet<Card> Cards => Set<Card>();
     public DbSet<CardBalance> CardBalances => Set<CardBalance>();
     public DbSet<Category> Categories => Set<Category>();
@@ -117,7 +116,7 @@ public sealed class BudgetDbContext(DbContextOptions<BudgetDbContext> options) :
             e.Property(x => x.Name).HasMaxLength(100);
             e.Property(x => x.AccountNumber).HasMaxLength(60);
             e.HasMany(x => x.Balances).WithOne(x => x.Account).HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Cascade);
-            e.HasMany(x => x.Transfers).WithOne(x => x.Account).HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Cascade);
+            e.HasMany(x => x.Transactions).WithOne(x => x.Account).HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Cascade);
         });
         mb.Entity<AccountBalance>().HasIndex(x => new { x.AccountId, x.AsOf }).IsUnique();
 
@@ -169,8 +168,11 @@ public sealed class BudgetDbContext(DbContextOptions<BudgetDbContext> options) :
             e.Property(x => x.Description).HasMaxLength(400);
             e.Property(x => x.Merchant).HasMaxLength(120);
             e.Property(x => x.ExternalId).HasMaxLength(120);
-            e.HasOne(x => x.Account).WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(x => x.Card).WithMany().HasForeignKey(x => x.CardId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.CounterpartyAccount).WithMany().HasForeignKey(x => x.CounterpartyAccountId).OnDelete(DeleteBehavior.SetNull);
+            e.HasOne(x => x.ReconciledWith).WithMany().HasForeignKey(x => x.ReconciledWithId).OnDelete(DeleteBehavior.SetNull);
+            e.HasOne(x => x.ReceivablePayment).WithMany().HasForeignKey(x => x.ReceivablePaymentId).OnDelete(DeleteBehavior.SetNull);
+            e.Ignore(x => x.Counts);
             e.HasOne(x => x.Category).WithMany().HasForeignKey(x => x.CategoryId).OnDelete(DeleteBehavior.SetNull);
             e.HasOne(x => x.Bill).WithMany().HasForeignKey(x => x.BillId).OnDelete(DeleteBehavior.SetNull);
             e.HasOne(x => x.ImportBatch).WithMany().HasForeignKey(x => x.ImportBatchId).OnDelete(DeleteBehavior.SetNull);

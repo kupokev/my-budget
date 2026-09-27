@@ -14,9 +14,10 @@ else
         <span class="year-nav"><button class="secondary" type="button" @onclick="() => Shift(-1)">‹</button><strong>@(new DateOnly(year, month, 1).ToString("MMM yyyy"))</strong><button class="secondary" type="button" @onclick="() => Shift(1)">›</button></span>
         <label class="inline"><input type="checkbox" @bind="wholeYear" @bind:after="Load" /> Whole year</label>
         <label class="inline"><input type="checkbox" @bind="onlyUncategorized" @bind:after="Load" /> Uncategorized only</label>
+        <label class="inline"><input type="checkbox" @bind="onlyUnreconciled" @bind:after="Load" /> Needs reconciling</label>
         <label class="inline">Source <select @bind="sourceFilter" @bind:after="Load"><option value="">all</option>
-            @foreach (var a in accounts) { <option value="account:@a.Id">@a.Name</option> }
-            @foreach (var c in cards) { <option value="card:@c.Id">@c.Name</option> }</select></label>
+            @foreach (var a in accounts) { <option value="account:@a.Id">@Fmt.Label(a.Name, a.AccountNumber)</option> }
+            @foreach (var c in cards) { <option value="card:@c.Id">@Fmt.Label(c.Name, c.AccountNumber)</option> }</select></label>
         <input type="search" placeholder="Search description" @bind="search" @bind:after="Load" />
         <span class="muted">@(rows?.Count ?? 0) lines · <Money Value="rows?.Where(r => r.Amount < 0 && !r.IsTransfer).Sum(r => r.Amount) ?? 0" Signed="true" /> out</span>
         <button class="secondary" type="button" @onclick="ShowRules">Rules</button>
@@ -55,53 +56,95 @@ else
     @if (rows is null) { <p class="muted">Loading…</p> }
     else
     {
-        <div class="scroll-x">
-        <table class="grid">
-            <thead><tr><th>Date</th><th>Source</th><th>Description</th><th class="money">Amount</th><th>Category</th><th>Bill</th><th>Transfer</th><th></th></tr></thead>
+        <table class="tx">
+            <colgroup><col class="c-date" /><col class="c-src" /><col class="c-desc" /><col class="c-amt" /><col class="c-cat" /><col class="c-bill" /><col class="c-xfer" /><col class="c-rec" /><col class="c-act" /></colgroup>
+            <thead><tr><th>Date</th><th>Source</th><th>Description</th><th class="money">Amount</th><th>Category</th><th>Bill</th><th>Transfer</th><th>Rec.</th><th></th></tr></thead>
             <tbody>
             @foreach (var t in rows)
             {
-                var isEditing = edit?.Id == t.Id;
-                <tr class="@(t.IsTransfer ? "muted" : "") @(isEditing ? "editing" : "")">
-                    <td>@Fmt.Date(t.Date)</td>
-                    <td class="muted">@t.SourceName</td>
-                    <td title="@t.Description">@(t.Merchant ?? t.Description) <span class="muted">@(t.IsManuallyCategorized ? "✎" : "")</span></td>
-                    <td><Money Value="t.Amount" Signed="true" /></td>
-                    @if (isEditing)
-                    {
-                        <td><select @bind="editDto.CategoryId"><option value="">—</option>@foreach (var c in categories) { <option value="@c.Id">@c.Name</option> }</select></td>
-                        <td><select @bind="editDto.BillId"><option value="">—</option>@foreach (var b in bills) { <option value="@b.Id">@b.Name</option> }</select></td>
-                        <td><input type="checkbox" @bind="editDto.IsTransfer" /></td>
-                        <td class="actions">
-                            <label class="inline" title="Create a rule so every line containing this merchant gets the same category/bill"><input type="checkbox" @bind="editDto.CreateRule" /> always</label>
-                            <button type="button" @onclick="SaveEdit">Save</button>
-                            <button class="secondary" type="button" @onclick="() => edit = null">Cancel</button>
-                        </td>
-                    }
-                    else
-                    {
-                        <td>@(t.CategoryName ?? (t.IsTransfer ? "" : "—"))</td>
-                        <td>@t.BillName</td>
-                        <td>@(t.IsTransfer ? "transfer" : "")</td>
-                        <td class="actions"><button class="secondary" type="button" @onclick="() => StartEdit(t)">Edit</button> <button class="secondary" type="button" @onclick="() => Remove(t)">✕</button></td>
-                    }
+                <tr class="@(t.IsTransfer ? "muted" : "")">
+                    <td>@t.Date.ToString("MMM d")</td>
+                    <td class="muted ellipsis" title="@t.SourceName">@t.SourceName</td>
+                    <td class="ellipsis" title="@t.Description">@(t.Merchant ?? t.Description) @if (t.Origin == MyBudget.Domain.TransactionOrigin.Manual) { <span class="chip small">manual</span> }</td>
+                    <td class="money"><Money Value="t.Amount" Signed="true" /></td>
+                    <td class="ellipsis">@(t.RepaymentFromPersonName is { } who ? $"Repayment · {who}" : t.CategoryName ?? (t.IsTransfer ? "" : "—"))</td>
+                    <td class="ellipsis">@t.BillName</td>
+                    <td class="center muted">@(t.IsTransfer ? "✓" : "")</td>
+                    <td class="center">
+                        @if (t.ReconciledWithId is not null) { <button class="link ok" type="button" title="@("Reconciled with " + t.ReconciledWithSummary + " · click to unlink")" @onclick="() => Unreconcile(t)">✓</button> }
+                        else if (t.Origin == MyBudget.Domain.TransactionOrigin.Manual) { <button class="link warn" type="button" title="Not reconciled with a bank line yet · click to pick one" @onclick="() => OpenReconcile(t)">!</button> }
+                        else { <button class="link faint" type="button" title="Link this bank line to an entry you made by hand" @onclick="() => OpenReconcile(t)">⇄</button> }
+                    </td>
+                    <td class="actions icons"><button class="link" type="button" title="Edit" @onclick="() => StartEdit(t)">✎</button><button class="link" type="button" title="Delete" @onclick="() => Remove(t)">✕</button></td>
                 </tr>
             }
             </tbody>
         </table>
-        </div>
+    }
+
+    @if (edit is { } et)
+    {
+        <Modal Title="@(et.Merchant ?? et.Description)" Subtitle="@($"{Fmt.Date(et.Date)} · {et.SourceName} · {Fmt.Money(et.Amount)}")" OnClose="() => edit = null">
+            <ChildContent>
+            <div class="form">
+                <fieldset class="group">
+                    <legend>File it under</legend>
+                    <div class="field"><label>Category</label><select @bind="editDto.CategoryId"><option value="">—</option>@foreach (var c in categories) { <option value="@c.Id">@c.Name</option> }</select></div>
+                    <div class="field"><label>Bill it pays</label><select @bind="editDto.BillId"><option value="">—</option>@foreach (var b in bills) { <option value="@b.Id">@b.Name</option> }</select></div>
+                    @if (et.Amount > 0)
+                    {
+                        <div class="field"><label>Repayment from <span class="muted">(someone who owes you)</span></label><select @bind="editDto.RepaymentFromPersonId"><option value="">—</option>@foreach (var pp in people ?? []) { <option value="@pp.Id">@pp.Name</option> }</select></div>
+                    }
+                    <div class="checks">
+                        <label class="inline"><input type="checkbox" @bind="editDto.IsTransfer" /> Transfer / card payment (not spending)</label>
+                        <label class="inline" title="Create a rule so every line with this merchant gets the same category and bill, now and in future imports"><input type="checkbox" @bind="editDto.CreateRule" /> Always file "@(et.Merchant ?? et.Description)" this way</label>
+                    </div>
+                </fieldset>
+                <div class="field full"><label>Notes</label><input type="text" @bind="editDto.Notes" /></div>
+                <p class="muted small-text">Full description: @et.Description</p>
+            </div>
+            </ChildContent>
+            <Footer>
+                <button class="secondary" type="button" @onclick="() => edit = null">Cancel</button>
+                <button type="button" @onclick="SaveEdit">Save</button>
+            </Footer>
+        </Modal>
+    }
+
+    @if (reconcileFor is { } rt)
+    {
+        <Modal Title="@("Reconcile " + (rt.Merchant ?? rt.Description))" Subtitle="@($"{Fmt.Money(rt.Amount)} on {Fmt.Date(rt.Date)} · with {(rt.Origin == MyBudget.Domain.TransactionOrigin.Manual ? "an imported line" : "an entry you made by hand")} on the same account")" OnClose="() => reconcileFor = null">
+            <ChildContent>
+            <label class="inline small"><input type="checkbox" @bind="showAllCandidates" @bind:after="() => OpenReconcile(rt)" /> show all, not just close amounts</label>
+            @if (candidates is null) { <p class="muted">loading…</p> }
+            else if (candidates.Count == 0) { <p class="muted">@(showAllCandidates ? "Nothing on this account within 45 days with the same sign." : "No close match; tick \"show all\" to see everything within 45 days.")</p> }
+            else
+            {
+                <table class="compact">
+                    <thead><tr><th>Date</th><th>Description</th><th class="money">Amount</th><th>Days apart</th><th class="money">Difference</th><th></th></tr></thead>
+                    <tbody>@foreach (var c in candidates) { <tr><td>@Fmt.Date(c.Transaction.Date)</td><td>@c.Transaction.Description</td><td><Money Value="c.Transaction.Amount" Signed="true" /></td><td>@c.DaysApart</td><td class="money">@(c.AmountDifference == 0 ? "exact" : Fmt.Money(c.AmountDifference))</td><td class="actions"><button class="secondary" type="button" @onclick="() => Reconcile(rt, c.Transaction)">Use this</button></td></tr> }</tbody>
+                </table>
+            }
+            </ChildContent>
+            <Footer><button class="secondary" type="button" @onclick="() => reconcileFor = null">Close</button></Footer>
+        </Modal>
     }
 }
 
 @code {
-    private int year = DateTime.Today.Year, month = DateTime.Today.Month;
-    private bool wholeYear, onlyUncategorized, rulesOpen;
+    private int year = DateTime.Now.Year;
+    private int month = DateTime.Now.Month;
+    private bool wholeYear, onlyUncategorized, onlyUnreconciled, rulesOpen;
+    private TransactionDto? reconcileFor;
+    private bool showAllCandidates;
+    private List<ReconcileCandidateDto>? candidates;
     private string sourceFilter = "", search = "";
     private List<TransactionDto>? rows;
     private List<CategoryDto>? categories;
     private List<BillDto>? bills;
     private List<AccountDto>? accounts;
     private List<CardDto>? cards;
+    private List<PersonDto>? people;
     private List<CategoryRuleDto> rules = [];
     private TransactionDto? edit;
     private TransactionUpdateDto editDto = new();
@@ -109,7 +152,7 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        try { categories = await Api.GetCategoriesAsync(); bills = await Api.GetBillsAsync(); accounts = await Api.GetAccountsAsync(); cards = await Api.GetCardsAsync(); }
+        try { categories = await Api.GetCategoriesAsync(); bills = await Api.GetBillsAsync(); accounts = await Api.GetAccountsAsync(); cards = await Api.GetCardsAsync(); people = await Api.GetPeopleAsync(); }
         catch (Exception ex) { error = ex.Message; }
         await Load();
     }
@@ -125,11 +168,11 @@ else
         var parts = sourceFilter.Split(':');
         int? accountId = parts.Length == 2 && parts[0] == "account" ? int.Parse(parts[1]) : null;
         int? cardId = parts.Length == 2 && parts[0] == "card" ? int.Parse(parts[1]) : null;
-        try { rows = await Api.GetTransactionsAsync(year, wholeYear ? null : month, null, onlyUncategorized, search, accountId, cardId); }
+        try { rows = await Api.GetTransactionsAsync(year, wholeYear ? null : month, null, onlyUncategorized, search, accountId, cardId, null, onlyUnreconciled); }
         catch (Exception ex) { error = ex.Message; }
     }
 
-    private void StartEdit(TransactionDto t) { edit = t; editDto = new() { CategoryId = t.CategoryId, BillId = t.BillId, IsTransfer = t.IsTransfer, Notes = t.Notes }; }
+    private void StartEdit(TransactionDto t) { edit = t; editDto = new() { CategoryId = t.CategoryId, BillId = t.BillId, IsTransfer = t.IsTransfer, Notes = t.Notes, RepaymentFromPersonId = t.RepaymentFromPersonId }; }
 
     private async Task SaveEdit()
     {
@@ -140,6 +183,25 @@ else
     private async Task Remove(TransactionDto t)
     {
         try { await Api.DeleteTransactionAsync(t.Id); await Load(); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task OpenReconcile(TransactionDto t)
+    {
+        reconcileFor = t; candidates = null;
+        try { candidates = await Api.GetReconcileCandidatesAsync(t.Id, showAllCandidates); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task Reconcile(TransactionDto t, TransactionDto other)
+    {
+        try { await Api.ReconcileAsync(t.Id, other.Id); reconcileFor = null; await Load(); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task Unreconcile(TransactionDto t)
+    {
+        try { await Api.UnreconcileAsync(t.Id); await Load(); }
         catch (Exception ex) { error = ex.Message; }
     }
 

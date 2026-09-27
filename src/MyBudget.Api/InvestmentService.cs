@@ -90,9 +90,13 @@ public sealed class InvestmentService(BudgetDbContext db, IMarketDataProvider ma
             if (price is null && s.Shares > 0) warnings.Add($"{h.Ticker}: no price yet; run Refresh or enter one.");
             var divYtd = h.Dividends.Where(d => d.ExDate.Year == year).Sum(d => d.Amount);
             var realizedYear = r.Realized.Where(g => g.SellDate.Year == year).ToList();
-            st += realizedYear.Where(g => g.Term == GainTerm.Short).Sum(g => g.Gain);
-            lt += realizedYear.Where(g => g.Term == GainTerm.Long).Sum(g => g.Gain);
-            positions.Add(new PositionDto(ToDto(h), s.Shares, s.CostBasis, s.Price, s.PriceDate, s.MarketValue, s.UnrealizedGain, divYtd,
+            var taxAdvantaged = h.Account is not null && AccountTypes.IsTaxAdvantaged(h.Account.Type);
+            if (!taxAdvantaged)
+            {
+                st += realizedYear.Where(g => g.Term == GainTerm.Short).Sum(g => g.Gain);
+                lt += realizedYear.Where(g => g.Term == GainTerm.Long).Sum(g => g.Gain);
+            }
+            positions.Add(new PositionDto(ToDto(h), taxAdvantaged, s.Shares, s.CostBasis, s.Price, s.PriceDate, s.MarketValue, s.UnrealizedGain, divYtd,
                 r.OpenLots.Select(l => new LotDto(l.TradeId, l.Acquired, l.Shares, l.CostPerShare, l.RemainingShares, l.FromReinvest, l.DisallowedLossAdded)).ToList(),
                 h.Trades.OrderByDescending(t => t.Date).Select(ToDto).ToList(),
                 h.Dividends.OrderByDescending(d => d.ExDate).Select(ToDto).ToList(),
@@ -141,6 +145,41 @@ public sealed class InvestmentService(BudgetDbContext db, IMarketDataProvider ma
             _ => (taxYear.LtcgThreshold15Single, taxYear.LtcgThreshold20Single),
         };
         return (marginal, ordinary, moRate, t15, t20, note);
+    }
+
+    /// <summary>Turns a tax-lot export into holdings and buy trades in one account; lots already present (same date, shares, cost) are left alone.</summary>
+    public async Task<LotImportResultDto> ImportLotsAsync(int accountId, string content, CancellationToken ct = default)
+    {
+        var account = await db.Accounts.FindAsync([accountId], ct) ?? throw new KeyNotFoundException("Account not found.");
+        var parsed = MyBudget.Engines.Import.TaxLotParser.Parse(content);
+        var holdings = await db.Holdings.Include(h => h.Trades).Where(h => h.AccountId == accountId).ToListAsync(ct);
+        int created = 0, imported = 0, present = 0, prices = 0;
+        foreach (var group in parsed.Lots.GroupBy(l => l.Ticker))
+        {
+            var h = holdings.FirstOrDefault(x => x.Ticker == group.Key);
+            if (h is null)
+            {
+                h = new Holding { Ticker = group.Key, Name = group.First().Description, AccountId = accountId };
+                db.Holdings.Add(h); holdings.Add(h); created++;
+            }
+            foreach (var lot in group)
+            {
+                if (h.Trades.Any(t => t.Kind != TradeKind.Sell && t.Date == lot.Acquired && t.Shares == lot.Quantity && t.Price == lot.UnitCost)) { present++; continue; }
+                h.Trades.Add(new Trade { Date = lot.Acquired, Kind = TradeKind.Buy, Shares = lot.Quantity, Price = lot.UnitCost, Notes = "from tax-lot import" });
+                imported++;
+            }
+            var priced = group.FirstOrDefault(l => l.Price is not null);
+            if (priced?.Price is { } px)
+            {
+                var date = priced.PriceDate ?? DateOnly.FromDateTime(DateTime.Today);
+                if (!await db.Prices.AnyAsync(p => p.Ticker == group.Key && p.Date == date, ct))
+                {
+                    db.Prices.Add(new PriceSnapshot { Ticker = group.Key, Date = date, Price = px, Source = DataSource.Manual }); prices++;
+                }
+            }
+        }
+        await db.SaveChangesAsync(ct);
+        return new LotImportResultDto(account.Name, created, imported, present, prices, parsed.Lots.Select(l => l.Ticker).Distinct().OrderBy(t => t).ToList(), parsed.Skipped, parsed.Warnings);
     }
 
     public static HoldingDto ToDto(Holding h) => new() { Id = h.Id, Ticker = h.Ticker, Name = h.Name, AccountId = h.AccountId, AccountName = h.Account?.Name, Drip = h.Drip, IsActive = h.IsActive, Notes = h.Notes };

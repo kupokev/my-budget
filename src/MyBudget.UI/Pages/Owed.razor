@@ -49,9 +49,9 @@ else
                 <div class="field grow"><label>Notes</label><input type="text" @bind="e.Notes" /></div>
                 <div class="field"><label class="inline"><input type="checkbox" @bind="e.IsActive" /> Active</label></div>
             </div>
-            <h3>Recurring obligations <span class="muted">(a fixed amount per month, or a share of a tracked bill)</span></h3>
+            <h3>Recurring obligations <span class="muted">(a fixed amount, or a share of a tracked bill, due every so many months)</span></h3>
             <table class="compact">
-                <thead><tr><th>Description</th><th>Bill</th><th>Share</th><th class="money">or fixed / month</th><th>From</th><th>Until</th><th>Active</th><th></th></tr></thead>
+                <thead><tr><th>Description</th><th>Bill</th><th>Share of it</th><th class="money">or fixed amount</th><th>How often</th><th>First due</th><th>Until</th><th>Active</th><th></th></tr></thead>
                 <tbody>
                 @foreach (var o in e.Obligations)
                 {
@@ -60,6 +60,10 @@ else
                         <td><select @bind="o.BillId"><option value="">—</option>@foreach (var b in bills) { <option value="@b.Id">@b.Name (@Fmt.Money(b.ProjectedAmount))</option> }</select></td>
                         <td><input type="number" step="0.05" class="narrow" @bind="o.ShareOfBill" /></td>
                         <td><input type="number" step="0.01" class="narrow-money" @bind="o.MonthlyAmount" /></td>
+                        <td><select @bind="o.EveryMonths">
+                            <option value="1">Monthly</option><option value="2">Every 2 months</option><option value="3">Quarterly</option>
+                            <option value="4">Every 4 months</option><option value="6">Twice a year</option><option value="12">Yearly</option>
+                        </select></td>
                         <td><input type="date" @bind="o.StartPeriod" /></td><td><input type="date" @bind="o.EndPeriod" /></td>
                         <td><input type="checkbox" @bind="o.IsActive" /></td>
                         <td><button class="secondary" type="button" @onclick="() => e.Obligations.Remove(o)">✕</button></td>
@@ -101,11 +105,11 @@ else
                 </div>
             }
             <button class="secondary" type="button" @onclick="() => e.Payments.Add(new ReceivablePaymentDto { Date = DateOnly.FromDateTime(DateTime.Today) })">Add payment</button>
-            <div class="toolbar">
-                <button type="button" @onclick="Save">Save</button>
-                <button class="secondary" type="button" @onclick="() => editing = null">Cancel</button>
-                @if (e.Id != 0) { <button class="secondary danger" type="button" @onclick="Delete">Delete</button> }
-            </div>
+            <div class="actions-row">
+                    @if (e.Id != 0) { <button class="link danger" type="button" @onclick="Delete">Delete</button> }
+                    <button class="secondary" type="button" @onclick="() => editing = null">Cancel</button>
+                    <button type="button" @onclick="Save">Save</button>
+                </div>
         </section>
     }
 }
@@ -127,7 +131,7 @@ else
     private static PersonDto Clone(PersonDto p) => new()
     {
         Id = p.Id, Name = p.Name, Notes = p.Notes, IsActive = p.IsActive,
-        Obligations = p.Obligations.Select(o => new ObligationDto { Id = o.Id, Description = o.Description, MonthlyAmount = o.MonthlyAmount, BillId = o.BillId, ShareOfBill = o.ShareOfBill, StartPeriod = o.StartPeriod, EndPeriod = o.EndPeriod, IsActive = o.IsActive }).ToList(),
+        Obligations = p.Obligations.Select(o => new ObligationDto { Id = o.Id, Description = o.Description, MonthlyAmount = o.MonthlyAmount, BillId = o.BillId, ShareOfBill = o.ShareOfBill, StartPeriod = o.StartPeriod, EndPeriod = o.EndPeriod, EveryMonths = o.EveryMonths, IsActive = o.IsActive }).ToList(),
         Charges = p.Charges.Select(c => new ReceivableChargeDto { Id = c.Id, Date = c.Date, Amount = c.Amount, Description = c.Description }).ToList(),
         Payments = p.Payments.Select(x => new ReceivablePaymentDto { Id = x.Id, Date = x.Date, Amount = x.Amount, Notes = x.Notes, Allocations = x.Allocations.Select(a => new PaymentAllocationDto { Period = a.Period, Amount = a.Amount }).ToList() }).ToList(),
     };

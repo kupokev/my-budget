@@ -271,3 +271,46 @@ th.center, td.center { text-align: center; }
 .form .field.full { margin-bottom: 14px; }
 .form .field.full textarea { width: 100%; }
 .form .actions-row { display: flex; align-items: center; gap: 8px; }
+.actions-row { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+.push-left { margin-right: auto; }
+
+.ledger-history { margin: 14px 0 16px; }
+.actions-row { margin-top: 4px; }
+
+.chip.small { font-size: 11px; padding: 0 6px; color: var(--fg-muted); }
+
+.warn-text { color: var(--warn); font-size: 12px; }
+
+button.link.muted-link { color: var(--fg-muted); }
+button.link.muted-link:hover { color: var(--accent); }
+
+/* transactions table: fixed columns, one font size, compact edit controls that stay inside their column */
+table.tx { table-layout: fixed; width: 100%; font-size: 13px; }
+table.tx th, table.tx td { padding: 3px 6px; vertical-align: middle; }
+table.tx th { font-size: 12px; }
+table.tx .c-date { width: 64px; } table.tx .c-src { width: 150px; } table.tx .c-amt { width: 96px; } table.tx .c-cat { width: 150px; } table.tx .c-bill { width: 130px; }
+table.tx .c-xfer { width: 64px; } table.tx .c-rec { width: 48px; } table.tx .c-act { width: 56px; }
+table.tx td.ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+table.tx .money { font-size: 13px; }
+table.tx select, table.tx input[type=text] { width: 100%; box-sizing: border-box; font-size: 12px; padding: 2px 4px; height: 26px; }
+table.tx label.small { font-size: 12px; white-space: nowrap; }
+table.tx .actions.icons button.link { font-size: 14px; padding: 0 3px; }
+table.tx button.link.ok { color: var(--ok); }
+table.tx button.link.warn { color: var(--warn); font-weight: 700; }
+table.tx button.link.faint { color: var(--border); }
+table.tx button.link.faint:hover { color: var(--accent); }
+table.tx tr:hover button.link.faint { color: var(--fg-muted); }
+table.tx td.center { text-align: center; }
+
+/* modal */
+.modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: flex; align-items: center; justify-content: center; z-index: 50; outline: none; }
+.modal { background: var(--bg-panel); color: var(--fg); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 12px 40px rgba(0,0,0,.5); width: min(720px, calc(100vw - 48px)); max-height: calc(100vh - 48px); display: flex; flex-direction: column; }
+.modal-head { display: flex; align-items: baseline; gap: 10px; padding: 12px 16px; border-bottom: 2px solid var(--accent-soft); }
+.modal-head strong { font-size: 15px; }
+.modal-body { padding: 14px 16px; overflow: auto; }
+.modal-foot { padding: 10px 16px 14px; border-top: 1px solid var(--border); }
+.modal .form fieldset.group { margin-bottom: 10px; }
+.small-text { font-size: 12px; }
+/* in a dialog the grid is narrow: checkboxes go on their own line under the fields */
+.modal .form .checks { grid-column: 1 / -1; grid-row: auto; justify-self: start; flex-direction: column; gap: 8px; padding: 6px 0 0; white-space: normal; }
+.modal .form fieldset.group { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }

@@ -108,8 +108,11 @@ public sealed class ApiClient(HttpClient http)
     public Task<ImportResultDto> CommitImportAsync(ImportCommitRequest req) => Post<ImportCommitRequest, ImportResultDto>("api/import/commit", req);
     public Task<List<ImportBatchDto>> GetImportBatchesAsync() => Get<List<ImportBatchDto>>("api/import/batches");
     public Task DeleteImportBatchAsync(int id) => Delete($"api/import/batches/{id}");
-    public Task<List<TransactionDto>> GetTransactionsAsync(int? year = null, int? month = null, int? categoryId = null, bool? uncategorized = null, string? search = null, int? accountId = null, int? cardId = null, int? billId = null)
-        => Get<List<TransactionDto>>(Q("api/transactions", ("year", year), ("month", month), ("categoryId", categoryId), ("uncategorized", uncategorized == true ? "true" : null), ("search", string.IsNullOrWhiteSpace(search) ? null : search), ("accountId", accountId), ("cardId", cardId), ("billId", billId)));
+    public Task<List<TransactionDto>> GetTransactionsAsync(int? year = null, int? month = null, int? categoryId = null, bool? uncategorized = null, string? search = null, int? accountId = null, int? cardId = null, int? billId = null, bool? unreconciled = null)
+        => Get<List<TransactionDto>>(Q("api/transactions", ("year", year), ("month", month), ("categoryId", categoryId), ("uncategorized", uncategorized == true ? "true" : null), ("search", string.IsNullOrWhiteSpace(search) ? null : search), ("accountId", accountId), ("cardId", cardId), ("billId", billId), ("unreconciled", unreconciled == true ? "true" : null)));
+    public Task<List<ReconcileCandidateDto>> GetReconcileCandidatesAsync(int id, bool all = false) => Get<List<ReconcileCandidateDto>>(Q($"api/transactions/{id}/reconcile-candidates", ("all", all ? "true" : null)));
+    public Task<TransactionDto> ReconcileAsync(int id, int otherId) => Post<object, TransactionDto>($"api/transactions/{id}/reconcile/{otherId}", new { });
+    public Task UnreconcileAsync(int id) => Delete($"api/transactions/{id}/reconcile");
     public Task<TransactionDto> UpdateTransactionAsync(int id, TransactionUpdateDto u) => Put<TransactionUpdateDto, TransactionDto>($"api/transactions/{id}", u);
     public Task DeleteTransactionAsync(int id) => Delete($"api/transactions/{id}");
     public Task<List<CategoryRuleDto>> GetCategoryRulesAsync() => Get<List<CategoryRuleDto>>("api/category-rules");
@@ -144,6 +147,15 @@ public sealed class ApiClient(HttpClient http)
     public Task<DividendDto> AddDividendAsync(DividendDto d) => Post("api/investments/dividends", d);
     public Task DeleteDividendAsync(int id) => Delete($"api/investments/dividends/{id}");
     public Task SetPriceAsync(string ticker, DateOnly date, decimal price) => Post<object, object>(Q("api/investments/prices", ("ticker", ticker), ("date", date.ToString("yyyy-MM-dd")), ("price", price)), new { });
+    public async Task<LotImportResultDto> ImportLotsAsync(string fileName, Stream file, int accountId)
+    {
+        using var form = new MultipartFormDataContent();
+        form.Add(new StreamContent(file), "file", fileName);
+        form.Add(new StringContent(accountId.ToString()), "accountId");
+        var r = await http.PostAsync("api/investments/import-lots", form);
+        await ThrowIfFailed(r);
+        return (await r.Content.ReadFromJsonAsync<LotImportResultDto>(Json))!;
+    }
     public Task<List<AssetDto>> GetAssetsAsync() => Get<List<AssetDto>>("api/assets");
     public Task<AssetDto> SaveAssetAsync(AssetDto a) => a.Id == 0 ? Post("api/assets", a) : Put($"api/assets/{a.Id}", a);
     public Task DeleteAssetAsync(int id) => Delete($"api/assets/{id}");

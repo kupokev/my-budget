@@ -8,14 +8,20 @@ internal static class Mapping
 {
     internal static string? Clean(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
 
-    public static AccountDto ToDto(this Account a) => new()
+    public static AccountDto ToDto(this Account a) => ToDto(a, DateOnly.FromDateTime(DateTime.Today));
+
+    public static AccountDto ToDto(this Account a, DateOnly asOf)
     {
-        Id = a.Id, Name = a.Name, Institution = a.Institution, Type = a.Type, AccountNumber = a.AccountNumber,
-        MinimumBalance = a.MinimumBalance, TransferCadence = a.TransferCadence, IsRainyDayFund = a.IsRainyDayFund,
-        Notes = a.Notes, IsActive = a.IsActive,
-        LatestBalance = a.Balances.OrderByDescending(b => b.AsOf).FirstOrDefault()?.Balance,
-        LatestBalanceAsOf = a.Balances.OrderByDescending(b => b.AsOf).FirstOrDefault()?.AsOf,
-    };
+        var current = BalanceMath.Of(a, asOf);
+        var has = a.Balances.Count > 0 || a.Transactions.Count > 0;
+        return new()
+        {
+            Id = a.Id, Name = a.Name, Institution = a.Institution, Type = a.Type, AccountNumber = a.AccountNumber,
+            MinimumBalance = a.MinimumBalance, TransferCadence = a.TransferCadence, IsRainyDayFund = a.IsRainyDayFund,
+            Notes = a.Notes, IsActive = a.IsActive,
+            LatestBalance = has ? current.Balance : null, LatestBalanceAsOf = current.SnapshotAsOf, BalanceDetail = has ? current.Detail : null,
+        };
+    }
 
     public static void Apply(this Account a, AccountDto d)
     {
@@ -25,7 +31,8 @@ internal static class Mapping
     }
 
     public static AccountBalanceDto ToDto(this AccountBalance b) => new() { Id = b.Id, AccountId = b.AccountId, AsOf = b.AsOf, Balance = b.Balance };
-    public static TransferDto ToDto(this Transfer t) => new() { Id = t.Id, AccountId = t.AccountId, Date = t.Date, Amount = t.Amount, Notes = t.Notes };
+    /// <summary>A manual transfer row seen through the account ledger.</summary>
+    public static TransferDto ToTransferDto(this Transaction t) => new() { Id = t.Id, AccountId = t.AccountId ?? 0, Date = t.Date, Amount = t.Amount, Notes = t.Notes, CounterpartyAccountId = t.CounterpartyAccountId, CounterpartyName = t.CounterpartyAccount?.Name, LinkedTransferId = t.LinkedTransactionId };
 
     public static CardDto ToDto(this Card c) => new()
     {

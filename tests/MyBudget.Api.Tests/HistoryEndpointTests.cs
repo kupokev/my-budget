@@ -72,29 +72,92 @@ public class HistoryEndpointTests : IClassFixture<ApiFixture>
         var surpass = cards.Single(c => c.CatalogKey == "amex-hilton-surpass");
         var categories = await _api.Get<List<CategoryDto>>("api/categories");
         var restaurants = categories.Single(c => c.Name == "Restaurants").Id;
-        const string csv = "Date,Description,Amount\n08/02/2026,TST* PAPPYS SMOKEHOUSE ST LOUIS MO,32.10\n08/20/2026,TST* PAPPYS SMOKEHOUSE ST LOUIS MO,28.40\n08/21/2026,KROGER #0456,84.12\n";
+        const string csv = "Date,Description,Amount\n07/02/2026,TST* PAPPYS SMOKEHOUSE ST LOUIS MO,32.10\n07/20/2026,TST* PAPPYS SMOKEHOUSE ST LOUIS MO,28.40\n07/21/2026,KROGER #0456,84.12\n";
         var pv = await Preview(surpass.Id, csv, "amex.csv");
         Assert.Equal("amex", pv.Profile);
         await _api.Post<ImportCommitRequest, ImportResultDto>("api/import/commit", new() { FileName = "amex.csv", Profile = pv.Profile, CardId = surpass.Id, Rows = pv.Rows.ToList() });
 
-        var lines = await _api.Get<List<TransactionDto>>($"api/transactions?year=2026&month=8&cardId={surpass.Id}");
+        var lines = await _api.Get<List<TransactionDto>>($"api/transactions?year=2026&month=7&cardId={surpass.Id}");
         var pappys = lines.Where(t => t.Description.Contains("PAPPYS")).ToList();
         Assert.Equal(2, pappys.Count);
         Assert.All(pappys, t => Assert.Null(t.CategoryId));
 
         // Categorize one with "always" → the other gets it too.
         await _api.Put<TransactionUpdateDto, TransactionDto>($"api/transactions/{pappys[0].Id}", new() { CategoryId = restaurants, CreateRule = true });
-        lines = await _api.Get<List<TransactionDto>>($"api/transactions?year=2026&month=8&cardId={surpass.Id}");
+        lines = await _api.Get<List<TransactionDto>>($"api/transactions?year=2026&month=7&cardId={surpass.Id}");
         Assert.All(lines.Where(t => t.Description.Contains("PAPPYS")), t => Assert.Equal(restaurants, t.CategoryId));
         Assert.Contains(await _api.Get<List<CategoryRuleDto>>("api/category-rules"), r => r.Pattern == "Pappys Smokehouse");
 
-        var summary = await _api.Get<SpendingSummaryDto>("api/spending/summary?year=2026&month=8");
+        var summary = await _api.Get<SpendingSummaryDto>("api/spending/summary?year=2026&month=7");
         Assert.Equal(60.50m, summary.Categories.Single(c => c.Name == "Restaurants").ThisMonth);
         Assert.Equal(1, summary.UncategorizedCount);                       // Kroger
 
-        var drill = await _api.Get<CategoryDrilldownDto>($"api/spending/category/{restaurants}?year=2026&month=8");
+        var drill = await _api.Get<CategoryDrilldownDto>($"api/spending/category/{restaurants}?year=2026&month=7");
         Assert.Equal("Pappys Smokehouse", Assert.Single(drill.Merchants).Merchant);
         Assert.Equal(60.50m, drill.Total);
+    }
+
+    [Fact]
+    public async Task Import_reconciles_with_a_manual_transfer_and_the_pair_counts_once()
+    {
+        var accounts = await _api.Get<List<AccountDto>>("api/accounts");
+        var main = accounts.Single(a => a.Name == "Chase Main");
+        var tbill = accounts.Single(a => a.Name == "Chase T-Bill");
+        var before = main.LatestBalance!.Value;
+
+        // Kevin records the move by hand on the 24th; the bank posts it on the 25th.
+        var manual = await _api.Post($"api/accounts/{main.Id}/transfers", new TransferDto { AccountId = main.Id, Date = new(2026, 9, 24), Amount = -500m, CounterpartyAccountId = tbill.Id, Notes = "Saving" });
+        Assert.Equal(before - 500m, (await _api.Get<List<AccountDto>>("api/accounts")).Single(a => a.Id == main.Id).LatestBalance);
+
+        const string csv = "Details,Posting Date,Description,Amount,Type,Balance,Check or Slip #\nDEBIT,09/25/2026,Online Transfer to SAV ...1234 transaction#: 987,-500.00,ACCT_XFER,2700.00,\nDEBIT,09/26/2026,AMEREN MISSOURI,-140.00,ACH_DEBIT,2560.00,\n";
+        using var form = new MultipartFormDataContent();
+        form.Add(new StringContent(csv), "file", "chase-checking.csv");
+        form.Add(new StringContent(main.Id.ToString()), "accountId");
+        var pv = (await (await _api.Client.PostAsync("api/import/preview", form)).Content.ReadFromJsonAsync<ImportPreviewDto>(ApiFixture.Json))!;
+        var xfer = pv.Rows.Single(r => r.Amount == -500m);
+        Assert.False(xfer.IsDuplicate);
+        Assert.Contains("will reconcile", xfer.SuggestionSource);
+        var result = await _api.Post<ImportCommitRequest, ImportResultDto>("api/import/commit", new() { FileName = "chase-checking.csv", Profile = pv.Profile, AccountId = main.Id, Rows = pv.Rows.ToList() });
+        Assert.Equal(2, result.Imported);
+        Assert.Equal(1, result.Reconciled);
+
+        // Balance moved once for the transfer (not twice) plus the electric bill.
+        Assert.Equal(before - 500m - 140m, (await _api.Get<List<AccountDto>>("api/accounts")).Single(a => a.Id == main.Id).LatestBalance);
+        var lines = await _api.Get<List<TransactionDto>>($"api/transactions?year=2026&month=9&accountId={main.Id}");
+        var manualLine = lines.Single(l => l.Id == manual.Id);
+        Assert.NotNull(manualLine.ReconciledWithId);
+        var imported = lines.Single(l => l.Id == manualLine.ReconciledWithId);
+        Assert.True(imported.IsTransfer);
+        Assert.Equal("Chase T-Bill", imported.CounterpartyName);
+        Assert.Empty(await _api.Get<List<TransactionDto>>($"api/transactions?year=2026&accountId={main.Id}&unreconciled=true"));
+
+        // Unlink and the manual row counts again.
+        await _api.Client.DeleteAsync($"api/transactions/{manual.Id}/reconcile");
+        Assert.Equal(before - 1_000m - 140m, (await _api.Get<List<AccountDto>>("api/accounts")).Single(a => a.Id == main.Id).LatestBalance);
+        var candidates = await _api.Get<List<ReconcileCandidateDto>>($"api/transactions/{manual.Id}/reconcile-candidates");
+        Assert.Contains(candidates, c => c.Transaction.Id == imported.Id && c.AmountDifference == 0);
+        await _api.Client.PostAsync($"api/transactions/{manual.Id}/reconcile/{imported.Id}", null);
+        Assert.Equal(before - 500m - 140m, (await _api.Get<List<AccountDto>>("api/accounts")).Single(a => a.Id == main.Id).LatestBalance);
+    }
+
+    [Fact]
+    public async Task Marking_a_deposit_as_a_repayment_creates_the_payment_on_the_persons_ledger()
+    {
+        var people = await _api.Get<List<PersonDto>>("api/people");
+        var robin = people.Single(p => p.Name == "Robin");
+        var before = (await _api.Get<List<PersonLedgerDto>>("api/people/ledgers")).Single(l => l.Person.Id == robin.Id);
+        var line = (await _api.Get<List<TransactionDto>>("api/transactions?year=2026&month=9")).First(t => t.Amount > 0 && !t.IsTransfer);
+
+        var updated = await _api.Put<TransactionUpdateDto, TransactionDto>($"api/transactions/{line.Id}", new() { RepaymentFromPersonId = robin.Id });
+        Assert.Equal("Robin", updated.RepaymentFromPersonName);
+        Assert.True(updated.IsTransfer);
+        var after = (await _api.Get<List<PersonLedgerDto>>("api/people/ledgers")).Single(l => l.Person.Id == robin.Id);
+        Assert.Equal(before.TotalPaid + line.Amount, after.TotalPaid);
+        Assert.Contains(after.Person.Payments, p => p.Amount == line.Amount && p.Date == line.Date);
+
+        var cleared = await _api.Put<TransactionUpdateDto, TransactionDto>($"api/transactions/{line.Id}", new() { RepaymentFromPersonId = null });
+        Assert.Null(cleared.RepaymentFromPersonName);
+        Assert.Equal(before.TotalPaid, (await _api.Get<List<PersonLedgerDto>>("api/people/ledgers")).Single(l => l.Person.Id == robin.Id).TotalPaid);
     }
 
     [Fact]
@@ -108,7 +171,7 @@ public class HistoryEndpointTests : IClassFixture<ApiFixture>
         Assert.Contains(hsa.StatusText, new[] { "On Track", "Not On Track", "Exceeded", "Done" });
 
         var rainy = progress.Single(p => p.Goal.Name.StartsWith("Rainy-day"));
-        Assert.Contains("latest balances of", rainy.CurrentSource);
+        Assert.Contains("current balances of", rainy.CurrentSource);
 
         var books = progress.Single(p => p.Goal.Name == "Read 12 books");
         Assert.Equal("InProgress", books.StatusText);

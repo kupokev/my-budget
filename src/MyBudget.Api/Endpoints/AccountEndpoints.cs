@@ -14,7 +14,7 @@ public static class AccountEndpoints
         g.MapGet("/", async (BudgetDbContext db, TimeProvider clock) =>
         {
             var today = DateOnly.FromDateTime(clock.GetLocalNow().DateTime);
-            var accounts = (await db.Accounts.Include(a => a.Balances).OrderBy(a => a.Name).ToListAsync()).Select(a => a.ToDto()).ToList();
+            var accounts = (await db.Accounts.Include(a => a.Balances).Include(a => a.Transactions).OrderBy(a => a.Name).ToListAsync()).Select(a => a.ToDto(today)).ToList();
             var outflow = await MonthlyOutflow(db, today);
             foreach (var a in accounts)
                 if (outflow.TryGetValue(a.Id, out var o)) { a.ThisMonthOutflow = o.Total; a.ThisMonthOutflowDetail = o.Detail; }
@@ -22,7 +22,7 @@ public static class AccountEndpoints
         });
 
         g.MapGet("/{id:int}", async (int id, BudgetDbContext db) =>
-            await db.Accounts.Include(a => a.Balances).FirstOrDefaultAsync(a => a.Id == id) is { } a ? Results.Ok(a.ToDto()) : Results.NotFound());
+            await db.Accounts.Include(a => a.Balances).Include(a => a.Transactions).FirstOrDefaultAsync(a => a.Id == id) is { } a ? Results.Ok(a.ToDto()) : Results.NotFound());
 
         g.MapPost("/", async (AccountDto dto, BudgetDbContext db) =>
         {
@@ -35,7 +35,7 @@ public static class AccountEndpoints
 
         g.MapPut("/{id:int}", async (int id, AccountDto dto, BudgetDbContext db) =>
         {
-            var a = await db.Accounts.Include(x => x.Balances).FirstOrDefaultAsync(x => x.Id == id);
+            var a = await db.Accounts.Include(x => x.Balances).Include(x => x.Transactions).FirstOrDefaultAsync(x => x.Id == id);
             if (a is null) return Results.NotFound();
             a.Apply(dto);
             await db.SaveChangesAsync();
@@ -67,34 +67,61 @@ public static class AccountEndpoints
             return Results.Ok(b.ToDto());
         });
 
+        // Manual transfers live in the transactions table (Origin = Manual, IsTransfer = true) so they show on Transactions too.
         g.MapGet("/{id:int}/transfers", async (int id, int? year, int? month, BudgetDbContext db) =>
         {
-            var q = db.Transfers.Where(t => t.AccountId == id);
+            var q = db.Transactions.Include(t => t.CounterpartyAccount).Where(t => t.AccountId == id && t.Origin == TransactionOrigin.Manual);
             if (year is { } y) q = q.Where(t => t.Date.Year == y);
             if (month is { } m) q = q.Where(t => t.Date.Month == m);
-            return (await q.OrderByDescending(t => t.Date).ToListAsync()).Select(t => t.ToDto());
+            return (await q.OrderByDescending(t => t.Date).ToListAsync()).Select(t => t.ToTransferDto());
         });
 
+        // A move between two of your accounts writes both sides, linked, in one call.
         g.MapPost("/{id:int}/transfers", async (int id, TransferDto dto, BudgetDbContext db) =>
         {
-            if (await db.Accounts.FindAsync(id) is null) return Results.NotFound();
-            var t = new Transfer { AccountId = id, Date = dto.Date, Amount = dto.Amount, Notes = dto.Notes };
-            db.Transfers.Add(t);
+            var account = await db.Accounts.FindAsync(id);
+            if (account is null) return Results.NotFound();
+            if (dto.Amount == 0) return Results.Problem("Amount can't be zero.", statusCode: 400);
+            if (dto.CounterpartyAccountId == id) return Results.Problem("The other account must be a different account.", statusCode: 400);
+            var other = dto.CounterpartyAccountId is { } oid ? await db.Accounts.FindAsync(oid) : null;
+            var direction = dto.Amount > 0 ? "Transfer in" : "Transfer out";
+            var t = ManualTransfer(id, dto.Date, dto.Amount, $"{direction}{(other is not null ? (dto.Amount > 0 ? " from " : " to ") + other.Name : "")}", dto.Notes, other?.Id);
+            db.Transactions.Add(t);
+            if (other is not null)
+            {
+                var mirror = ManualTransfer(other.Id, dto.Date, -dto.Amount, $"{(dto.Amount > 0 ? "Transfer out to " : "Transfer in from ")}{account.Name}", dto.Notes, id);
+                db.Transactions.Add(mirror);
+                await db.SaveChangesAsync();
+                t.LinkedTransactionId = mirror.Id; mirror.LinkedTransactionId = t.Id;
+            }
             await db.SaveChangesAsync();
-            return Results.Created($"/api/accounts/{id}/transfers/{t.Id}", t.ToDto());
+            await db.Entry(t).Reference(x => x.CounterpartyAccount).LoadAsync();
+            return Results.Created($"/api/accounts/{id}/transfers/{t.Id}", t.ToTransferDto());
         });
 
         g.MapDelete("/{id:int}/transfers/{transferId:int}", async (int id, int transferId, BudgetDbContext db) =>
         {
-            var t = await db.Transfers.FirstOrDefaultAsync(x => x.Id == transferId && x.AccountId == id);
+            var t = await db.Transactions.FirstOrDefaultAsync(x => x.Id == transferId && x.AccountId == id);
             if (t is null) return Results.NotFound();
-            db.Transfers.Remove(t);
+            db.Transactions.Remove(t);
+            if (t.LinkedTransactionId is { } linked && await db.Transactions.FindAsync(linked) is { } mirror)
+            {
+                db.Transactions.Remove(mirror);
+                if (mirror.ReconciledWithId is { } mr && await db.Transactions.FindAsync(mr) is { } mp) mp.ReconciledWithId = null;
+            }
+            if (t.ReconciledWithId is { } rec && await db.Transactions.FindAsync(rec) is { } partner) partner.ReconciledWithId = null;
             await db.SaveChangesAsync();
             return Results.NoContent();
         });
 
         return api;
     }
+
+    internal static Transaction ManualTransfer(int accountId, DateOnly date, decimal amount, string description, string? notes, int? counterpartyId) => new()
+    {
+        AccountId = accountId, Date = date, Amount = amount, Description = description, Merchant = description, Notes = notes,
+        IsTransfer = true, Origin = TransactionOrigin.Manual, ExternalId = "manual:" + Guid.NewGuid().ToString("N"), CounterpartyAccountId = counterpartyId, IsManuallyCategorized = true,
+    };
 
     /// <summary>
     /// Cash actually leaving each account in the month: bills paid from the account directly, plus bills charged to a

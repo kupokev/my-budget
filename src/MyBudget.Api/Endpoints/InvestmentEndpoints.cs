@@ -43,6 +43,18 @@ public static class InvestmentEndpoints
             return Results.NoContent();
         });
         g.MapPost("/holdings/{id:int}/sync", async (int id, InvestmentService svc) => await PaycheckEndpoints.Guarded(() => svc.SyncAsync(id)));
+        // multipart/form-data: file (tax-lot export), accountId
+        g.MapPost("/import-lots", async (HttpRequest request, InvestmentService svc) =>
+        {
+            var form = await request.ReadFormAsync();
+            var file = form.Files.GetFile("file");
+            if (file is null || file.Length == 0) return Results.Problem("No file uploaded.", statusCode: 400);
+            if (!int.TryParse(form["accountId"], out var accountId)) return Results.Problem("Pick the account the lots belong to.", statusCode: 400);
+            using var reader = new StreamReader(file.OpenReadStream());
+            var content = await reader.ReadToEndAsync();
+            return await PaycheckEndpoints.Guarded(() => svc.ImportLotsAsync(accountId, content));
+        }).DisableAntiforgery();
+
         g.MapPost("/sync-all", async (BudgetDbContext db, InvestmentService svc) =>
         {
             var ids = await db.Holdings.Where(h => h.IsActive).Select(h => h.Id).ToListAsync();

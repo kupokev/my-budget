@@ -2,6 +2,9 @@ namespace MyBudget.Domain;
 
 public enum ImportFormat { Csv, Ofx }
 
+/// <summary>Where a transaction row came from: a statement import, or typed in (a manual transfer).</summary>
+public enum TransactionOrigin { Imported, Manual }
+
 /// <summary>One uploaded statement file (ADR-0001: import is a manual upload per institution).</summary>
 public class ImportBatch
 {
@@ -52,6 +55,23 @@ public class Transaction
     public string? Notes { get; set; }
     /// <summary>Set when the user categorized it by hand; auto-categorization never overrides these.</summary>
     public bool IsManuallyCategorized { get; set; }
+    public TransactionOrigin Origin { get; set; }
+    /// <summary>For a manual transfer between two of your accounts: the other account, and the mirror row there.</summary>
+    public int? CounterpartyAccountId { get; set; }
+    public Account? CounterpartyAccount { get; set; }
+    public int? LinkedTransactionId { get; set; }
+    /// <summary>
+    /// A manual row reconciled to the imported line that is the same movement (and vice versa). The pair counts once:
+    /// the imported line is the truth, the manual row is excluded from balance math once reconciled.
+    /// </summary>
+    public int? ReconciledWithId { get; set; }
+    public Transaction? ReconciledWith { get; set; }
+    /// <summary>Money in that is someone paying back what they owe (DBT-2): the receivable payment this line created.</summary>
+    public int? ReceivablePaymentId { get; set; }
+    public ReceivablePayment? ReceivablePayment { get; set; }
+
+    /// <summary>False for a manual row that has been reconciled to an imported line (so the pair isn't counted twice).</summary>
+    public bool Counts => !(Origin == TransactionOrigin.Manual && ReconciledWithId != null);
 }
 
 public enum RuleMatch { Contains, StartsWith, Regex }

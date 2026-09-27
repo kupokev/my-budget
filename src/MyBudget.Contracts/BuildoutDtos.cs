@@ -47,7 +47,7 @@ public sealed record LotDto(int TradeId, DateOnly Acquired, decimal Shares, deci
 public sealed record RealizedGainDto(int SellTradeId, DateOnly SellDate, DateOnly Acquired, decimal Shares, decimal Proceeds, decimal CostBasis, decimal Gain, string Term, int DaysHeld, bool WashSale, decimal DisallowedLoss, string Formula);
 public sealed record WashSaleDto(int SellTradeId, DateOnly SellDate, decimal Loss, DateOnly WindowOpens, DateOnly WindowCloses, DateOnly EarliestSafeRepurchase, decimal DisallowedLoss, bool WindowStillOpen, string Message);
 
-public sealed record PositionDto(HoldingDto Holding, decimal Shares, decimal CostBasis, decimal? Price, DateOnly? PriceDate, decimal? MarketValue, decimal? UnrealizedGain, decimal DividendsThisYear,
+public sealed record PositionDto(HoldingDto Holding, bool TaxAdvantaged, decimal Shares, decimal CostBasis, decimal? Price, DateOnly? PriceDate, decimal? MarketValue, decimal? UnrealizedGain, decimal DividendsThisYear,
     IReadOnlyList<LotDto> Lots, IReadOnlyList<TradeDto> Trades, IReadOnlyList<DividendDto> Dividends, IReadOnlyList<RealizedGainDto> Realized, IReadOnlyList<WashSaleDto> WashSales);
 
 public sealed record GainsTaxDto(decimal ShortTermGain, decimal LongTermGain, decimal ShortTermTax, decimal LongTermTax, decimal MissouriTax, decimal Total, decimal OrdinaryMarginalRate, IReadOnlyList<string> Steps);
@@ -56,6 +56,8 @@ public sealed record PortfolioDto(DateOnly AsOf, int Year, IReadOnlyList<Positio
     decimal RealizedShortTerm, decimal RealizedLongTerm, GainsTaxDto? Tax, IReadOnlyList<string> Warnings);
 
 public sealed record MarketSyncResultDto(string Ticker, int PricesAdded, int DividendsAdded, int ReinvestsCreated, decimal? LastPrice, string? Error);
+
+public sealed record LotImportResultDto(string AccountName, int HoldingsCreated, int LotsImported, int LotsAlreadyPresent, int PricesRecorded, IReadOnlyList<string> Tickers, IReadOnlyList<string> Skipped, IReadOnlyList<string> Warnings);
 
 // ---- Assets (ACC-4a) --------------------------------------------------------------------------
 
@@ -89,6 +91,8 @@ public sealed class ObligationDto
     public decimal ShareOfBill { get; set; } = 1.0m;
     public DateOnly StartPeriod { get; set; }
     public DateOnly? EndPeriod { get; set; }
+    /// <summary>1 = every month, 3 = quarterly, 6 = twice a year, 12 = yearly.</summary>
+    [Range(1, 24)] public int EveryMonths { get; set; } = 1;
     public bool IsActive { get; set; } = true;
 }
 

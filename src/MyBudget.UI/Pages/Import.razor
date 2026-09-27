@@ -15,8 +15,8 @@ else
             <div class="field"><label>This statement belongs to</label>
                 <select @bind="source">
                     <option value="">—</option>
-                    <optgroup label="Bank accounts">@foreach (var a in accounts.Where(a => a.IsActive)) { <option value="account:@a.Id">@a.Name</option> }</optgroup>
-                    <optgroup label="Cards">@foreach (var c in cards.Where(c => c.IsActive)) { <option value="card:@c.Id">@c.Name</option> }</optgroup>
+                    <optgroup label="Bank accounts">@foreach (var a in accounts.Where(a => a.IsActive)) { <option value="account:@a.Id">@Fmt.Label(a.Name, a.AccountNumber)</option> }</optgroup>
+                    <optgroup label="Cards">@foreach (var c in cards.Where(c => c.IsActive)) { <option value="card:@c.Id">@Fmt.Label(c.Name, c.AccountNumber)</option> }</optgroup>
                 </select></div>
             <div class="field"><label>Layout</label>
                 <select @bind="profile"><option value="auto">Detect from the file</option>@foreach (var p in profiles) { <option value="@p.Key">@p.Name</option> }</select></div>
@@ -63,7 +63,7 @@ else
     {
         <section class="panel">
             <h2>Imported</h2>
-            <p>@res.Imported lines imported, @res.Duplicates duplicates skipped, @res.Skipped skipped by you. @res.BillMonthsUpdated bill-month actuals and @res.CardMonthsUpdated card-month spend figures updated.</p>
+            <p>@res.Imported lines imported, @res.Duplicates duplicates skipped, @res.Skipped skipped by you, @res.Reconciled reconciled with entries you'd made by hand. @res.BillMonthsUpdated bill-month actuals and @res.CardMonthsUpdated card-month spend figures updated.</p>
         </section>
     }
 

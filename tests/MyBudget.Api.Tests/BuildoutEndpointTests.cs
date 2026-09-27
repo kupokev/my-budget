@@ -12,7 +12,7 @@ public class BuildoutEndpointTests : IClassFixture<ApiFixture>
     private async Task<HoldingDto> NewHolding(string ticker, bool drip)
     {
         var accounts = await _api.Get<List<AccountDto>>("api/accounts");
-        var brokerage = accounts.Single(a => a.Type == AccountType.Brokerage);
+        var brokerage = accounts.Single(a => a.Name == "Fidelity Brokerage");
         var h = await _api.Post("api/investments/holdings", new HoldingDto { Ticker = ticker, AccountId = brokerage.Id, Drip = drip });
         await _api.Post("api/investments/trades", new TradeDto { HoldingId = h.Id, Date = new(2025, 3, 3), Kind = TradeKind.Buy, Shares = 10, Price = 280m });
         return h;
@@ -77,6 +77,28 @@ public class BuildoutEndpointTests : IClassFixture<ApiFixture>
         var sam = ledgers.Single(l => l.Person.Name == "Sam");
         Assert.Equal(250m, sam.Periods.First().Expected);                 // 100% of the Amex loan bill
         Assert.Equal("Due", sam.Periods.Single(r => r.Period == new DateOnly(2026, 9, 1)).Status);
+    }
+
+    [Fact]
+    public async Task A_quarterly_obligation_is_only_expected_every_third_month()
+    {
+        var people = await _api.Get<List<PersonDto>>("api/people");
+        var robin = people.Single(p => p.Name == "Robin");
+        robin.Obligations.Add(new ObligationDto { Description = "Blueland", MonthlyAmount = 11m, EveryMonths = 3, StartPeriod = new(2026, 2, 1) });
+        await _api.Put($"api/people/{robin.Id}", robin);
+
+        var ledger = (await _api.Get<List<PersonLedgerDto>>("api/people/ledgers")).Single(l => l.Person.Id == robin.Id);
+        decimal Expected(int month) => ledger.Periods.Single(r => r.Period == new DateOnly(2026, month, 1)).Expected;
+        Assert.Equal(45m, Expected(1));                       // phone only, before it starts
+        Assert.Equal(45m + 11m, Expected(2));                 // first due
+        Assert.Equal(45m, Expected(3));
+        Assert.Equal(45m, Expected(4));
+        Assert.Equal(45m + 11m, Expected(5));                 // every third month
+        Assert.Equal(45m + 11m, Expected(8));
+        Assert.Contains("Blueland (quarterly)", ledger.Periods.Single(r => r.Period == new DateOnly(2026, 8, 1)).Detail);
+
+        robin.Obligations.RemoveAll(o => o.Description == "Blueland");
+        await _api.Put($"api/people/{robin.Id}", robin);
     }
 
     [Fact]

@@ -35,7 +35,7 @@ else
                     var cat = c;
                     <label class="inline"><input type="radio" name="catf" checked="@(categoryFilter == cat.Id)" @onchange="() => categoryFilter = cat.Id" /> @cat.Name <span class="muted">@bills.Count(b => b.CategoryId == cat.Id)</span></label>
                 }
-                <a class="muted" href="settings">Manage categories…</a>
+                <a class="muted" href="categories">Manage categories…</a>
             </div>
         </details>
         <label class="inline"><input type="checkbox" @bind="showInactive" /> Show inactive</label>
@@ -63,11 +63,11 @@ else
                 </fieldset>
                 <div class="field notes"><label>Notes</label><input type="text" @bind="monthEdit.Notes" @bind:event="oninput" @onkeydown="OnMonthKey" placeholder="e.g. paid late, split payment" /></div>
             </div>
-            <div class="toolbar">
-                <button type="button" @onclick="SaveMonth">Save</button>
+            <div class="actions-row">
+                <span class="muted push-left">Enter saves · Esc closes · blank means "use the usual"</span>
+                <button class="link danger" type="button" @onclick="ClearMonth">Clear this month</button>
                 <button class="secondary" type="button" @onclick="() => monthEdit = null">Close</button>
-                <span class="muted">Enter saves · Esc closes · blank means "use the usual"</span>
-                <button class="link danger push-right" type="button" @onclick="ClearMonth">Clear this month</button>
+                <button type="button" @onclick="SaveMonth">Save</button>
             </div>
         </section>
     }
@@ -202,19 +202,19 @@ else
                     {
                         <div class="field"><label>Paying account</label><InputSelect @bind-Value="editing.PaymentAccountId">
                             <option value="">—</option>
-                            @foreach (var a in accounts.Where(a => a.IsActive)) { <option value="@a.Id">@a.Name</option> }
+                            @foreach (var a in accounts.Where(a => a.IsActive)) { <option value="@a.Id">@Fmt.Label(a.Name, a.AccountNumber)</option> }
                         </InputSelect></div>
                     }
                     else
                     {
                         <div class="field"><label>Paying card</label><InputSelect @bind-Value="editing.PaymentCardId">
                             <option value="">—</option>
-                            @foreach (var c in cards.Where(c => c.IsActive)) { <option value="@c.Id">@c.Name</option> }
+                            @foreach (var c in cards.Where(c => c.IsActive)) { <option value="@c.Id">@Fmt.Label(c.Name, c.AccountNumber)</option> }
                         </InputSelect></div>
                     }
                     <div class="field"><label>Funded from <span class="muted">(where the money really comes from)</span></label><InputSelect @bind-Value="editing.FundingAccountId">
                         <option value="0">—</option>
-                        @foreach (var a in accounts.Where(a => a.IsActive)) { <option value="@a.Id">@a.Name</option> }
+                        @foreach (var a in accounts.Where(a => a.IsActive)) { <option value="@a.Id">@Fmt.Label(a.Name, a.AccountNumber)</option> }
                     </InputSelect><ValidationMessage For="() => editing.FundingAccountId" /></div>
                     <div class="field"><label>Bank-autopay discount / month</label><InputNumber @bind-Value="editing.BankAutopayDiscount" step="0.01" /></div>
                     <div class="checks">
@@ -225,9 +225,9 @@ else
                 </fieldset>
                 <div class="field full"><label>Notes</label><InputTextArea @bind-Value="editing.Notes" rows="2" /></div>
                 <div class="actions-row">
-                    <button type="submit">Save</button>
+                    @if (editing.Id != 0) { <button class="link danger" type="button" @onclick="DeleteEditing">Delete bill</button> }
                     <button class="secondary" type="button" @onclick="() => editing = null">Cancel</button>
-                    @if (editing.Id != 0) { <button class="link danger push-right" type="button" @onclick="DeleteEditing">Delete bill</button> }
+                    <button type="submit">Save</button>
                 </div>
             </EditForm>
         </section>

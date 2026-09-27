@@ -1,0 +1,21 @@
+@* A centered dialog over a dimmed page. Esc or the backdrop closes it. *@
+<div class="modal-backdrop" @onclick="Close" @onkeydown="OnKey" tabindex="-1" @ref="root">
+    <div class="modal" @onclick:stopPropagation="true">
+        <div class="modal-head"><strong>@Title</strong> @if (!string.IsNullOrEmpty(Subtitle)) { <span class="muted">@Subtitle</span> } <button class="link push-right" type="button" title="Close" @onclick="Close">✕</button></div>
+        <div class="modal-body">@ChildContent</div>
+        @if (Footer is not null) { <div class="actions-row modal-foot">@Footer</div> }
+    </div>
+</div>
+
+@code {
+    [Parameter] public string Title { get; set; } = "";
+    [Parameter] public string? Subtitle { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public RenderFragment? Footer { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    private ElementReference root;
+
+    protected override async Task OnAfterRenderAsync(bool first) { if (first) { try { await root.FocusAsync(); } catch { } } }
+    private Task Close() => OnClose.InvokeAsync();
+    private async Task OnKey(KeyboardEventArgs e) { if (e.Key == "Escape") await Close(); }
+}

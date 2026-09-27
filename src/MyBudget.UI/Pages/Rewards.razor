@@ -187,7 +187,7 @@ else
                             <td><input type="text" class="narrow" @bind="x.TierName" /></td>
                             <td><select @bind="x.Kind">@foreach (var k in Enum.GetValues<StatusPathKind>()) { <option value="@k">@Fmt.Words(k)</option> }</select></td>
                             <td><input type="number" step="1" class="narrow-money" @bind="x.Threshold" /></td>
-                            <td>@if (x.Kind is StatusPathKind.CardSpend or StatusPathKind.HoldCard) { <select @bind="x.CardId"><option value="">—</option>@foreach (var c in cards) { <option value="@c.Id">@c.Name</option> }</select> }</td>
+                            <td>@if (x.Kind is StatusPathKind.CardSpend or StatusPathKind.HoldCard) { <select @bind="x.CardId"><option value="">—</option>@foreach (var c in cards) { <option value="@c.Id">@Fmt.Label(c.Name, c.AccountNumber)</option> }</select> }</td>
                             <td><input type="text" @bind="x.Notes" /></td>
                             <td><button class="secondary" type="button" @onclick="() => pe.Paths.Remove(x)">✕</button></td>
                         </tr>
@@ -209,10 +209,10 @@ else
                 </table>
                 <button class="secondary" type="button" @onclick="() => pe.Progress.Add(new LoyaltyProgressDto { Year = year })">Add year</button>
                 <div class="field"><label>Notes</label><input type="text" @bind="pe.Notes" /></div>
-                <div class="toolbar">
-                    <button type="button" @onclick="SaveProgram">Save</button>
+                <div class="actions-row">
+                    @if (pe.Id != 0) { <button class="link danger" type="button" @onclick="DeleteProgram">Delete</button> }
                     <button class="secondary" type="button" @onclick="() => programEdit = null">Cancel</button>
-                    @if (pe.Id != 0) { <button class="secondary danger" type="button" @onclick="DeleteProgram">Delete</button> }
+                    <button type="button" @onclick="SaveProgram">Save</button>
                 </div>
             </section>
         }

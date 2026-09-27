@@ -16,7 +16,7 @@ public class Account
     public bool IsActive { get; set; } = true;
 
     public List<AccountBalance> Balances { get; set; } = [];
-    public List<Transfer> Transfers { get; set; } = [];
+    public List<Transaction> Transactions { get; set; } = [];
 }
 
 /// <summary>Balance as of a date. Entered manually or by statement import; feeds Long/Short and net worth.</summary>
@@ -27,15 +27,4 @@ public class AccountBalance
     public Account? Account { get; set; }
     public DateOnly AsOf { get; set; }
     public decimal Balance { get; set; }
-}
-
-/// <summary>An actual transfer into an account to fund its bills (ACC-3). Negative means money moved out.</summary>
-public class Transfer
-{
-    public int Id { get; set; }
-    public int AccountId { get; set; }
-    public Account? Account { get; set; }
-    public DateOnly Date { get; set; }
-    public decimal Amount { get; set; }
-    public string? Notes { get; set; }
 }

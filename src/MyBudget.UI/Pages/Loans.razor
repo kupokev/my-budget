@@ -72,9 +72,9 @@ else
                 </fieldset>
                 <div class="field full"><label>Notes</label><InputTextArea @bind-Value="editing.Notes" rows="2" /></div>
                 <div class="actions-row">
-                    <button type="submit">Save</button>
+                    @if (editing.Id != 0) { <button class="link danger" type="button" @onclick="DeleteEditing">Delete loan</button> }
                     <button class="secondary" type="button" @onclick="() => editing = null">Cancel</button>
-                    @if (editing.Id != 0) { <button class="link danger push-right" type="button" @onclick="DeleteEditing">Delete loan</button> }
+                    <button type="submit">Save</button>
                 </div>
             </EditForm>
         </section>

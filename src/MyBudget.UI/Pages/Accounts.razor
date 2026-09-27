@@ -15,17 +15,17 @@ else
     </div>
 
     <table>
-        <thead><tr><th>Name</th><th>Type</th><th>Institution</th><th class="money">Min balance</th><th class="money">Latest balance</th><th>As of</th><th class="money" title="Cash leaving this account this month: bills paid from it, plus bills on cards it pays">This month</th><th>Cadence</th><th class="center" title="Rainy-day fund">RDF</th><th class="center">Active</th><th></th></tr></thead>
+        <thead><tr><th>Name</th><th>Type</th><th>Institution</th><th class="money">Min balance</th><th class="money" title="Latest snapshot plus transfers since it">Balance</th><th>Snapshot</th><th class="money" title="Cash leaving this account this month: bills paid from it, plus bills on cards it pays">This month</th><th>Cadence</th><th class="center" title="Rainy-day fund">RDF</th><th class="center">Active</th><th></th></tr></thead>
         <tbody>
         @foreach (var a in accounts.Where(a => showInactive || a.IsActive))
         {
             <tr class="@(a.IsActive ? "" : "muted")">
                 <td>@a.Name <MaskedNumber Value="@a.AccountNumber" /></td>
-                <td>@Fmt.Words(a.Type)</td>
+                <td>@MyBudget.Domain.AccountTypes.Display(a.Type)</td>
                 <td>@a.Institution</td>
                 <td><Money Value="a.MinimumBalance" /></td>
-                <td class="money">@Fmt.Money(a.LatestBalance)</td>
-                <td>@Fmt.Date(a.LatestBalanceAsOf)</td>
+                <td class="money" title="@a.BalanceDetail">@Fmt.Money(a.LatestBalance)</td>
+                <td class="muted">@Fmt.Date(a.LatestBalanceAsOf)</td>
                 <td class="money" title="@a.ThisMonthOutflowDetail">@(a.ThisMonthOutflow > 0 ? Fmt.Money(a.ThisMonthOutflow) : "")</td>
                 <td>@Fmt.Words(a.TransferCadence)</td>
                 <td class="center">@if (a.IsRainyDayFund) { <span class="tick" title="Part of the rainy-day fund">✓</span> }</td>
@@ -50,7 +50,7 @@ else
                     <div class="field"><label>Name</label><InputText @bind-Value="editing.Name" /><ValidationMessage For="() => editing.Name" /></div>
                     <div class="field"><label>Institution</label><InputText @bind-Value="editing.Institution" /></div>
                     <div class="field"><label>Type</label><InputSelect @bind-Value="editing.Type">
-                        @foreach (var t in Enum.GetValues<MyBudget.Domain.AccountType>()) { <option value="@t">@Fmt.Words(t)</option> }
+                        @foreach (var t in Enum.GetValues<MyBudget.Domain.AccountType>()) { <option value="@t">@MyBudget.Domain.AccountTypes.Display(t)</option> }
                     </InputSelect></div>
                     <div class="field"><label>Account number</label><MaskedInput @bind-Value="editing.AccountNumber" /></div>
                 </fieldset>
@@ -67,9 +67,9 @@ else
                 </fieldset>
                 <div class="field full"><label>Notes</label><InputTextArea @bind-Value="editing.Notes" rows="2" /></div>
                 <div class="actions-row">
-                    <button type="submit">Save</button>
+                    @if (editing.Id != 0) { <button class="link danger" type="button" @onclick="DeleteEditing">Delete account</button> }
                     <button class="secondary" type="button" @onclick="() => editing = null">Cancel</button>
-                    @if (editing.Id != 0) { <button class="link danger push-right" type="button" @onclick="DeleteEditing">Delete account</button> }
+                    <button type="submit">Save</button>
                 </div>
             </EditForm>
         </section>
@@ -79,44 +79,45 @@ else
     {
         <section class="panel">
             <h2>@ledger.Name · balances and transfers</h2>
-            <div class="row">
-                <div>
-                    <h3>Record balance</h3>
-                    <EditForm Model="newBalance" OnValidSubmit="SaveBalance">
-                        <div class="row">
-                            <div class="field"><label>As of</label><InputDate @bind-Value="newBalance.AsOf" /></div>
-                            <div class="field"><label>Balance</label><InputNumber @bind-Value="newBalance.Balance" step="0.01" /></div>
-                            <div class="field"><label>&nbsp;</label><button type="submit">Save balance</button></div>
-                        </div>
-                    </EditForm>
-                    <table>
-                        <thead><tr><th>As of</th><th class="money">Balance</th></tr></thead>
-                        <tbody>@foreach (var b in balances) { <tr><td>@Fmt.Date(b.AsOf)</td><td><Money Value="b.Balance" /></td></tr> }</tbody>
-                    </table>
-                </div>
-                <div>
-                    <h3>Record transfer in</h3>
-                    <EditForm Model="newTransfer" OnValidSubmit="SaveTransfer">
-                        <div class="row">
-                            <div class="field"><label>Date</label><InputDate @bind-Value="newTransfer.Date" /></div>
-                            <div class="field"><label>Amount</label><InputNumber @bind-Value="newTransfer.Amount" step="0.01" /></div>
-                            <div class="field"><label>Notes</label><InputText @bind-Value="newTransfer.Notes" /></div>
-                            <div class="field"><label>&nbsp;</label><button type="submit">Add transfer</button></div>
-                        </div>
-                    </EditForm>
-                    <table>
-                        <thead><tr><th>Date</th><th class="money">Amount</th><th>Notes</th><th></th></tr></thead>
-                        <tbody>
-                        @foreach (var t in transfers)
-                        {
-                            <tr><td>@Fmt.Date(t.Date)</td><td><Money Value="t.Amount" /></td><td>@t.Notes</td>
-                                <td><button class="secondary" type="button" @onclick="() => RemoveTransfer(t)">✕</button></td></tr>
-                        }
-                        </tbody>
-                    </table>
-                </div>
+            <div class="form">
+                <fieldset class="group">
+                    <legend>Record</legend>
+                    <div class="field"><label>What</label><select @bind="entryKind">
+                        <option value="Balance">@(balances.Count == 0 ? "Starting balance" : "Statement balance")</option>
+                        <option value="In">Transfer in</option>
+                        <option value="Out">Transfer out</option>
+                    </select></div>
+                    <div class="field"><label>Date</label><input type="date" @bind="entryDate" /></div>
+                    <div class="field"><label>@(entryKind == "Balance" ? "Balance" : "Amount")</label><input type="number" step="0.01" @bind="entryAmount" /></div>
+                    @if (entryKind != "Balance")
+                    {
+                        <div class="field"><label>@(entryKind == "In" ? "From" : "To")</label><select @bind="entryOther">
+                            <option value="">Other (outside my accounts)</option>
+                            @foreach (var a in accounts.Where(a => a.IsActive && a.Id != ledger.Id)) { <option value="@a.Id">@Fmt.Label(a.Name, a.AccountNumber)</option> }
+                        </select></div>
+                    }
+                    <div class="field"><label>Notes</label><input type="text" @bind="entryNotes" /></div>
+                    <div class="field"><label>&nbsp;</label><button type="button" @onclick="SaveEntry" disabled="@(entryAmount == 0 && entryKind != "Balance")">Save</button></div>
+                </fieldset>
             </div>
-            <button class="secondary" type="button" @onclick="() => ledger = null">Close</button>
+            @if (entryKind != "Balance" && !string.IsNullOrEmpty(entryOther)) { <p class="muted">The matching @(entryKind == "In" ? "transfer out" : "transfer in") is written on @accounts.First(a => a.Id.ToString() == entryOther).Name at the same time; deleting either removes both.</p> }
+            <table class="compact ledger-history">
+                <thead><tr><th>Date</th><th>What</th><th class="money">Amount</th><th>With</th><th>Notes</th><th></th></tr></thead>
+                <tbody>
+                @foreach (var row in History())
+                {
+                    <tr>
+                        <td>@Fmt.Date(row.Date)</td>
+                        <td>@row.Kind</td>
+                        <td class="money"><Money Value="row.Amount" Signed="@(row.Kind.StartsWith("Transfer"))" /></td>
+                        <td class="muted">@row.With</td>
+                        <td class="muted">@row.Notes</td>
+                        <td>@if (row.Transfer is { } t) { <button class="link" type="button" title="Delete" @onclick="() => RemoveTransfer(t)">✕</button> }</td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+            <div class="actions-row"><button class="secondary" type="button" @onclick="() => ledger = null">Close</button></div>
         </section>
     }
 
@@ -138,8 +139,35 @@ else
     private AccountDto? ledger;
     private List<AccountBalanceDto> balances = [];
     private List<TransferDto> transfers = [];
-    private AccountBalanceDto newBalance = new() { AsOf = DateOnly.FromDateTime(DateTime.Today) };
-    private TransferDto newTransfer = new() { Date = DateOnly.FromDateTime(DateTime.Today) };
+    private string entryKind = "In", entryOther = "", entryNotes = "";
+    private DateOnly entryDate = DateOnly.FromDateTime(DateTime.Today);
+    private decimal entryAmount;
+
+    private sealed record HistoryRow(DateOnly Date, string Kind, decimal Amount, string With, string? Notes, TransferDto? Transfer);
+
+    private IEnumerable<HistoryRow> History()
+        => balances.Select(b => new HistoryRow(b.AsOf, b.AsOf == balances.Min(x => x.AsOf) ? "Starting balance" : "Statement balance", b.Balance, "", null, null))
+            .Concat(transfers.Select(t => new HistoryRow(t.Date, t.Amount >= 0 ? "Transfer in" : "Transfer out", t.Amount, t.CounterpartyName ?? "other", t.Notes, t)))
+            .OrderByDescending(r => r.Date).ThenBy(r => r.Kind);
+
+    private async Task SaveEntry()
+    {
+        if (ledger is null) return;
+        try
+        {
+            if (entryKind == "Balance")
+                await Api.SaveAccountBalanceAsync(ledger.Id, new AccountBalanceDto { AccountId = ledger.Id, AsOf = entryDate, Balance = entryAmount });
+            else
+                await Api.AddTransferAsync(ledger.Id, new TransferDto
+                {
+                    AccountId = ledger.Id, Date = entryDate, Amount = entryKind == "In" ? Math.Abs(entryAmount) : -Math.Abs(entryAmount),
+                    Notes = string.IsNullOrWhiteSpace(entryNotes) ? null : entryNotes, CounterpartyAccountId = int.TryParse(entryOther, out var o) ? o : null,
+                });
+            entryAmount = 0; entryNotes = "";
+            await LoadLedger(); await Load();
+        }
+        catch (Exception ex) { error = ex.Message; }
+    }
     private bool showInactive;
     private string? error;
 
@@ -171,9 +199,7 @@ else
 
     private async Task OpenLedger(AccountDto a)
     {
-        editing = null; ledger = a;
-        newBalance = new() { AccountId = a.Id, AsOf = DateOnly.FromDateTime(DateTime.Today) };
-        newTransfer = new() { AccountId = a.Id, Date = DateOnly.FromDateTime(DateTime.Today) };
+        editing = null; ledger = a; entryOther = ""; entryAmount = 0;
         await LoadLedger();
     }
 
@@ -184,18 +210,6 @@ else
             balances = await Api.GetAccountBalancesAsync(ledger!.Id);
             transfers = await Api.GetTransfersAsync(ledger.Id);
         }
-        catch (Exception ex) { error = ex.Message; }
-    }
-
-    private async Task SaveBalance()
-    {
-        try { await Api.SaveAccountBalanceAsync(ledger!.Id, newBalance); await LoadLedger(); await Load(); }
-        catch (Exception ex) { error = ex.Message; }
-    }
-
-    private async Task SaveTransfer()
-    {
-        try { await Api.AddTransferAsync(ledger!.Id, newTransfer); newTransfer = new() { AccountId = ledger.Id, Date = newTransfer.Date }; await LoadLedger(); await Load(); }
         catch (Exception ex) { error = ex.Message; }
     }
 

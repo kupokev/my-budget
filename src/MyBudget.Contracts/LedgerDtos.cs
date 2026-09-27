@@ -18,9 +18,11 @@ public sealed class AccountDto
     public bool IsRainyDayFund { get; set; }
     public string? Notes { get; set; }
     public bool IsActive { get; set; } = true;
-    /// <summary>Latest known balance, read-only.</summary>
+    /// <summary>Balance now: latest snapshot plus transfers since it. Read-only.</summary>
     public decimal? LatestBalance { get; set; }
+    /// <summary>Date of the snapshot the balance is built from.</summary>
     public DateOnly? LatestBalanceAsOf { get; set; }
+    public string? BalanceDetail { get; set; }
     /// <summary>Cash leaving this account this month: bills paid from it plus bills on cards this account pays. Read-only.</summary>
     public decimal ThisMonthOutflow { get; set; }
     public string? ThisMonthOutflowDetail { get; set; }
@@ -34,6 +36,7 @@ public sealed class AccountBalanceDto
     public decimal Balance { get; set; }
 }
 
+/// <summary>Amount is signed: positive in, negative out. To record a move between two of your accounts, set CounterpartyAccountId and the API writes the mirror row.</summary>
 public sealed class TransferDto
 {
     public int Id { get; set; }
@@ -41,6 +44,9 @@ public sealed class TransferDto
     public DateOnly Date { get; set; }
     public decimal Amount { get; set; }
     public string? Notes { get; set; }
+    public int? CounterpartyAccountId { get; set; }
+    public string? CounterpartyName { get; set; }
+    public int? LinkedTransferId { get; set; }
 }
 
 public sealed class CardDto

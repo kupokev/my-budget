@@ -38,7 +38,7 @@ public sealed class ImportCommitRequest
     public List<ImportRowDto> Rows { get; set; } = [];
 }
 
-public sealed record ImportResultDto(int BatchId, int Imported, int Duplicates, int Skipped, int BillMonthsUpdated, int CardMonthsUpdated);
+public sealed record ImportResultDto(int BatchId, int Imported, int Duplicates, int Skipped, int BillMonthsUpdated, int CardMonthsUpdated, int Reconciled);
 
 public sealed record ImportBatchDto(int Id, string FileName, ImportFormat Format, string? Profile, DateTime ImportedAt, string SourceName,
     int RowCount, int ImportedCount, int DuplicateCount, DateOnly? FirstDate, DateOnly? LastDate);
@@ -46,7 +46,10 @@ public sealed record ImportBatchDto(int Id, string FileName, ImportFormat Format
 // ---- Transactions (BIL-8/9) ------------------------------------------------------------------
 
 public sealed record TransactionDto(int Id, int? AccountId, int? CardId, string SourceName, DateOnly Date, DateOnly? PostedDate, decimal Amount,
-    string Description, string? Merchant, int? CategoryId, string? CategoryName, int? BillId, string? BillName, bool IsTransfer, string? Notes, bool IsManuallyCategorized);
+    string Description, string? Merchant, int? CategoryId, string? CategoryName, int? BillId, string? BillName, bool IsTransfer, string? Notes, bool IsManuallyCategorized,
+    TransactionOrigin Origin, string? CounterpartyName, int? ReconciledWithId, string? ReconciledWithSummary, int? RepaymentFromPersonId, string? RepaymentFromPersonName);
+
+public sealed record ReconcileCandidateDto(TransactionDto Transaction, int DaysApart, decimal AmountDifference);
 
 public sealed class TransactionUpdateDto
 {
@@ -54,6 +57,8 @@ public sealed class TransactionUpdateDto
     public int? BillId { get; set; }
     public bool IsTransfer { get; set; }
     public string? Notes { get; set; }
+    /// <summary>Money in that repays what this person owes: creates (or removes) the payment on their ledger.</summary>
+    public int? RepaymentFromPersonId { get; set; }
     /// <summary>Also create a rule so future lines with this merchant get the same category/bill.</summary>
     public bool CreateRule { get; set; }
     public string? RulePattern { get; set; }
@@ -102,6 +107,7 @@ public sealed class GoalDto
     public DateOnly EndDate { get; set; }
     public decimal? ManualCurrent { get; set; }
     public List<int> AccountIds { get; set; } = [];
+    public AccountType? AccountType { get; set; }
     public int? CategoryId { get; set; }
     public int? LoanId { get; set; }
     public bool LowerIsBetter { get; set; }

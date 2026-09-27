@@ -80,7 +80,8 @@ else
 }
 
 @code {
-    private int year = DateTime.Today.Year, month = DateTime.Today.Month;
+    private int year = DateTime.Now.Year;
+    private int month = DateTime.Now.Month;
     private SpendingSummaryDto? summary;
     private SpendingMatrixDto? matrix;
     private CategoryDrilldownDto? drill;

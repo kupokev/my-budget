@@ -17,7 +17,7 @@ public static class DevSeed
         var premierSavings = new Account { Name = "Chase Premier Savings", Institution = "Chase", Type = AccountType.Savings, MinimumBalance = 500m };
         var chaseMain = new Account { Name = "Chase Main", Institution = "Chase", Type = AccountType.Checking };
         var automatedBills = new Account { Name = "Chase Automated Bills", Institution = "Chase", Type = AccountType.Checking, TransferCadence = TransferCadence.PerPaycheck };
-        var tBill = new Account { Name = "Chase T-Bill", Institution = "Chase", Type = AccountType.TreasuryBill, IsRainyDayFund = true };
+        var tBill = new Account { Name = "Chase T-Bill", Institution = "Chase", Type = AccountType.Brokerage, IsRainyDayFund = true, Notes = "Treasury bills bought through the brokerage" };
         var wealthfront = new Account { Name = "Wealthfront", Institution = "Wealthfront", Type = AccountType.HighYieldSavings, IsRainyDayFund = true };
         var fidelityHsa = new Account { Name = "Fidelity HSA", Institution = "Fidelity", Type = AccountType.Hsa };
         var inspiraHsa = new Account { Name = "Inspira HSA (employer)", Institution = "Inspira", Type = AccountType.Hsa };
@@ -140,7 +140,7 @@ public static class DevSeed
             new CategoryRule { Pattern = "PAYMENT THANK YOU", MarkAsTransfer = true, Priority = 1 });
         db.Goals.AddRange(
             new Goal { Name = "Net worth +$25K this year", Kind = GoalKind.Financial, Metric = GoalMetric.NetWorth, StartValue = 120_000m, TargetAmount = 145_000m, StartDate = new(2026, 1, 1), EndDate = new(2026, 12, 31) },
-            new Goal { Name = "Max the HSA", Kind = GoalKind.Financial, Metric = GoalMetric.HsaContributed, TargetAmount = 8_020.83m, StartDate = new(2026, 1, 1), EndDate = new(2026, 12, 31) },
+            new Goal { Name = "Max the HSA", Kind = GoalKind.Financial, Metric = GoalMetric.AccountTypeContributions, AccountType = AccountType.Hsa, TargetAmount = 8_020.83m, StartDate = new(2026, 1, 1), EndDate = new(2026, 12, 31) },
             new Goal { Name = "Rainy-day fund to $30K", Kind = GoalKind.Financial, Metric = GoalMetric.AccountBalances, StartValue = 18_000m, TargetAmount = 30_000m, StartDate = new(2026, 1, 1), EndDate = new(2027, 6, 30), AccountIds = $"{tBill.Id},{wealthfront.Id}" },
             new Goal { Name = "Restaurants under $6K", Kind = GoalKind.Financial, Metric = GoalMetric.CategoryOutflow, CategoryId = restaurants.Id, TargetAmount = 6_000m, LowerIsBetter = true, StartDate = new(2026, 1, 1), EndDate = new(2026, 12, 31) },
             new Goal { Name = "Read 12 books", Kind = GoalKind.NonFinancial, Status = GoalStatus.InProgress, StartDate = new(2026, 1, 1), EndDate = new(2026, 12, 31) });
@@ -179,11 +179,83 @@ public static class DevSeed
             new IncomeReceipt { IncomeSource = db.IncomeSources.Local.First(s => s.Name == "Chroma"), Date = new(2026, 3, 15), Amount = 4_000m },
             new IncomeReceipt { IncomeSource = db.IncomeSources.Local.First(s => s.Name == "Alphanomix"), Date = new(2026, 6, 30), Amount = 6_500m });
 
+        // Starting balances for every account on Jan 1 (so each has a history), then September statement snapshots for a few.
         db.AccountBalances.AddRange(
-            new AccountBalance { Account = pnc, AsOf = new(2026, 9, 1), Balance = 2_450m },
-            new AccountBalance { Account = automatedBills, AsOf = new(2026, 9, 1), Balance = 610m },
-            new AccountBalance { Account = chaseMain, AsOf = new(2026, 9, 1), Balance = 3_200m });
+            new AccountBalance { Account = pnc, AsOf = new(2026, 1, 1), Balance = 2_300m },
+            new AccountBalance { Account = premierSavings, AsOf = new(2026, 1, 1), Balance = 1_150m },
+            new AccountBalance { Account = chaseMain, AsOf = new(2026, 1, 1), Balance = 2_900m },
+            new AccountBalance { Account = automatedBills, AsOf = new(2026, 1, 1), Balance = 540m },
+            new AccountBalance { Account = tBill, AsOf = new(2026, 1, 1), Balance = 12_000m },
+            new AccountBalance { Account = wealthfront, AsOf = new(2026, 1, 1), Balance = 6_000m },
+            new AccountBalance { Account = fidelityHsa, AsOf = new(2026, 1, 1), Balance = 4_800m },
+            new AccountBalance { Account = inspiraHsa, AsOf = new(2026, 1, 1), Balance = 1_100m },
+            new AccountBalance { Account = brokerage, AsOf = new(2026, 1, 1), Balance = 0m },
+            new AccountBalance { Account = pnc, AsOf = new(2026, 8, 31), Balance = 2_450m },
+            new AccountBalance { Account = automatedBills, AsOf = new(2026, 8, 31), Balance = 610m },
+            new AccountBalance { Account = chaseMain, AsOf = new(2026, 8, 31), Balance = 3_200m });
 
+        await db.SaveChangesAsync(ct);
+        await SeedTransactionsAsync(db, chaseMain, automatedBills, ct);
+    }
+
+    /// <summary>August and September bank activity: paychecks, bills, a few purchases, and the monthly transfer to the bills account entered by hand and reconciled with the bank's line.</summary>
+    private static async Task SeedTransactionsAsync(BudgetDbContext db, Account chaseMain, Account automatedBills, CancellationToken ct)
+    {
+        var cats = await db.Categories.ToDictionaryAsync(c => c.Name, ct);
+        var bills = await db.Bills.ToDictionaryAsync(b => b.Name, ct);
+        var batch = new ImportBatch { FileName = "seed-chase.csv", Format = ImportFormat.Csv, Profile = "chase-checking", ImportedAt = DateTime.Now, Account = chaseMain, RowCount = 0 };
+        db.ImportBatches.Add(batch);
+
+        Transaction Imported(Account acct, DateOnly date, decimal amount, string desc, string merchant, string? category = null, string? bill = null, bool transfer = false) => new()
+        {
+            Account = acct, Date = date, Amount = amount, Description = desc, Merchant = merchant, Origin = TransactionOrigin.Imported, ImportBatch = batch,
+            CategoryId = category is not null ? cats[category].Id : bill is not null ? bills[bill].CategoryId : null, BillId = bill is not null ? bills[bill].Id : null,
+            IsTransfer = transfer, ExternalId = $"seed:{acct.Name}:{date:yyyyMMdd}:{amount}:{desc}",
+        };
+
+        var lines = new List<Transaction>();
+        foreach (var (y, m) in new[] { (2026, 8), (2026, 9) })
+        {
+            var actual = m == 8 ? (Electric: 149.50m, Water: 61.00m) : (Electric: 151.20m, Water: 58.40m);
+            lines.AddRange(
+            [
+                Imported(chaseMain, new(y, m, 1), -2_100m, "MORTGAGE PMT PLACEHOLDER BANK", "Placeholder Bank", bill: "Mortgage"),
+                Imported(chaseMain, new(y, m, 4), 4_222.07m, "RIDGELINE PARTNERS PAYROLL", "Ridgeline Partners Payroll"),
+                Imported(chaseMain, new(y, m, 18), 4_222.07m, "RIDGELINE PARTNERS PAYROLL", "Ridgeline Partners Payroll"),
+                Imported(chaseMain, new(y, m, 5), -250m, "AMEX LOAN PAYMENT", "Amex Loan", bill: "Amex loan"),
+                Imported(chaseMain, new(y, m, 9), -84.12m, "KROGER #0456", "Kroger", "Groceries"),
+                Imported(chaseMain, new(y, m, 13), -32.10m, "TST* PAPPYS SMOKEHOUSE ST LOUIS MO", "Pappys Smokehouse", "Restaurants"),
+                Imported(chaseMain, new(y, m, 21), -46.75m, "SHELL OIL 57444 ST LOUIS MO", "Shell Oil", "Gas"),
+                Imported(chaseMain, new(y, m, 2), -330m, "Online Transfer to CHK ...4412", "Online Transfer", transfer: true),
+                Imported(automatedBills, new(y, m, 2), 330m, "Online Transfer from CHK ...9901", "Online Transfer", transfer: true),
+                Imported(automatedBills, new(y, m, 6), -85m, "ATT PAYMENT", "Att Payment", bill: "AT&T"),
+                Imported(automatedBills, new(y, m, 18), -actual.Electric, "AMEREN MISSOURI", "Ameren Missouri", bill: "Electric"),
+                Imported(automatedBills, new(y, m, 20), -actual.Water, "CITY WATER UTILITY", "City Water Utility", bill: "Water"),
+                Imported(automatedBills, new(y, m, 20), -45m, "MSD SEWER", "Msd Sewer", bill: "Sewer"),
+            ]);
+            // The same transfer, entered by hand on the 1st (two-sided) and reconciled with the bank's lines on the 2nd.
+            var outRow = new Transaction { Account = chaseMain, Date = new(y, m, 1), Amount = -330m, Description = "Transfer out to Chase Automated Bills", Merchant = "Transfer out to Chase Automated Bills", Origin = TransactionOrigin.Manual, IsTransfer = true, IsManuallyCategorized = true, ExternalId = $"manual:seed:{y}{m}:out", CounterpartyAccount = automatedBills, Notes = "monthly bills" };
+            var inRow = new Transaction { Account = automatedBills, Date = new(y, m, 1), Amount = 330m, Description = "Transfer in from Chase Main", Merchant = "Transfer in from Chase Main", Origin = TransactionOrigin.Manual, IsTransfer = true, IsManuallyCategorized = true, ExternalId = $"manual:seed:{y}{m}:in", CounterpartyAccount = chaseMain, Notes = "monthly bills" };
+            lines.AddRange([outRow, inRow]);
+            // Bill actuals those lines represent.
+            foreach (var (name, amt) in new[] { ("Mortgage", 2_100m), ("Amex loan", 250m), ("AT&T", 85m), ("Electric", actual.Electric), ("Water", actual.Water), ("Sewer", 45m) })
+                db.BillPeriods.Add(new BillPeriod { BillId = bills[name].Id, Period = new(y, m, 1), ActualAmount = amt, Notes = "from import" });
+        }
+        db.Transactions.AddRange(lines);
+        batch.RowCount = lines.Count(l => l.Origin == TransactionOrigin.Imported); batch.ImportedCount = batch.RowCount;
+        await db.SaveChangesAsync(ct);
+
+        // Link the manual pairs to each other and reconcile each with the bank's line.
+        foreach (var (y, m) in new[] { (2026, 8), (2026, 9) })
+        {
+            var outRow = lines.Single(l => l.Origin == TransactionOrigin.Manual && l.Date == new DateOnly(y, m, 1) && l.Amount < 0);
+            var inRow = lines.Single(l => l.Origin == TransactionOrigin.Manual && l.Date == new DateOnly(y, m, 1) && l.Amount > 0);
+            outRow.LinkedTransactionId = inRow.Id; inRow.LinkedTransactionId = outRow.Id;
+            var bankOut = lines.Single(l => l.Origin == TransactionOrigin.Imported && l.Account == chaseMain && l.Date == new DateOnly(y, m, 2) && l.Amount == -330m);
+            var bankIn = lines.Single(l => l.Origin == TransactionOrigin.Imported && l.Account == automatedBills && l.Date == new DateOnly(y, m, 2) && l.Amount == 330m);
+            outRow.ReconciledWithId = bankOut.Id; bankOut.ReconciledWithId = outRow.Id; bankOut.CounterpartyAccount = automatedBills;
+            inRow.ReconciledWithId = bankIn.Id; bankIn.ReconciledWithId = inRow.Id; bankIn.CounterpartyAccount = chaseMain;
+        }
         await db.SaveChangesAsync(ct);
     }
 }

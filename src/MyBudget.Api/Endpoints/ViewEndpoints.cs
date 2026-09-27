@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using MyBudget.Contracts;
 using MyBudget.Data;
+using MyBudget.Domain;
 using MyBudget.Engines.Ledger;
 
 namespace MyBudget.Api.Endpoints;
@@ -33,9 +34,9 @@ public static class ViewEndpoints
         var accounts = await db.Accounts.ToDictionaryAsync(a => a.Id);
         var monthStart = new DateOnly(asOf.Year, asOf.Month, 1);
         var monthEnd = monthStart.AddMonths(1).AddDays(-1);
-        var transferred = await db.Transfers
-            .Where(t => t.Date >= monthStart && t.Date <= monthEnd)
-            .GroupBy(t => t.AccountId)
+        var transferred = await db.Transactions
+            .Where(t => t.AccountId != null && t.IsTransfer && t.Date >= monthStart && t.Date <= monthEnd && !(t.Origin == TransactionOrigin.Manual && t.ReconciledWithId != null))
+            .GroupBy(t => t.AccountId!.Value)
             .Select(g => new { AccountId = g.Key, Sum = g.Sum(t => t.Amount) })
             .ToDictionaryAsync(x => x.AccountId, x => x.Sum);
 

@@ -13,7 +13,7 @@ public sealed class AlertsService(BudgetDbContext db, InvestmentService investme
     public async Task<List<AlertDto>> ComputeAsync(DateOnly today, TransferNeedsDto needs, IReadOnlyList<UpcomingBillDto> upcoming, RewardsReportDto rewards, HsaPlanDto? hsa)
     {
         var alerts = new List<AlertDto>();
-        var accounts = await db.Accounts.Include(a => a.Balances).Where(a => a.IsActive).ToListAsync();
+        var accounts = await db.Accounts.Include(a => a.Balances).Include(a => a.Transactions).Where(a => a.IsActive).ToListAsync();
 
         // ALT-1: a bill is due soon and its funding account hasn't received this month's transfer need.
         foreach (var n in needs.Accounts.Where(n => n.LongShort < 0))
@@ -27,12 +27,12 @@ public sealed class AlertsService(BudgetDbContext db, InvestmentService investme
         // ALT-2: balance below what the next two weeks of bills (plus the minimum) need.
         foreach (var a in accounts)
         {
-            var latest = a.Balances.OrderByDescending(b => b.AsOf).FirstOrDefault();
-            if (latest is null) continue;
+            if (a.Balances.Count == 0 && a.Transactions.Count == 0) continue;
+            var cur = BalanceMath.Of(a, today);
             var due = upcoming.Where(b => b.FundingAccount == a.Name && b.DueDate <= today.AddDays(14)).Sum(b => b.Amount);
-            if (due > 0 && latest.Balance < due + a.MinimumBalance)
-                alerts.Add(new("balance", AlertSeverity.Danger, $"{a.Name} balance {latest.Balance:C} won't cover {due:C} due in the next 14 days",
-                    $"Keep {a.MinimumBalance:C} minimum; short by {due + a.MinimumBalance - latest.Balance:C} (balance as of {latest.AsOf:MMM d}).", "accounts"));
+            if (due > 0 && cur.Balance < due + a.MinimumBalance)
+                alerts.Add(new("balance", AlertSeverity.Danger, $"{a.Name} balance {cur.Balance:C} won't cover {due:C} due in the next 14 days",
+                    $"Keep {a.MinimumBalance:C} minimum; short by {due + a.MinimumBalance - cur.Balance:C} ({cur.Detail}).", "accounts"));
         }
 
         // ALT-3: rewards goals short or thresholds behind pace.
@@ -86,8 +86,8 @@ public sealed class AlertsService(BudgetDbContext db, InvestmentService investme
         var billsMonthly = bills.Sum(b => SinkingFund.MonthlyAccrual(b, today).Monthly);
         var planned = await db.Categories.Where(c => c.IsActive && c.PlannedMonthly != null).SumAsync(c => c.PlannedMonthly!.Value);
         var monthly = Math.Round(billsMonthly + planned, 2);
-        var marked = await db.Accounts.Include(a => a.Balances).Where(a => a.IsActive && a.IsRainyDayFund).ToListAsync();
-        var balance = marked.Sum(a => a.Balances.OrderByDescending(b => b.AsOf).FirstOrDefault()?.Balance ?? 0m);
+        var marked = await db.Accounts.Include(a => a.Balances).Include(a => a.Transactions).Where(a => a.IsActive && a.IsRainyDayFund).ToListAsync();
+        var balance = marked.Sum(a => BalanceMath.Of(a, today).Balance);
         var months = monthly == 0 ? 0 : Math.Round(balance / monthly, 1);
         var low = 3 * monthly; var comfort = Math.Round(low * 1.25m, 2); var high = 6 * monthly;
         var status = marked.Count == 0 || balance < low ? "Low" : balance < comfort ? "Marginal" : "Healthy";

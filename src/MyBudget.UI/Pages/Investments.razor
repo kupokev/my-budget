@@ -16,6 +16,19 @@ else
         <span class="year-nav"><button class="secondary" type="button" @onclick="() => ChangeYear(year - 1)">‹</button><strong>@year</strong><button class="secondary" type="button" @onclick="() => ChangeYear(year + 1)">›</button></span>
         <span class="muted">Prices and dividends from Yahoo Finance's free chart data; anything it misses can be typed in.</span>
     </div>
+    <details class="panel">
+        <summary><strong>Import tax lots</strong> <span class="muted">from a brokerage "tax lots" export: one buy per lot with its acquisition date and unit cost</span></summary>
+        <div class="row" style="margin-top:8px">
+            <div class="field"><label>Into account</label><select @bind="lotAccountId">@foreach (var a in accounts.Where(a => a.IsActive)) { <option value="@a.Id">@Fmt.Label(a.Name, a.AccountNumber) (@MyBudget.Domain.AccountTypes.Display(a.Type))</option> }</select></div>
+            <div class="field"><label>File</label><InputFile OnChange="OnLotsFile" accept=".csv" /></div>
+        </div>
+        @if (lotResult is { } lr)
+        {
+            <p>@lr.HoldingsCreated new holdings, @lr.LotsImported lots imported, @lr.LotsAlreadyPresent already there, @lr.PricesRecorded prices recorded into @lr.AccountName: @string.Join(", ", lr.Tickers).</p>
+            @if (lr.Skipped.Count > 0) { <p class="muted">Skipped: @string.Join("; ", lr.Skipped)</p> }
+            <Warnings Items="lr.Warnings" />
+        }
+    </details>
     <Warnings Items="portfolio.Warnings" />
     @if (syncResults is { Count: > 0 })
     {
@@ -29,7 +42,7 @@ else
         <section class="panel tile"><h3>Realized @year</h3><p class="big"><Money Value="portfolio.RealizedShortTerm + portfolio.RealizedLongTerm" Signed="true" /></p><p class="muted">short <Money Value="portfolio.RealizedShortTerm" Signed="true" /> · long <Money Value="portfolio.RealizedLongTerm" Signed="true" /></p></section>
         @if (portfolio.Tax is { } tax)
         {
-            <section class="panel tile"><h3>Tax on gains (est.)</h3><p class="big"><Money Value="tax.Total" /></p><p class="muted">federal ST <Money Value="tax.ShortTermTax" /> at @tax.OrdinaryMarginalRate.ToString("P0") · LT <Money Value="tax.LongTermTax" /> · MO <Money Value="tax.MissouriTax" /></p><Steps Items="tax.Steps" /></section>
+            <section class="panel tile" title="Taxable accounts only; gains inside IRAs, 401(k)s and HSAs are not taxed as they happen (🛡 rows)"><h3>Tax on gains (est.)</h3><p class="big"><Money Value="tax.Total" /></p><p class="muted">federal ST <Money Value="tax.ShortTermTax" /> at @tax.OrdinaryMarginalRate.ToString("P0") · LT <Money Value="tax.LongTermTax" /> · MO <Money Value="tax.MissouriTax" /></p><Steps Items="tax.Steps" /></section>
         }
     </div>
 
@@ -40,7 +53,7 @@ else
             @foreach (var p in portfolio.Positions)
             {
                 <tr class="@(open == p.Holding.Id ? "editing" : "")">
-                    <td><strong>@p.Holding.Ticker</strong> <span class="muted">@p.Holding.Name</span></td><td>@p.Holding.AccountName</td>
+                    <td><strong>@p.Holding.Ticker</strong> <span class="muted">@p.Holding.Name</span></td><td>@p.Holding.AccountName @(p.TaxAdvantaged ? "🛡" : "")</td>
                     <td class="money">@p.Shares.ToString("0.####")</td><td class="money" title="@Fmt.Date(p.PriceDate)">@Fmt.Money(p.Price)</td>
                     <td class="money">@Fmt.Money(p.MarketValue)</td><td><Money Value="p.CostBasis" /></td><td>@if (p.UnrealizedGain is { } u) { <Money Value="u" Signed="true" /> }</td><td><Money Value="p.DividendsThisYear" /></td>
                     <td>@(p.Holding.Drip ? "on" : "")</td>
@@ -109,16 +122,16 @@ else
             <div class="row">
                 <div class="field"><label>Ticker</label><input type="text" @bind="h.Ticker" /></div>
                 <div class="field grow"><label>Name</label><input type="text" @bind="h.Name" /></div>
-                <div class="field"><label>Account</label><select @bind="h.AccountId">@foreach (var a in accounts.Where(a => a.IsActive)) { <option value="@a.Id">@a.Name</option> }</select></div>
+                <div class="field"><label>Account</label><select @bind="h.AccountId">@foreach (var a in accounts.Where(a => a.IsActive)) { <option value="@a.Id">@Fmt.Label(a.Name, a.AccountNumber) (@MyBudget.Domain.AccountTypes.Display(a.Type))</option> }</select></div>
                 <div class="field"><label class="inline"><input type="checkbox" @bind="h.Drip" /> DRIP (reinvest dividends)</label></div>
                 <div class="field"><label class="inline"><input type="checkbox" @bind="h.IsActive" /> Active</label></div>
             </div>
             <div class="field"><label>Notes</label><input type="text" @bind="h.Notes" /></div>
-            <div class="toolbar">
-                <button type="button" @onclick="SaveHolding">Save</button>
-                <button class="secondary" type="button" @onclick="() => editing = null">Cancel</button>
-                @if (h.Id != 0) { <button class="secondary danger" type="button" @onclick="DeleteHolding">Delete</button> }
-            </div>
+            <div class="actions-row">
+                    @if (h.Id != 0) { <button class="link danger" type="button" @onclick="DeleteHolding">Delete</button> }
+                    <button class="secondary" type="button" @onclick="() => editing = null">Cancel</button>
+                    <button type="button" @onclick="SaveHolding">Save</button>
+                </div>
         </section>
     }
 }
@@ -133,6 +146,8 @@ else
     private DividendDto newDividend = new() { ExDate = DateOnly.FromDateTime(DateTime.Today) };
     private decimal manualPrice;
     private bool syncing;
+    private int lotAccountId;
+    private LotImportResultDto? lotResult;
     private List<MarketSyncResultDto>? syncResults;
     private string? error;
 
@@ -140,7 +155,12 @@ else
 
     private async Task Load()
     {
-        try { accounts ??= await Api.GetAccountsAsync(); portfolio = await Api.GetPortfolioAsync(year); }
+        try
+        {
+            accounts ??= await Api.GetAccountsAsync();
+            if (lotAccountId == 0) lotAccountId = accounts.FirstOrDefault(a => a.Type is AccountType.Brokerage or AccountType.TraditionalIra or AccountType.RothIra)?.Id ?? accounts.FirstOrDefault()?.Id ?? 0;
+            portfolio = await Api.GetPortfolioAsync(year);
+        }
         catch (Exception ex) { error = ex.Message; }
     }
 
@@ -156,6 +176,18 @@ else
     private async Task DeleteHolding()
     {
         try { await Api.DeleteHoldingAsync(editing!.Id); editing = null; await Load(); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task OnLotsFile(InputFileChangeEventArgs e)
+    {
+        error = null; lotResult = null;
+        try
+        {
+            await using var stream = e.File.OpenReadStream(20 * 1024 * 1024);
+            lotResult = await Api.ImportLotsAsync(e.File.Name, stream, lotAccountId);
+            await Load();
+        }
         catch (Exception ex) { error = ex.Message; }
     }
 

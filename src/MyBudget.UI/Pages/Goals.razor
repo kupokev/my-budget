@@ -19,7 +19,7 @@ else
             @foreach (var p in progress)
             {
                 <tr title="@p.Formula">
-                    <td>@p.Goal.Name <span class="muted">@(p.Goal.Kind == GoalKind.NonFinancial ? "" : Fmt.Words(p.Goal.Metric))</span></td>
+                    <td>@p.Goal.Name <span class="muted">@(p.Goal.Kind == GoalKind.NonFinancial ? "" : GoalMetrics.Display(p.Goal.Metric) + (p.Goal.Metric == GoalMetric.AccountTypeContributions && p.Goal.AccountType is { } at ? ": " + AccountTypes.Display(at) : ""))</span></td>
                     <td class="@(p.StatusText is "On Track" or "Exceeded" or "Done" ? "pos" : p.StatusText == "Not On Track" ? "neg" : "")">@p.StatusText</td>
                     @if (p.Goal.Kind == GoalKind.Financial)
                     {
@@ -51,11 +51,17 @@ else
             @if (g.Kind == GoalKind.Financial)
             {
                 <div class="row">
-                    <div class="field"><label>Current comes from</label><select @bind="g.Metric">@foreach (var m in Enum.GetValues<GoalMetric>()) { <option value="@m">@Fmt.Words(m)</option> }</select></div>
+                    <div class="field"><label>Current comes from</label><select @bind="g.Metric">@foreach (var m in Enum.GetValues<GoalMetric>()) { <option value="@m">@GoalMetrics.Display(m)</option> }</select></div>
                     <div class="field"><label>Target</label><input type="number" step="0.01" @bind="g.TargetAmount" /></div>
                     <div class="field"><label>Starting value <span class="muted">(where you were on the start date)</span></label><input type="number" step="0.01" @bind="g.StartValue" /></div>
                     <div class="field"><label class="inline"><input type="checkbox" @bind="g.LowerIsBetter" /> Lower is better</label></div>
                     @if (g.Metric == GoalMetric.Manual) { <div class="field"><label>Current</label><input type="number" step="0.01" @bind="g.ManualCurrent" /></div> }
+                    @if (g.Metric == GoalMetric.AccountTypeContributions)
+                    {
+                        <div class="field"><label>Account type</label><select @bind="g.AccountType">
+                            @foreach (var t in Enum.GetValues<MyBudget.Domain.AccountType>()) { <option value="@t">@AccountTypes.Display(t)</option> }
+                        </select></div>
+                    }
                     @if (g.Metric is GoalMetric.CategoryInflow or GoalMetric.CategoryOutflow) { <div class="field"><label>Category</label><select @bind="g.CategoryId"><option value="">—</option>@foreach (var c in categories) { <option value="@c.Id">@c.Name</option> }</select></div> }
                     @if (g.Metric == GoalMetric.LoanBalance) { <div class="field"><label>Loan</label><select @bind="g.LoanId"><option value="">—</option>@foreach (var l in loans) { <option value="@l.Id">@l.Name</option> }</select></div> }
                 </div>
@@ -71,11 +77,11 @@ else
                 <div class="field"><label>Status</label><select @bind="g.Status">@foreach (var s in Enum.GetValues<GoalStatus>()) { <option value="@s">@Fmt.Words(s)</option> }</select></div>
             }
             <div class="field"><label>Notes</label><input type="text" @bind="g.Notes" /></div>
-            <div class="toolbar">
-                <button type="button" @onclick="Save">Save</button>
-                <button class="secondary" type="button" @onclick="() => editing = null">Cancel</button>
-                @if (g.Id != 0) { <button class="secondary danger" type="button" @onclick="Delete">Delete</button> }
-            </div>
+            <div class="actions-row">
+                    @if (g.Id != 0) { <button class="link danger" type="button" @onclick="Delete">Delete</button> }
+                    <button class="secondary" type="button" @onclick="() => editing = null">Cancel</button>
+                    <button type="button" @onclick="Save">Save</button>
+                </div>
         </section>
     }
 }
@@ -103,7 +109,7 @@ else
     private void Edit(GoalDto g) => editing = new()
     {
         Id = g.Id, Name = g.Name, Kind = g.Kind, Metric = g.Metric, TargetAmount = g.TargetAmount, StartValue = g.StartValue, StartDate = g.StartDate, EndDate = g.EndDate,
-        ManualCurrent = g.ManualCurrent, AccountIds = g.AccountIds.ToList(), CategoryId = g.CategoryId, LoanId = g.LoanId, LowerIsBetter = g.LowerIsBetter, Status = g.Status, Notes = g.Notes, IsActive = g.IsActive,
+        ManualCurrent = g.ManualCurrent, AccountIds = g.AccountIds.ToList(), AccountType = g.AccountType, CategoryId = g.CategoryId, LoanId = g.LoanId, LowerIsBetter = g.LowerIsBetter, Status = g.Status, Notes = g.Notes, IsActive = g.IsActive,
     };
 
     private static void ToggleAccount(GoalDto g, int id, ChangeEventArgs e) { if (e.Value is true) { if (!g.AccountIds.Contains(id)) g.AccountIds.Add(id); } else g.AccountIds.Remove(id); }

@@ -26,6 +26,13 @@
 - **Ordinary-income context** for the tax estimate comes from the W-2 paycheck year estimate and
   the filing status on the W-4 (`OrdinaryContextAsync`), reused by the 1099 estimate.
 
+- **Tax-lot import:** a brokerage "tax lots" export (J.P. Morgan layout: Ticker, Quantity, Unit Cost,
+  Acquisition Date, Price, Pricing Date) becomes one holding per ticker and one Buy per lot in the
+  chosen account; cash and money-market rows are skipped; lots already present (same date, shares,
+  cost) are left alone; the day's price is recorded.
+- **Tax-advantaged accounts** (HSA, 401(k), Traditional IRA, Roth IRA) are excluded from realized
+  gains and the tax estimate; wash-sale warnings still show.
+
 ## Open Questions
 
 - Net-worth history values holdings at the latest price for every point (no price-history walk).

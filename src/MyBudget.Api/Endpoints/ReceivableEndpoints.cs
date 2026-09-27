@@ -49,6 +49,25 @@ public static class ReceivableEndpoints
         return api;
     }
 
+    /// <summary>Oldest unpaid months first, then one-off charges, then the month after the payment date for anything left.</summary>
+    internal static List<PaymentAllocation> AutoAllocate(Person p, decimal amount, DateOnly date)
+    {
+        var ledger = Ledger(p, date);
+        var allocations = new List<PaymentAllocation>();
+        var left = amount;
+        foreach (var r in ledger.Periods.OrderBy(r => r.Period))
+        {
+            if (left <= 0) break;
+            var owed = r.Expected - r.Paid;
+            if (owed <= 0) continue;
+            var take = Math.Min(left, owed);
+            allocations.Add(new PaymentAllocation { Period = r.Period, Amount = take }); left -= take;
+        }
+        if (left > 0 && ledger.OneOffBalance > 0) { var take = Math.Min(left, ledger.OneOffBalance); allocations.Add(new PaymentAllocation { Period = null, Amount = take }); left -= take; }
+        if (left > 0) allocations.Add(new PaymentAllocation { Period = new DateOnly(date.Year, date.Month, 1).AddMonths(1), Amount = left });
+        return allocations;
+    }
+
     internal static PersonLedgerDto Ledger(Person p, DateOnly today)
     {
         var steps = new List<string>();
@@ -64,8 +83,9 @@ public static class ReceivableEndpoints
         decimal running = 0;
         for (var period = new DateOnly(first.Year, first.Month, 1); period <= last; period = period.AddMonths(1))
         {
-            var expectedParts = active.Where(o => o.StartPeriod <= period && (o.EndPeriod is null || o.EndPeriod >= period))
-                .Select(o => (o.Description, Amount: o.BillId is not null && o.Bill is not null ? Math.Round(o.Bill.ProjectedAmount * o.ShareOfBill, 2) : o.MonthlyAmount ?? 0m)).ToList();
+            var expectedParts = active.Where(o => o.DueIn(period))
+                .Select(o => (Description: o.EveryMonths > 1 ? $"{o.Description} ({o.Cadence})" : o.Description,
+                              Amount: o.BillId is not null && o.Bill is not null ? Math.Round(o.Bill.ProjectedAmount * o.ShareOfBill, 2) : o.MonthlyAmount ?? 0m)).ToList();
             var expected = expectedParts.Sum(x => x.Amount);
             var paid = p.Payments.SelectMany(x => x.Allocations).Where(a => a.Period == period).Sum(a => a.Amount);
             running += paid - expected;
@@ -90,7 +110,7 @@ public static class ReceivableEndpoints
     private static PersonDto ToDto(Person p) => new()
     {
         Id = p.Id, Name = p.Name, Notes = p.Notes, IsActive = p.IsActive,
-        Obligations = p.Obligations.OrderBy(o => o.StartPeriod).Select(o => new ObligationDto { Id = o.Id, Description = o.Description, MonthlyAmount = o.MonthlyAmount, BillId = o.BillId, ShareOfBill = o.ShareOfBill, StartPeriod = o.StartPeriod, EndPeriod = o.EndPeriod, IsActive = o.IsActive }).ToList(),
+        Obligations = p.Obligations.OrderBy(o => o.StartPeriod).Select(o => new ObligationDto { Id = o.Id, Description = o.Description, MonthlyAmount = o.MonthlyAmount, BillId = o.BillId, ShareOfBill = o.ShareOfBill, StartPeriod = o.StartPeriod, EndPeriod = o.EndPeriod, EveryMonths = o.EveryMonths, IsActive = o.IsActive }).ToList(),
         Charges = p.Charges.OrderByDescending(c => c.Date).Select(c => new ReceivableChargeDto { Id = c.Id, Date = c.Date, Amount = c.Amount, Description = c.Description }).ToList(),
         Payments = p.Payments.OrderByDescending(x => x.Date).Select(x => new ReceivablePaymentDto { Id = x.Id, Date = x.Date, Amount = x.Amount, Notes = x.Notes, Allocations = x.Allocations.OrderBy(a => a.Period).Select(a => new PaymentAllocationDto { Period = a.Period, Amount = a.Amount }).ToList() }).ToList(),
     };
@@ -102,7 +122,8 @@ public static class ReceivableEndpoints
         e.Obligations.AddRange(d.Obligations.Where(o => !string.IsNullOrWhiteSpace(o.Description)).Select(o => new Obligation
         {
             Description = o.Description.Trim(), MonthlyAmount = o.BillId is null ? o.MonthlyAmount : null, BillId = o.BillId, ShareOfBill = o.ShareOfBill <= 0 ? 1m : o.ShareOfBill,
-            StartPeriod = new DateOnly(o.StartPeriod.Year, o.StartPeriod.Month, 1), EndPeriod = o.EndPeriod is { } ep ? new DateOnly(ep.Year, ep.Month, 1) : null, IsActive = o.IsActive,
+            StartPeriod = new DateOnly(o.StartPeriod.Year, o.StartPeriod.Month, 1), EndPeriod = o.EndPeriod is { } ep ? new DateOnly(ep.Year, ep.Month, 1) : null,
+            EveryMonths = o.EveryMonths <= 0 ? 1 : o.EveryMonths, IsActive = o.IsActive,
         }));
         e.Charges.Clear();
         e.Charges.AddRange(d.Charges.Where(c => !string.IsNullOrWhiteSpace(c.Description)).Select(c => new ReceivableCharge { Date = c.Date, Amount = c.Amount, Description = c.Description.Trim() }));

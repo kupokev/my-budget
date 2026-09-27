@@ -47,7 +47,7 @@ public sealed class AiTools(BudgetDbContext db, PaycheckService paychecks, Inves
             "spend_by_category" => await SpendingEndpoints.Summary(db, Int("year", today.Year), Int("month", today.Month)),
             "account_balances" => new
             {
-                accounts = (await db.Accounts.Include(a => a.Balances).Where(a => a.IsActive).ToListAsync()).Select(a => new { a.Name, a.Type, balance = a.Balances.OrderByDescending(b => b.AsOf).FirstOrDefault()?.Balance, asOf = a.Balances.OrderByDescending(b => b.AsOf).FirstOrDefault()?.AsOf }),
+                accounts = (await db.Accounts.Include(a => a.Balances).Include(a => a.Transactions).Where(a => a.IsActive).ToListAsync()).Select(a => { var c = BalanceMath.Of(a, today); return new { a.Name, a.Type, balance = c.Balance, detail = c.Detail }; }),
                 cards = (await db.Cards.Include(c => c.Balances).Where(c => c.IsActive).ToListAsync()).Select(c => new { c.Name, balance = c.Balances.OrderByDescending(b => b.AsOf).FirstOrDefault()?.Balance, asOf = c.Balances.OrderByDescending(b => b.AsOf).FirstOrDefault()?.AsOf }),
             },
             "upcoming_bills" => await BillEndpoints.Upcoming(db, today, Math.Clamp(Int("days", 14), 1, 90)),

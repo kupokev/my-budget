@@ -11,9 +11,10 @@ public static class TransactionEndpoints
     {
         var g = api.MapGroup("/transactions");
 
-        g.MapGet("/", async (int? year, int? month, int? categoryId, bool? uncategorized, string? search, int? accountId, int? cardId, int? billId, int? limit, BudgetDbContext db) =>
+        g.MapGet("/", async (int? year, int? month, int? categoryId, bool? uncategorized, string? search, int? accountId, int? cardId, int? billId, int? limit, bool? unreconciled, BudgetDbContext db) =>
         {
             var q = Query(db);
+            if (unreconciled == true) q = q.Where(t => t.Origin == TransactionOrigin.Manual && t.ReconciledWithId == null);
             if (year is { } y) q = q.Where(t => t.Date.Year == y);
             if (month is { } m) q = q.Where(t => t.Date.Month == m);
             if (categoryId is { } c) q = q.Where(t => t.CategoryId == c);
@@ -31,6 +32,27 @@ public static class TransactionEndpoints
             if (t is null) return Results.NotFound();
             t.CategoryId = dto.CategoryId; t.BillId = dto.BillId; t.IsTransfer = dto.IsTransfer; t.Notes = dto.Notes; t.IsManuallyCategorized = true;
             if (t.BillId is { } b && t.CategoryId is null) t.CategoryId = (await db.Bills.FindAsync(b))?.CategoryId;
+            // Repayment from a person: create/replace/remove the receivable payment this line represents.
+            var existingPayment = t.ReceivablePaymentId is { } rp ? await db.ReceivablePayments.Include(x => x.Allocations).FirstOrDefaultAsync(x => x.Id == rp) : null;
+            if (dto.RepaymentFromPersonId is { } personId && t.Amount > 0)
+            {
+                if (existingPayment is not null && existingPayment.PersonId != personId) { db.ReceivablePayments.Remove(existingPayment); existingPayment = null; }
+                if (existingPayment is null)
+                {
+                    var person = await db.People.Include(p => p.Obligations).ThenInclude(o => o.Bill).Include(p => p.Charges).Include(p => p.Payments).ThenInclude(x => x.Allocations).FirstOrDefaultAsync(p => p.Id == personId);
+                    if (person is null) return Results.NotFound("Person not found.");
+                    var payment = new ReceivablePayment { PersonId = personId, Date = t.Date, Amount = t.Amount, Notes = $"from bank line: {t.Merchant ?? t.Description}" };
+                    payment.Allocations.AddRange(ReceivableEndpoints.AutoAllocate(person, t.Amount, t.Date));
+                    db.ReceivablePayments.Add(payment);
+                    await db.SaveChangesAsync();
+                    t.ReceivablePaymentId = payment.Id;
+                }
+                t.IsTransfer = true; // not income, not spending: it's money coming back
+            }
+            else if (existingPayment is not null)
+            {
+                db.ReceivablePayments.Remove(existingPayment); t.ReceivablePaymentId = null;
+            }
             CategoryRule? rule = null;
             if (dto.CreateRule)
             {
@@ -49,8 +71,49 @@ public static class TransactionEndpoints
             var t = await db.Transactions.FindAsync(id);
             if (t is null) return Results.NotFound();
             db.Transactions.Remove(t);
+            if (t.LinkedTransactionId is { } linked && await db.Transactions.FindAsync(linked) is { } mirror) db.Transactions.Remove(mirror);
+            if (t.ReconciledWithId is { } rec && await db.Transactions.FindAsync(rec) is { } partner) partner.ReconciledWithId = null;
+            if (t.ReceivablePaymentId is { } rpId && await db.ReceivablePayments.FindAsync(rpId) is { } rpay) db.ReceivablePayments.Remove(rpay);
             await db.SaveChangesAsync();
             await svc.SyncAsync([t]);
+            return Results.NoContent();
+        });
+
+        // Reconciliation: a manual row ↔ the imported line that is the same movement.
+        // Close matches only (within 20% or $10 of the amount, ±45 days) unless all=true.
+        g.MapGet("/{id:int}/reconcile-candidates", async (int id, bool? all, BudgetDbContext db) =>
+        {
+            var t = await db.Transactions.FindAsync(id);
+            if (t is null) return Results.NotFound();
+            var lo = t.Date.AddDays(-45); var hi = t.Date.AddDays(45);
+            var tolerance = Math.Max(10m, Math.Abs(t.Amount) * 0.2m);
+            var otherOrigin = t.Origin == TransactionOrigin.Manual ? TransactionOrigin.Imported : TransactionOrigin.Manual;
+            var list = await Query(db).Where(c => c.Origin == otherOrigin && c.ReconciledWithId == null && c.AccountId == t.AccountId && c.CardId == t.CardId && c.Date >= lo && c.Date <= hi && Math.Sign(c.Amount) == Math.Sign(t.Amount)).ToListAsync();
+            return Results.Ok(list.Select(c => new ReconcileCandidateDto(ToDto(c), Math.Abs(c.Date.DayNumber - t.Date.DayNumber), Math.Round(Math.Abs(c.Amount - t.Amount), 2)))
+                .Where(c => all == true || c.AmountDifference <= tolerance)
+                .OrderBy(c => c.AmountDifference).ThenBy(c => c.DaysApart).Take(25));
+        });
+
+        g.MapPost("/{id:int}/reconcile/{otherId:int}", async (int id, int otherId, BudgetDbContext db, ImportService svc) =>
+        {
+            var a = await db.Transactions.FindAsync(id); var b = await db.Transactions.FindAsync(otherId);
+            if (a is null || b is null) return Results.NotFound();
+            if (a.Origin == b.Origin) return Results.Problem("Reconcile a manual entry with an imported line, not two of the same kind.", statusCode: 400);
+            if (a.ReconciledWithId != null || b.ReconciledWithId != null) return Results.Problem("One of them is already reconciled; unlink it first.", statusCode: 400);
+            var (imported, manual) = a.Origin == TransactionOrigin.Imported ? (a, b) : (b, a);
+            ImportService.Link(imported, manual);
+            await db.SaveChangesAsync();
+            await svc.SyncAsync([imported]);
+            return Results.Ok(ToDto(await Query(db).FirstAsync(x => x.Id == id)));
+        });
+
+        g.MapDelete("/{id:int}/reconcile", async (int id, BudgetDbContext db) =>
+        {
+            var t = await db.Transactions.FindAsync(id);
+            if (t is null) return Results.NotFound();
+            if (t.ReconciledWithId is { } otherId && await db.Transactions.FindAsync(otherId) is { } other) other.ReconciledWithId = null;
+            t.ReconciledWithId = null;
+            await db.SaveChangesAsync();
             return Results.NoContent();
         });
 
@@ -85,10 +148,12 @@ public static class TransactionEndpoints
     }
 
     internal static IQueryable<Transaction> Query(BudgetDbContext db)
-        => db.Transactions.Include(t => t.Account).Include(t => t.Card).Include(t => t.Category).Include(t => t.Bill);
+        => db.Transactions.Include(t => t.Account).Include(t => t.Card).Include(t => t.Category).Include(t => t.Bill).Include(t => t.CounterpartyAccount).Include(t => t.ReconciledWith).Include(t => t.ReceivablePayment).ThenInclude(p => p!.Person);
 
     internal static TransactionDto ToDto(Transaction t) => new(t.Id, t.AccountId, t.CardId, t.Account?.Name ?? t.Card?.Name ?? "—", t.Date, t.PostedDate, t.Amount,
-        t.Description, t.Merchant, t.CategoryId, t.Category?.Name, t.BillId, t.Bill?.Name, t.IsTransfer, t.Notes, t.IsManuallyCategorized);
+        t.Description, t.Merchant, t.CategoryId, t.Category?.Name, t.BillId, t.Bill?.Name, t.IsTransfer, t.Notes, t.IsManuallyCategorized, t.Origin, t.CounterpartyAccount?.Name,
+        t.ReconciledWithId, t.ReconciledWith is { } r ? $"{r.Date:MMM d} {r.Amount:C} {(r.Merchant ?? r.Description)}" : null,
+        t.ReceivablePayment?.PersonId, t.ReceivablePayment?.Person?.Name);
 
     private static CategoryRuleDto ToDto(CategoryRule r) => new() { Id = r.Id, Pattern = r.Pattern, Match = r.Match, CategoryId = r.CategoryId, BillId = r.BillId, MarkAsTransfer = r.MarkAsTransfer, Priority = r.Priority, IsActive = r.IsActive };
 }

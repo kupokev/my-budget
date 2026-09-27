@@ -71,7 +71,7 @@ public static class ReportEndpoints
 
     internal static async Task<NetWorthDto> NetWorth(BudgetDbContext db, DateOnly asOf, bool history)
     {
-        var accounts = await db.Accounts.Include(a => a.Balances).Where(a => a.IsActive).ToListAsync();
+        var accounts = await db.Accounts.Include(a => a.Balances).Include(a => a.Transactions).Where(a => a.IsActive).ToListAsync();
         var cards = await db.Cards.Include(c => c.Balances).Where(c => c.IsActive).ToListAsync();
         var loans = await db.Loans.Include(l => l.Balances).Where(l => l.IsActive).ToListAsync();
 
@@ -102,7 +102,7 @@ public static class ReportEndpoints
             if (acct is null) continue;
             valuedAccounts.Add(acct.Id); assets += value; lines.Add(new(acct.Name + " (holdings)", "investments", value, priced));
         }
-        foreach (var a in accounts.Where(a => !valuedAccounts.Contains(a.Id))) { var (bal, d) = Latest(a.Balances, b => b.AsOf, b => b.Balance, asOf); assets += bal; lines.Add(new(a.Name, "account", bal, d)); }
+        foreach (var a in accounts.Where(a => !valuedAccounts.Contains(a.Id))) { var cur = BalanceMath.Of(a, asOf); assets += cur.Balance; lines.Add(new(a.Name, "account", cur.Balance, cur.SnapshotAsOf)); }
         foreach (var asset in await db.Assets.Include(x => x.Values).Where(x => x.IsActive).ToListAsync())
         {
             var (val, d) = Latest(asset.Values, v => v.AsOf, v => v.Value, asOf);
@@ -125,7 +125,7 @@ public static class ReportEndpoints
             {
                 var monthEnd = new DateOnly(asOf.Year, asOf.Month, 1).AddMonths(-i + 1).AddDays(-1);
                 if (monthEnd > asOf) monthEnd = asOf;
-                var a = accounts.Where(x => !valuedAccounts.Contains(x.Id)).Sum(x => Latest(x.Balances, b => b.AsOf, b => b.Balance, monthEnd).Item1)
+                var a = accounts.Where(x => !valuedAccounts.Contains(x.Id)).Sum(x => BalanceMath.Of(x, monthEnd).Balance)
                         + (await db.Assets.Include(x => x.Values).Where(x => x.IsActive).ToListAsync()).Sum(x => Latest(x.Values, v => v.AsOf, v => v.Value, monthEnd).Item1)
                         + lines.Where(l => l.Kind == "investments").Sum(l => l.Balance); // holdings valued at the latest price for every point (no price history walk)
                 var c = cards.Sum(x => Latest(x.Balances, b => b.AsOf, b => b.Balance, monthEnd).Item1);

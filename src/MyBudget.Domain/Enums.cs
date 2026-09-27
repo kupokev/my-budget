@@ -12,7 +12,29 @@ public enum PayFrequency
     Monthly,
 }
 
-public enum AccountType { Checking, Savings, HighYieldSavings, TreasuryBill, Hsa, Retirement401k, Ira, Brokerage, Crypto, Cash }
+/// <summary>
+/// Fixed list, because behaviour hangs off it: HSA accounts feed the HSA planner, tax-advantaged types are
+/// excluded from the gains-tax estimate, and brokerage-style accounts are valued from their holdings.
+/// Adding one means a value here plus a label in <see cref="AccountTypes.Display"/>.
+/// </summary>
+public enum AccountType { Checking, Savings, HighYieldSavings, Hsa, Retirement401k, TraditionalIra, RothIra, Brokerage, Crypto, Cash, Other }
+
+public static class AccountTypes
+{
+    /// <summary>Gains and dividends inside these are not taxed as they happen, so the portfolio's tax estimate skips them.</summary>
+    public static bool IsTaxAdvantaged(AccountType t) => t is AccountType.Hsa or AccountType.Retirement401k or AccountType.TraditionalIra or AccountType.RothIra;
+
+    /// <summary>How the type is written in the UI; the enum name is not shown anywhere.</summary>
+    public static string Display(AccountType t) => t switch
+    {
+        AccountType.HighYieldSavings => "High Yield Savings (HYSA)",
+        AccountType.Hsa => "Health Savings Account (HSA)",
+        AccountType.Retirement401k => "401(k)",
+        AccountType.TraditionalIra => "Traditional IRA",
+        AccountType.RothIra => "Roth IRA",
+        _ => t.ToString(),
+    };
+}
 
 /// <summary>How money is moved into an account to cover the bills funded from it (replaces the sheet's Monthly vs PPP columns).</summary>
 public enum TransferCadence { Monthly, PerPaycheck }

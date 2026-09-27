@@ -133,11 +133,11 @@ else
                 </tbody>
             </table>
             <button class="secondary" type="button" @onclick="() => rw.Thresholds.Add(new SpendThresholdDto())">Add threshold</button>
-            <div class="toolbar">
-                <button type="button" @onclick="SaveRewards">Save rewards</button>
-                <button class="secondary" type="button" @onclick="() => rewards = null">Close</button>
-                <span class="muted">A status threshold also needs a matching card-spend path on the program (Rewards → Programs).</span>
-            </div>
+            <div class="actions-row">
+                    <span class="muted push-left">A status threshold also needs a matching card-spend path on the program (Rewards → Programs).</span>
+                    <button class="secondary" type="button" @onclick="() => rewards = null">Close</button>
+                    <button type="button" @onclick="SaveRewards">Save rewards</button>
+                </div>
         </section>
     }
 
@@ -169,15 +169,15 @@ else
                     <div class="field"><label>Payment due on day</label><InputNumber @bind-Value="editing.DueDay" /></div>
                     <div class="field"><label>Paid from account</label><InputSelect @bind-Value="editing.PayingAccountId">
                         <option value="">—</option>
-                        @foreach (var a in accounts.Where(a => a.IsActive)) { <option value="@a.Id">@a.Name</option> }
+                        @foreach (var a in accounts.Where(a => a.IsActive)) { <option value="@a.Id">@Fmt.Label(a.Name, a.AccountNumber)</option> }
                     </InputSelect></div>
                     <div class="checks"><label class="inline"><InputCheckbox @bind-Value="editing.IsActive" /> Active</label></div>
                 </fieldset>
                 <div class="field full"><label>Notes</label><InputTextArea @bind-Value="editing.Notes" rows="2" /></div>
                 <div class="actions-row">
-                    <button type="submit">Save</button>
+                    @if (editing.Id != 0) { <button class="link danger" type="button" @onclick="DeleteEditing">Delete card</button> }
                     <button class="secondary" type="button" @onclick="() => editing = null">Cancel</button>
-                    @if (editing.Id != 0) { <button class="link danger push-right" type="button" @onclick="DeleteEditing">Delete card</button> }
+                    <button type="submit">Save</button>
                 </div>
             </EditForm>
         </section>

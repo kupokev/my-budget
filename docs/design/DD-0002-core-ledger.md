@@ -21,8 +21,8 @@ the app instead of the 2026 tab.
 | `SalaryRate` | Annual salary from an effective date (INC-2) | A raise is a new row; unique per (source, date) |
 | `PaySchedule` | Pay cadence from an effective date (INC-3) | Bi-weekly/semi-monthly/monthly; anchor pay date; semi-monthly days (31 = last); weekend → prior Friday flag. Effective-dated because 2026 switched 24 → 26 mid-year |
 | `Account` | Where money sits (ACC-1) | Type, min balance, transfer cadence (monthly / per paycheck), rainy-day flag, account number (ADR-0008) |
-| `AccountBalance` | Balance as of a date | Unique per (account, date); latest one shows in lists |
-| `Transfer` | Money moved into an account to fund its bills (ACC-3) | Summed per month for Long/Short |
+| `AccountBalance` | Balance snapshot as of a date (what the statement said) | Unique per (account, date). The balance shown anywhere = latest snapshot + transfers dated after it (`BalanceMath`), so recording a transfer moves both accounts immediately |
+| (transfers) | Manual transfers are `Transaction` rows with Origin = Manual and IsTransfer = true (DD-0005); summed per month for Long/Short | One table for every money movement |
 | `Card` | Credit card (CC-1) | APR + promo, statement/due day, limit, fee + month, paying account |
 | `CardBalance` | Statement/month-end balance (CC-3/4 later) | Unique per (card, date) |
 | `Category` | Spending bucket (BIL-8 later) | Bills carry one; imported transactions will too |

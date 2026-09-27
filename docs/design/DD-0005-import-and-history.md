@@ -33,7 +33,7 @@ with CSV export (RPT-2). No workbook importer: the decision was to import histor
 | Entity | Purpose |
 | --- | --- |
 | `ImportBatch` | One uploaded file: source, layout, counts, date range. Deleting it removes its lines |
-| `Transaction` | A line on an account or card. Signed amount, description, normalised merchant, category, matched bill, transfer flag, external id (unique per source), manual-categorization flag |
+| `Transaction` | A line on an account or card. Signed amount, description, normalised merchant, category, matched bill, transfer flag, external id (unique per source), manual-categorization flag, **origin** (Imported or Manual). Manual transfers between your accounts are two Manual rows linked by `LinkedTransactionId`. **Reconciliation:** on commit each imported line links (`ReconciledWithId`, both ways) to an unreconciled manual row on the same source with the same amount within 3 days, inheriting its transfer flag, counterparty, category and bill; a reconciled manual row no longer counts toward balances or transfer totals, so the pair counts once. Unreconciled manual rows are marked on the Transactions page and can be reconciled by hand from a candidate list (same source, same sign, ±45 days) or unlinked |
 | `CategoryRule` | Pattern (contains / starts-with / regex) → category, bill, transfer; priority order |
 | `Goal` | Financial (metric-driven) or non-financial (status); target, start value, dates, lower-is-better |
 
@@ -59,8 +59,9 @@ non-manual lines.
 - Spending = money out, non-transfer. Summary: this month vs last per category, YTD, average,
   uncategorized count; matrix: category × month; drill-down: merchants and lines.
 - Goal metrics: net worth (accounts − cards − loans from latest balances), selected account
-  balances, HSA contributed in the goal's year, 401(k) deferrals estimated from paychecks, category
-  inflow/outflow between the dates, loan balance, or manual. Prorated target = start + (target −
+  balances, contributions into an account type (HSA reads its own contribution records; every other
+  type sums money into accounts of that type between the dates), 401(k) deferrals estimated from
+  paychecks, category inflow/outflow between the dates, loan balance, or manual. Prorated target = start + (target −
   start) × elapsed/total days. Status: Done, Exceeded (reached before the end date), On Track,
   Not On Track; lower-is-better flips the comparisons.
 - Year over year: categories from transactions, bills from BillPeriod actuals, both by month.

@@ -122,6 +122,31 @@ public class LedgerEndpointTests : IClassFixture<ApiFixture>
     }
 
     [Fact]
+    public async Task Transfer_between_two_accounts_writes_both_sides_and_deletes_together()
+    {
+        var accounts = await _api.Get<List<AccountDto>>("api/accounts");
+        var main = accounts.Single(a => a.Name == "Chase Main");
+        var auto = accounts.Single(a => a.Name == "Chase Automated Bills");
+        var t = await _api.Post($"api/accounts/{main.Id}/transfers", new TransferDto { AccountId = main.Id, Date = new(2026, 9, 20), Amount = -330m, CounterpartyAccountId = auto.Id, Notes = "monthly bills" });
+        Assert.Equal(-330m, t.Amount);
+        Assert.Equal("Chase Automated Bills", t.CounterpartyName);
+        Assert.NotNull(t.LinkedTransferId);
+        var mirror = (await _api.Get<List<TransferDto>>($"api/accounts/{auto.Id}/transfers?year=2026&month=9")).Single(x => x.Id == t.LinkedTransferId);
+        Assert.Equal(330m, mirror.Amount);
+        Assert.Equal(main.Id, mirror.CounterpartyAccountId);
+        var lines = await _api.Get<List<TransactionDto>>($"api/transactions?year=2026&month=9&accountId={main.Id}");
+        var line = lines.Single(x => x.Id == t.Id);
+        Assert.True(line.IsTransfer);
+        Assert.Equal(TransactionOrigin.Manual, line.Origin);
+        Assert.Equal("Chase Automated Bills", line.CounterpartyName);
+        var after = await _api.Get<List<AccountDto>>("api/accounts");
+        Assert.Equal(main.LatestBalance - 330m, after.Single(a => a.Id == main.Id).LatestBalance);   // snapshot Sep 1 + transfer Sep 20
+        Assert.Equal(auto.LatestBalance + 330m, after.Single(a => a.Id == auto.Id).LatestBalance);
+        await _api.Client.DeleteAsync($"api/accounts/{main.Id}/transfers/{t.Id}");
+        Assert.DoesNotContain(await _api.Get<List<TransferDto>>($"api/accounts/{auto.Id}/transfers?year=2026&month=9"), x => x.Id == mirror.Id);
+    }
+
+    [Fact]
     public async Task Account_referenced_by_a_bill_cannot_be_deleted()
     {
         var accounts = await _api.Get<List<AccountDto>>("api/accounts");

@@ -11,13 +11,14 @@ public static partial class Merchants
     {
         var s = description.Trim();
         s = Prefixes().Replace(s, "");                  // SQ *, TST*, PAYPAL *, POS DEBIT, etc.
+        s = BankTails().Replace(s, " ");               // WEB ID: 123, PPD ID: 456, transaction#: 789, REF: …
         s = OrderCodes().Replace(s, " ");               // AMAZON.COM*2K4T9 → AMAZON.COM
         s = Phones().Replace(s, " ");                   // 877-8244858
         s = StoreNumbers().Replace(s, " ");             // #1234, store 0456, long digit runs
         s = Dates().Replace(s, " ");                    // 09/18, 09/18/26
         s = TrailingLocation().Replace(s, "");          // "... SAN FRANCISCO CA", "... ST LOUIS MO"
         s = Regex.Replace(s, @"[^\w&'\.\- ]", " ");
-        s = Regex.Replace(s, @"\s+", " ").Trim().Trim('-', '.', '*');
+        s = Regex.Replace(s, @"\s+", " ").Trim(' ', '-', '.', '*');
         if (s.Length == 0) return description.Trim();
         return TitleCase(s);
     }
@@ -35,6 +36,9 @@ public static partial class Merchants
 
     [GeneratedRegex(@"^(SQ \*|SQ\*|TST\*|TST \*|PAYPAL \*|PP\*|POS DEBIT |DEBIT CARD PURCHASE |CHECKCARD |PURCHASE AUTHORIZED ON \d\d/\d\d )", RegexOptions.IgnoreCase)]
     private static partial Regex Prefixes();
+
+    [GeneratedRegex(@"\b(WEB|PPD|CCD|ARC|TEL|CTX)\s+ID:\s*\S+|\btransaction#:\s*\d+|\bREF:\s*\S+|\bINFO:\s*\S+|\bIID:\s*\S+|\bTRN:\s*\S+|\bRECD:\s*\S+|\bABA/CONTR\s+BNK-\d+", RegexOptions.IgnoreCase)]
+    private static partial Regex BankTails();
 
     /// <summary>A star followed by an order/reference code containing a digit.</summary>
     [GeneratedRegex(@"\*\s*[A-Z0-9]*\d[A-Z0-9]*", RegexOptions.IgnoreCase)]

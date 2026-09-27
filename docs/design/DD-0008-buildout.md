@@ -19,8 +19,8 @@ then bills due and goals; per-category spending and status goals are left to the
 
 ## Receivables (DBT-2a–c)
 
-`Person` → `Obligation` (fixed monthly amount or a share of a bill's projected amount, with a
-start/end month), `ReceivableCharge` (one-offs), `ReceivablePayment` with `PaymentAllocation`s to
+`Person` → `Obligation` (fixed amount or a share of a bill's projected amount, due every N months from
+its start month: 1 monthly, 3 quarterly, 6 twice a year, 12 yearly, with an optional end month), `ReceivableCharge` (one-offs), `ReceivablePayment` with `PaymentAllocation`s to
 months or to the one-off balance. The ledger walks each month from the first obligation to the
 latest prepaid month: expected, paid, running balance, status (Paid / Partial / Missed / Due /
 Prepaid / Upcoming), then one-off charged vs paid, unallocated receipts, total owed. "Auto" on the

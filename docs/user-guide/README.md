@@ -5,6 +5,18 @@ account as rainy-day fund, reading the rewards progress view, etc. Written for t
 this app (not a general audience), so it can assume familiarity with the domain (HSA, DRIP,
 IHG/Hilton status) and focus on *this app's* specific workflow for each.
 
+## Starting empty instead of with sample data
+
+In Development the API seeds sample accounts, bills, cards and so on so every page has something to
+show. To start from nothing, run the API with the seed switched off:
+
+```
+Database__SkipDevSeed=true dotnet run --project src/MyBudget.Api --launch-profile http
+```
+
+(Reference tables for tax rules and limits are still loaded; only the sample data is skipped. The
+in-memory database resets on every restart either way.)
+
 ## Phase 1 basics
 
 - **Income:** add each employer/source. Salary history is one row per rate with its effective date.
@@ -16,7 +28,9 @@ IHG/Hilton status) and focus on *this app's* specific workflow for each.
   normal gross or the exact gross, and say whether fixed deductions shrink with it.
 - **Accounts:** one row per place money sits. "Funded from" on bills drives the transfer-needs
   panel at the bottom: expand an account to see each bill's monthly accrual and its formula.
-  Use "Balance / transfer" to record a balance snapshot or a transfer into the account; Long/Short
+  The double-arrow icon opens one Record form: a starting/current balance, a transfer in, or a
+  transfer out. For transfers, pick the other account (the matching entry is written there too and
+  the pair deletes together) or "Other" for money from or to outside. Long/Short on the Dashboard
   compares transfers this month to the monthly need.
 - **Bills:** the year grid is the old bill tab. Click a month cell to open that month's editor:
   type the actual and press Enter for the quick case, or also set this month's due date or expected
@@ -26,7 +40,7 @@ IHG/Hilton status) and focus on *this app's* specific workflow for each.
   plan ending in October) gets an End date on the bill, which zeroes later months automatically.
   Projected, Category, Due, Paid via, Funded from and Avg actual are hidden by default: use the
   Columns menu, or hover the bill name (projected shows in each due month's grey parentheses). The
-  Category dropdown filters the grid; categories themselves are managed under Admin → Settings. "Paid via" is the account or card that pays; "Funded from" is where the money really
+  Category dropdown filters the grid; categories themselves are managed under Admin → Categories. "Paid via" is the account or card that pays; "Funded from" is where the money really
   comes from (for a card-paid bill, the account that covers it).
 - **Cards:** the summary shows which bills sit on each card, their monthly total, the latest
   balance and utilization. "Balance" records a statement or month-end balance. "Yearly cost vs
@@ -85,13 +99,17 @@ IHG/Hilton status) and focus on *this app's* specific workflow for each.
   already imported are marked as duplicates and left out. A line matched to a bill sets that
   month's actual on the Bills grid; card lines feed the Rewards card-spend figures. Undo removes a
   whole file's lines.
-- **Transactions.** Browse by month or year, filter to uncategorized, search, edit a line's
-  category/bill/transfer. Tick "always" when saving to create a rule that files every line with
+- **Transactions.** Browse by month or year, filter to uncategorized or to entries that still need
+  reconciling, search, edit a line's category/bill/transfer. A transfer you typed on Accounts shows
+  here as "manual" and "unreconciled" until a statement import brings the bank's line for it; the
+  import links them automatically when amount and date (±3 days) match, or use "reconcile…" to pick
+  the line yourself. A reconciled pair counts once in balances. A deposit that is someone paying you back: edit it and pick the person under "Repayment from"; the payment lands on their Owed-to-me ledger (oldest months first) and the line stops counting as income. Tick "always" when saving to create a rule that files every line with
   that merchant the same way, now and in future imports. The Rules panel lists and edits them.
 - **Spending.** This month vs last, year to date, money in, uncategorized. Per-category table with
   drill-down to merchants and lines, and a month-over-month matrix.
 - **Goals.** Financial goals read their current value from a metric (net worth, chosen account
-  balances, HSA contributed, 401(k) deferrals, category totals, a loan balance) or a typed value.
+  balances, contributions into an account type such as HSA or Roth IRA, 401(k) deferrals, category
+  totals, a loan balance) or a typed value.
   The on-track target is prorated by date; the bar is progress and the tick is elapsed time.
   Non-financial goals just carry a status.
 - **Reports.** Year over year by category and by bill, net worth with 24 months of history, and
@@ -107,7 +125,8 @@ IHG/Hilton status) and focus on *this app's* specific workflow for each.
   shares held on the ex-date and, with DRIP on, become reinvest trades. Details shows lots, realized
   gains with short/long term, wash-sale warnings with the earliest safe repurchase date, and the
   year's estimated tax on gains.
-- **Owed to me.** One panel per person: month-by-month expected vs paid with Paid / Partial /
+- **Owed to me.** Obligations can repeat every month, quarter, four or six months, or yearly, counting
+  from their first-due month; months in between show nothing expected. One panel per person: month-by-month expected vs paid with Paid / Partial /
   Missed / Prepaid, one-off charges, payments applied to months (use Auto to fill the oldest first).
 - **Paycheck → 1099.** Log each 1099 payment received and each estimated payment made; the panel
   shows the set-aside percent, the tax breakdown with steps, and the remaining quarterly amounts.

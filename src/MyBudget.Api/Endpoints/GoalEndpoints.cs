@@ -94,15 +94,23 @@ public static class GoalEndpoints
             case GoalMetric.AccountBalances:
             {
                 var ids = (goal.AccountIds ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(int.Parse).ToList();
-                var accounts = await db.Accounts.Include(a => a.Balances).Where(a => ids.Contains(a.Id)).ToListAsync();
-                var sum = accounts.Sum(a => a.Balances.OrderByDescending(b => b.AsOf).FirstOrDefault()?.Balance ?? 0m);
-                return (sum, $"latest balances of {string.Join(", ", accounts.Select(a => a.Name))}");
+                var accounts = await db.Accounts.Include(a => a.Balances).Include(a => a.Transactions).Where(a => ids.Contains(a.Id)).ToListAsync();
+                var sum = accounts.Sum(a => BalanceMath.Of(a, today).Balance);
+                return (sum, $"current balances of {string.Join(", ", accounts.Select(a => a.Name))}");
             }
-            case GoalMetric.HsaContributed:
+            case GoalMetric.AccountTypeContributions:
             {
-                var year = goal.EndDate.Year;
-                var sum = await db.HsaYears.Where(h => h.Year == year).SelectMany(h => h.Contributions).SumAsync(c => c.Amount);
-                return (sum, $"HSA contributions recorded for {year}");
+                var type = goal.AccountType ?? Domain.AccountType.Hsa;
+                if (type == Domain.AccountType.Hsa)
+                {
+                    // The HSA page is where employer, payroll and direct contributions are recorded.
+                    var year = goal.EndDate.Year;
+                    var hsa = await db.HsaYears.Where(h => h.Year == year).SelectMany(h => h.Contributions).SumAsync(c => c.Amount);
+                    return (hsa, $"HSA contributions recorded for {year}");
+                }
+                var accountIds = await db.Accounts.Where(a => a.Type == type).Select(a => a.Id).ToListAsync();
+                var paidIn = await db.Transactions.Where(t => t.AccountId != null && accountIds.Contains(t.AccountId.Value) && t.Amount > 0 && t.Date >= goal.StartDate && t.Date <= goal.EndDate).SumAsync(t => t.Amount);
+                return (paidIn, $"money into {AccountTypes.Display(type)} accounts {goal.StartDate:MMM d} – {goal.EndDate:MMM d, yyyy}");
             }
             case GoalMetric.Retirement401kContributed:
             {
@@ -143,7 +151,7 @@ public static class GoalEndpoints
     private static GoalDto ToDto(Goal g) => new()
     {
         Id = g.Id, Name = g.Name, Kind = g.Kind, Metric = g.Metric, TargetAmount = g.TargetAmount, StartValue = g.StartValue, StartDate = g.StartDate, EndDate = g.EndDate,
-        ManualCurrent = g.ManualCurrent, AccountIds = (g.AccountIds ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(int.Parse).ToList(),
+        ManualCurrent = g.ManualCurrent, AccountIds = (g.AccountIds ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(int.Parse).ToList(), AccountType = g.AccountType,
         CategoryId = g.CategoryId, LoanId = g.LoanId, LowerIsBetter = g.LowerIsBetter, Status = g.Status, Notes = g.Notes, IsActive = g.IsActive,
     };
 
@@ -151,7 +159,7 @@ public static class GoalEndpoints
     {
         e.Name = d.Name.Trim(); e.Kind = d.Kind; e.Metric = d.Kind == GoalKind.NonFinancial ? GoalMetric.Manual : d.Metric; e.TargetAmount = d.TargetAmount; e.StartValue = d.StartValue;
         e.StartDate = d.StartDate; e.EndDate = d.EndDate < d.StartDate ? d.StartDate : d.EndDate; e.ManualCurrent = d.ManualCurrent;
-        e.AccountIds = d.AccountIds.Count == 0 ? null : string.Join(",", d.AccountIds); e.CategoryId = d.CategoryId; e.LoanId = d.LoanId;
+        e.AccountIds = d.AccountIds.Count == 0 ? null : string.Join(",", d.AccountIds); e.AccountType = d.Metric == GoalMetric.AccountTypeContributions ? d.AccountType ?? Domain.AccountType.Hsa : null; e.CategoryId = d.CategoryId; e.LoanId = d.LoanId;
         e.LowerIsBetter = d.LowerIsBetter; e.Status = d.Status; e.Notes = d.Notes; e.IsActive = d.IsActive;
     }
 }
