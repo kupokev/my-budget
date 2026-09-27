@@ -75,3 +75,31 @@ written for the paycheck engine, HSA planner, rewards optimizer, and investment 
 - ADR-0001: No paid account aggregation
 - ADR-0002: MAUI Blazor Hybrid for shared desktop/phone UI
 - ADR-0003: Local AI restricted to tool-calling
+
+
+## Desktop-first: the API runs in-process (2026-09-27, ADR-0010)
+
+The shape changed. The desktop app is the whole application: it starts an ASP.NET host inside its own
+process on a loopback port and serves the same endpoints against a SQLite file under the user's local
+data folder. There is no service to install and no database server.
+
+```
+MyBudget.Desktop (one process)
+  ├── Photino window  ──►  MyBudget.UI (Razor)  ──►  ApiClient (HTTP to 127.0.0.1:<ephemeral>)
+  └── BudgetApiHost   ──►  minimal APIs  ──►  EF Core  ──►  ~/.local/share/MyBudget/mybudget.db
+```
+
+`BudgetApiHost` holds the service registration and endpoint mapping that both entry points share:
+`MyBudget.Api`'s own `Program` (still a standalone executable, kept for the phone-sync server) and
+`LocalApi` in the desktop app. The port is taken from the OS at startup and the API key is generated
+per run, so neither is fixed or guessable.
+
+The HTTP hop was kept deliberately rather than refactoring the UI to call services directly. It costs
+almost nothing on loopback and it means the phone gets a working API rather than a port of one.
+
+Set `MYBUDGET_API_URL` and the desktop app talks to a remote API instead of starting its own, which
+is the path to a shared server when one exists.
+
+**Schema changes need a migration.** The file holds real data now, so `Database.MigrateAsync` runs at
+startup for any relational provider. `EnsureCreated` would silently stop matching the model and take
+the data with it. Tests still use the in-memory provider, which has no migrations and needs none.

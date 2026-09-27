@@ -1,6 +1,10 @@
 namespace MyBudget.Data;
 
-public enum DatabaseProvider { InMemory, PostgreSQL }
+/// <summary>
+/// Where the data lives. <see cref="Sqlite"/> is the desktop default: one file on this machine, no
+/// server. <see cref="PostgreSQL"/> is for the shared API a phone would sync against later.
+/// </summary>
+public enum DatabaseProvider { InMemory, PostgreSQL, Sqlite }
 
 /// <summary>Bound from the "Database" configuration section (ADR-0005).</summary>
 public sealed class DatabaseOptions

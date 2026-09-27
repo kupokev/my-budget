@@ -28,6 +28,8 @@ them as the design evolves, don't treat the original doc as authoritative once t
   numbers, not synthetic fixtures. If a number doesn't match a real stub, that's a bug.
 - **Auditability** — every calculated number must be traceable to its inputs and formula. Don't
   build a calculation whose reasoning can't be displayed.
+- **One machine, one file** — the desktop app hosts the API in-process against a SQLite file; there is
+  no server to run. A model change needs an EF migration, because the data in that file is real.
 - **No paid integrations** — no Plaid/SimpleFIN/aggregator, no paid market-data tier, no paid
   valuation API. Import is CSV/OFX statement files; market data is a free-tier API; home/vehicle
   value is manual entry. If a feature needs a paid service, it doesn't ship until that's revisited.
@@ -49,21 +51,23 @@ them as the design evolves, don't treat the original doc as authoritative once t
 | --- | --- |
 | UI | Razor class library; Photino.Blazor host on Linux desktop now, MAUI Android host later (ADR-0004) |
 | API | ASP.NET Core minimal APIs |
-| Data | EF Core: in-memory provider in dev, PostgreSQL (existing network server) in prod (ADR-0005) |
+| Data | EF Core: SQLite file on the desktop, in-memory in tests, PostgreSQL reserved for a future sync server (ADR-0010) |
 | Charts | FactFoundry.Blazor.Charts |
 | Styling | Hand-written CSS + QuickGrid, no component framework (ADR-0007) |
 | Auth | LAN-only, single API key, TLS in transit, no MFA (ADR-0006); full account numbers stored (ADR-0008) |
 | Import | CSV/OFX per institution |
 | Local AI | Ollama + Open WebUI (an instance you already run), tool-calling model |
-| Hosting | `dotnet publish` + systemd on a Linux server on the home network, no Docker |
+| Hosting | None. The desktop app hosts the API in-process on a loopback port (ADR-0010); `MyBudget.Api` stays runnable on its own for a future phone-sync server |
 
 ## Working on the code
 
 ```
 dotnet build                                   # whole solution (MyBudget.slnx)
 dotnet test                                    # engine + API tests, no database needed
-dotnet run --project src/MyBudget.Api --launch-profile http   # API on http://localhost:5210, in-memory DB, dev seed, key "dev"
-dotnet run --project src/MyBudget.Desktop      # Photino desktop app; MYBUDGET_API_URL / MYBUDGET_API_KEY override defaults
+./run.sh                                       # stop, build, launch the desktop app (use this; it guards against a stale UI assembly)
+dotnet run --project src/MyBudget.Desktop      # the app: hosts the API in-process against ~/.local/share/MyBudget/mybudget.db
+dotnet run --project src/MyBudget.Api --launch-profile http   # the API alone, in-memory + dev seed, key "dev" (for a future sync server)
+dotnet ef migrations add <Name> --project src/MyBudget.Data --startup-project src/MyBudget.Data   # after any model change
 ```
 
 Layout: `src/MyBudget.{Domain,Engines.Ledger,Engines.Paycheck,Engines.Hsa,Engines.Amortization,Engines.Rewards,Engines.Import,Engines.Investments,Contracts,Data,Api,UI,Desktop}`, `tests/MyBudget.{Engines,Api}.Tests`.

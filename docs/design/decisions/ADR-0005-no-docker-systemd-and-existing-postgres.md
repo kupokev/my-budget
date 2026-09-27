@@ -1,6 +1,6 @@
 # ADR-0005: No Docker; API on a Linux server under systemd, PostgreSQL for production, in-memory for dev
 
-> **Status:** Accepted
+> **Status:** Accepted; the hosting decision is superseded by ADR-0010 (SQLite in-process, desktop-first)
 > **Date:** 2026-09-26
 > **Deciders:** Kevin
 

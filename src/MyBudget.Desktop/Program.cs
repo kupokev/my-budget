@@ -11,13 +11,38 @@ if (OperatingSystem.IsLinux()
     Environment.SetEnvironmentVariable("GDK_BACKEND", "x11");
 }
 
-var builder = PhotinoBlazorAppBuilder.CreateDefault(args);
+// The API runs inside this process against a SQLite file under the user's data folder, so there is
+// nothing to host and nothing to start first. Point MYBUDGET_API_URL at a server to use a shared one
+// instead, which is how a phone would eventually talk to the same data.
+var remoteUrl = Environment.GetEnvironmentVariable("MYBUDGET_API_URL");
+MyBudget.Desktop.LocalApi? localApi = null;
+ApiClientOptions apiOptions;
 
-var apiOptions = new ApiClientOptions
+if (string.IsNullOrWhiteSpace(remoteUrl))
 {
-    BaseUrl = Environment.GetEnvironmentVariable("MYBUDGET_API_URL") ?? "http://localhost:5210",
-    ApiKey = Environment.GetEnvironmentVariable("MYBUDGET_API_KEY") ?? "dev",
-};
+    localApi = new MyBudget.Desktop.LocalApi();
+    try
+    {
+        await localApi.StartAsync();
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"Could not open the database at {MyBudget.Desktop.LocalApi.DatabasePath}: {ex.Message}");
+        return 1;
+    }
+    apiOptions = new ApiClientOptions { BaseUrl = localApi.BaseUrl, ApiKey = localApi.ApiKey };
+    Console.WriteLine($"MyBudget: {MyBudget.Desktop.LocalApi.DatabasePath}");
+}
+else
+{
+    apiOptions = new ApiClientOptions
+    {
+        BaseUrl = remoteUrl,
+        ApiKey = Environment.GetEnvironmentVariable("MYBUDGET_API_KEY") ?? "dev",
+    };
+}
+
+var builder = PhotinoBlazorAppBuilder.CreateDefault(args);
 builder.Services.AddMyBudgetUI(apiOptions);
 var fileSaver = new MyBudget.Desktop.PhotinoFileSaver();
 builder.Services.AddSingleton<MyBudget.UI.Services.IFileSaver>(fileSaver);
@@ -48,3 +73,6 @@ AppDomain.CurrentDomain.UnhandledException += (_, error) =>
 };
 
 app.Run();
+
+if (localApi is not null) await localApi.DisposeAsync();
+return 0;

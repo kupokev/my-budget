@@ -2,7 +2,7 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <RootNamespace>MyBudget.Desktop</RootNamespace>
-    <Description>Photino.Blazor desktop host for Linux (ADR-0004).</Description>
+    <Description>Photino.Blazor desktop host for Linux (ADR-0004). Hosts the API in-process against a local SQLite file.</Description>
     <StaticWebAssetProjectMode>Default</StaticWebAssetProjectMode>
   </PropertyGroup>
   <ItemGroup>
@@ -10,6 +10,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../MyBudget.UI/MyBudget.UI.csproj" />
+    <ProjectReference Include="../MyBudget.Api/MyBudget.Api.csproj" />
   </ItemGroup>
   <!-- Photino serves from a real wwwroot folder next to the binary. -->
   <Target Name="CopyWwwroot" AfterTargets="Build">

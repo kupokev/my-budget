@@ -21,6 +21,11 @@ public static class ServiceCollectionExtensions
                 case DatabaseProvider.InMemory:
                     db.UseInMemoryDatabase(options.Name);
                     break;
+                case DatabaseProvider.Sqlite:
+                    if (string.IsNullOrWhiteSpace(options.ConnectionString))
+                        throw new InvalidOperationException("Database:ConnectionString is required when Database:Provider is Sqlite.");
+                    db.UseSqlite(options.ConnectionString);
+                    break;
                 case DatabaseProvider.PostgreSQL:
                     if (string.IsNullOrWhiteSpace(options.ConnectionString))
                         throw new InvalidOperationException("Database:ConnectionString is required when Database:Provider is PostgreSQL.");
