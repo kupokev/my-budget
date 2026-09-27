@@ -179,3 +179,19 @@ input[type=search] { min-width: 200px; }
 details.heads-up > summary { cursor: pointer; }
 .alerts.compact { margin-top: 8px; }
 .alerts.compact .alert { padding: 4px 10px; font-size: 13px; }
+
+.tiles .tile { text-align: center; }
+.tiles .tile h3 a { color: inherit; text-decoration: none; border-bottom: 1px dotted var(--fg-muted); }
+.tiles .tile h3 a:hover { color: var(--accent); }
+
+/* density: least scrolling on first view */
+.two-up > .panel { flex: 1 1 calc(50% - 8px); min-width: 360px; }
+.compact-panel { padding: 10px 14px; }
+.compact-panel h2 { font-size: 14px; margin: 0 0 6px; }
+.compact-panel p.muted { margin: 4px 0 0; }
+.compact-panel .bar { width: 110px; }
+.tiles .tile { padding: 10px 14px; }
+.tiles .tile h3 { margin: 0 0 4px; font-size: 13px; }
+.tiles .tile .big { font-size: 20px; margin: 2px 0; }
+.content { padding: 14px 20px; }
+h1 { margin-bottom: 10px; }

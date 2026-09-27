@@ -2,7 +2,6 @@
 @inject ApiClient Api
 @using MyBudget.Domain
 
-<h1>Home</h1>
 <ErrorBanner @bind-Message="error" />
 
 @if (d is null)
@@ -27,54 +26,32 @@ else
     }
 
     <div class="row tiles">
-        <section class="panel tile"><h3>Spending this month</h3><p class="big"><Money Value="d.SpendingThisMonth" /></p><p class="muted">last month <Money Value="d.SpendingLastMonth" /> · <Money Value="d.SpendingThisMonth - d.SpendingLastMonth" Signed="true" />@(d.Uncategorized > 0 ? $" · {d.Uncategorized} uncategorized" : "")</p></section>
         <section class="panel tile"><h3>Net worth</h3><p class="big"><Money Value="d.NetWorth" Signed="true" /></p><p class="muted">@(d.NetWorthChange is null ? "" : "vs last month ")@if (d.NetWorthChange is { } nwc) { <Money Value="nwc" Signed="true" /> }</p></section>
+        <section class="panel tile"><h3><a href="spending">Spending this month</a></h3><p class="big"><Money Value="d.SpendingThisMonth" /></p><p class="muted">last month <Money Value="d.SpendingLastMonth" /> · <Money Value="d.SpendingThisMonth - d.SpendingLastMonth" Signed="true" />@(d.Uncategorized > 0 ? $" · {d.Uncategorized} uncategorized" : "")</p></section>
         <section class="panel tile"><h3>Next paycheck</h3>@if (d.NextPayDate is { } np) { <p class="big">@Fmt.Date(np.Date)</p><p class="muted">@np.IncomeSource @(np.ThirdCheckOfMonth ? "· third check this month" : "")</p> } else { <p class="muted">No pay schedule.</p> }</section>
         <section class="panel tile rainy @d.RainyDay.Status.ToLowerInvariant()"><h3>Rainy-day fund</h3><p class="big">@d.RainyDay.MonthsCovered.ToString("0.#") months</p><p class="muted" title="@d.RainyDay.ExpensesFormula"><Money Value="d.RainyDay.Balance" /> vs @Fmt.Money(d.RainyDay.LowTarget)–@Fmt.Money(d.RainyDay.HighTarget) · @d.RainyDay.Verdict</p></section>
     </div>
 
-    <div class="row">
-        <section class="panel grow">
+    <div class="row two-up">
+        <section class="panel grow compact-panel">
             <h2>Due in the next 14 days</h2>
             @if (d.UpcomingBills.Count == 0) { <p class="muted">Nothing due.</p> }
             else
             {
-                <table>
+                <table class="compact">
                     <thead><tr><th>Due</th><th>Bill</th><th class="money">Amount</th><th>Paid via</th><th>Funded from</th></tr></thead>
                     <tbody>@foreach (var b in d.UpcomingBills) { <tr><td>@Fmt.Date(b.DueDate)</td><td>@b.BillName @(b.IsAutopay ? "" : "✍")</td><td><Money Value="b.Amount" /></td><td>@b.PaidVia</td><td>@b.FundingAccount</td></tr> }</tbody>
                     <tfoot><tr><th></th><th>Total</th><th><Money Value="d.UpcomingBills.Sum(b => b.Amount)" /></th><th colspan="2"></th></tr></tfoot>
                 </table>
             }
         </section>
-        <section class="panel grow">
-            <h2>Where the money went</h2>
-            <table>
-                <thead><tr><th>Category</th><th class="money">This month</th><th class="money">Last month</th><th class="money">Change</th></tr></thead>
-                <tbody>@foreach (var c in d.TopCategories) { <tr><td>@c.Name</td><td><Money Value="c.ThisMonth" /></td><td><Money Value="c.LastMonth" /></td><td><span class="money @(c.Delta > 0 ? "neg" : c.Delta < 0 ? "pos" : "")">@(c.Delta > 0 ? "+" : "")@Fmt.Money(c.Delta)</span></td></tr> }</tbody>
-            </table>
-            <p class="muted"><a href="spending">Full spending view</a></p>
-        </section>
-    </div>
 
-    <div class="row">
-        <section class="panel grow">
-            <h2>Status goals</h2>
-            @if (d.Programs.Count == 0) { <p class="muted">No loyalty programs set up.</p> }
-            else
-            {
-                <table>
-                    <thead><tr><th>Program</th><th>Now</th><th>Target</th><th>Plan</th></tr></thead>
-                    <tbody>@foreach (var p in d.Programs) { <tr><td>@p.Name</td><td>@(p.CurrentTier ?? "—")</td><td>@(p.TargetTier ?? "—")</td><td class="@(p.TargetReached ? "pos" : p.HowReached.StartsWith("short") ? "neg" : "")">@p.HowReached</td></tr> }</tbody>
-                </table>
-            }
-            <p class="muted"><a href="rewards">Rewards</a></p>
-        </section>
-        <section class="panel grow">
+        <section class="panel grow compact-panel">
             <h2>Goals</h2>
             @if (d.Goals.Count == 0) { <p class="muted">No goals yet.</p> }
             else
             {
-                <table>
+                <table class="compact">
                     <thead><tr><th>Goal</th><th>Status</th><th>Progress</th></tr></thead>
                     <tbody>@foreach (var g in d.Goals) { <tr title="@g.Formula"><td>@g.Goal.Name</td><td class="@(g.StatusText is "On Track" or "Exceeded" or "Done" ? "pos" : g.StatusText == "Not On Track" ? "neg" : "")">@g.StatusText</td><td><div class="bar"><div class="bar-fill @(g.StatusText == "Not On Track" ? "bad" : "")" style="width:@((int)(g.ProgressFraction * 100))%"></div><div class="bar-mark" style="left:@((int)(g.ElapsedFraction * 100))%"></div></div></td></tr> }</tbody>
                 </table>
@@ -83,15 +60,16 @@ else
         </section>
     </div>
 
-    <section class="panel">
+    <div class="row two-up">
+    <section class="panel grow compact-panel">
         <h2>Transfer needs</h2>
-        <table>
+        <table class="compact">
             <thead><tr><th>Account</th><th class="money">Per month</th><th class="money">Per paycheck</th><th class="money">Moved this month</th><th class="money">Long / short</th></tr></thead>
             <tbody>@foreach (var n in d.Needs) { <tr><td>@n.AccountName <span class="muted">(@Fmt.Words(n.Cadence))</span></td><td><Money Value="n.MonthlyNeed" /></td><td><Money Value="n.PerPaycheckNeed" /></td><td><Money Value="n.TransferredThisMonth" /></td><td><Money Value="n.LongShort" Signed="true" /></td></tr> }</tbody>
         </table>
     </section>
 
-    <section class="panel">
+    <section class="panel grow compact-panel">
         <h2>This month in plain English</h2>
         @if (!d.AiEnabled) { <p class="muted">Local AI is off. Turn it on in the API's appsettings (Ai:Enabled, Ai:BaseUrl, Ai:Model) to get a narrative built from the same numbers above.</p> }
         else
@@ -104,6 +82,7 @@ else
             }
         }
     </section>
+    </div>
 }
 
 @code {

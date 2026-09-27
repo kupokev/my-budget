@@ -1,7 +1,6 @@
 @page "/cards"
 @inject ApiClient Api
 
-<h1>Cards</h1>
 <ErrorBanner @bind-Message="error" />
 
 @if (cards is null || summary is null || accounts is null)

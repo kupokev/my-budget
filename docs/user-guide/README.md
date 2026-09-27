@@ -32,7 +32,7 @@ IHG/Hilton status) and focus on *this app's* specific workflow for each.
   value" ranks cards by annual fee plus interest (if the latest balance were carried at the APR)
   against the rewards value recorded this year, worst first, so a card that costs more than it
   returns stands out.
-- **Home:** bills due in the next 14 days, the next pay date, and per-account transfer needs.
+- **Dashboard:** bills due in the next 14 days, the next pay date, and per-account transfer needs.
 
 ## Phase 2: calculators
 
@@ -98,7 +98,7 @@ IHG/Hilton status) and focus on *this app's* specific workflow for each.
 
 ## Phase 5: build-out
 
-- **Home** now leads with what needs attention (alerts with links), then spending, net worth, next
+- **Dashboard** (nav item, formerly Home) now leads with what needs attention (alerts with links), then spending, net worth, next
   paycheck, rainy-day months covered, bills due, top categories, status goals, goals, transfer
   needs, and, when local AI is on, a button that writes the month's summary from the same numbers.
 - **Investments.** Add a holding (ticker, brokerage account, DRIP on/off), enter buys and sells with

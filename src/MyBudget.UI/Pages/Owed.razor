@@ -1,7 +1,6 @@
 @page "/owed"
 @inject ApiClient Api
 
-<h1>Owed to me</h1>
 <ErrorBanner @bind-Message="error" />
 
 @if (ledgers is null || bills is null)

@@ -13,8 +13,9 @@ within 45 days (ALT-6); plus uncategorized transactions and unverified/missing t
 ## Home (HOME-1, full)
 
 `home/dashboard` assembles alerts, bills due, next paycheck, transfer needs, spending this vs last
-month with top categories, net worth and month change, rainy-day months covered, program status,
-goals, and (when enabled) the AI monthly narrative.
+month, net worth and month change, rainy-day months covered, goals, and (when enabled) the AI
+monthly narrative. The page shows tiles (net worth first, centered, spending tile links to Spending),
+then bills due and goals; per-category spending and status goals are left to their own pages.
 
 ## Receivables (DBT-2a–c)
 
