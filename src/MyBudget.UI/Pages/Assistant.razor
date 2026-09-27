@@ -12,7 +12,7 @@ else
     <section class="panel">
         @if (!status.Enabled)
         {
-            <p><strong>Local AI is off.</strong> It runs against your own Ollama instance and only ever calls fixed query functions, never the database. Turn it on in the API's appsettings: <code>Ai:Enabled</code>, <code>Ai:BaseUrl</code> (e.g. http://localhost:11434), <code>Ai:Model</code> (a tool-calling model such as llama3.1 or qwen2.5).</p>
+            <p><strong>Local AI is off.</strong> It runs against your own Ollama instance and only ever calls fixed query functions, never the database. Turn it on under <a href="settings">Admin → Settings</a> and point it at your model server. It needs a model that supports tool calling, such as llama3.1 or qwen2.5.</p>
         }
         else
         {
