@@ -27,7 +27,7 @@ else
                     <tr class="@(s.IsActive ? "" : "muted")">
                         <td>@s.Name</td>
                         <td>@Fmt.Words(s.Type)</td>
-                        <td>@Fmt.Money(rate?.AnnualAmount)</td>
+                        <td class="money">@Fmt.Money(rate?.AnnualAmount)</td>
                         <td>@(sched is null ? "—" : $"{Fmt.Words(sched.Frequency)} since {Fmt.Date(sched.EffectiveDate)}")@(s.EndDate is { } end ? $" · ended {Fmt.Date(end)}" : "")</td>
                         <td><button class="secondary" type="button" @onclick="() => Edit(s)">Edit</button></td>
                     </tr>

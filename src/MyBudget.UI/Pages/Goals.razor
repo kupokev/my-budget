@@ -24,7 +24,7 @@ else
                     @if (p.Goal.Kind == GoalKind.Financial)
                     {
                         <td><Money Value="p.Current" /></td><td><Money Value="p.ProratedTarget" /></td><td><Money Value="p.Goal.TargetAmount" /></td>
-                        <td>@(p.MissingAmount > 0 ? Fmt.Money(p.MissingAmount) : "")</td>
+                        <td class="money">@(p.MissingAmount > 0 ? Fmt.Money(p.MissingAmount) : "")</td>
                     }
                     else { <td colspan="4" class="muted">status only</td> }
                     <td><div class="bar"><div class="bar-fill @(p.StatusText == "Not On Track" ? "bad" : "")" style="width:@((int)(p.ProgressFraction * 100))%"></div><div class="bar-mark" style="left:@((int)(p.ElapsedFraction * 100))%"></div></div></td>

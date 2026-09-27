@@ -19,8 +19,8 @@ else
             <tr class="@(l.IsActive ? "" : "muted")">
                 <td>@l.Name <span class="muted">@l.Lender @l.AccountNumber</span></td><td>@Fmt.Words(l.Kind)</td>
                 <td class="money">@l.AnnualRatePercent.ToString("0.###")%</td>
-                <td>@Fmt.Money(l.ScheduledPayment)</td>
-                <td>@Fmt.Money(l.LatestBalance)</td><td>@Fmt.Date(l.LatestBalanceAsOf)</td>
+                <td class="money">@Fmt.Money(l.ScheduledPayment)</td>
+                <td class="money">@Fmt.Money(l.LatestBalance)</td><td>@Fmt.Date(l.LatestBalanceAsOf)</td>
                 <td class="actions">
                     <button class="secondary" type="button" @onclick="() => Project(l)">Projection</button>
                     <button class="secondary" type="button" @onclick="() => OpenBalance(l)">Balance</button>
@@ -47,29 +47,34 @@ else
     {
         <section class="panel">
             <h2>@(editing.Id == 0 ? "New loan" : editing.Name)</h2>
-            <EditForm Model="editing" OnValidSubmit="Save">
+            <EditForm Model="editing" OnValidSubmit="Save" class="form">
                 <DataAnnotationsValidator />
-                <div class="row">
+                <fieldset class="group">
+                    <legend>Loan</legend>
                     <div class="field"><label>Name</label><InputText @bind-Value="editing.Name" /><ValidationMessage For="() => editing.Name" /></div>
                     <div class="field"><label>Kind</label><InputSelect @bind-Value="editing.Kind">@foreach (var k in Enum.GetValues<LoanKind>()) { <option value="@k">@Fmt.Words(k)</option> }</InputSelect></div>
                     <div class="field"><label>Lender</label><InputText @bind-Value="editing.Lender" /></div>
                     <div class="field"><label>Loan / account #</label><InputText @bind-Value="editing.AccountNumber" /></div>
+                </fieldset>
+                <fieldset class="group">
+                    <legend>Terms</legend>
                     <div class="field"><label>Original principal</label><InputNumber @bind-Value="editing.OriginalPrincipal" step="0.01" /></div>
                     <div class="field"><label>Rate %</label><InputNumber @bind-Value="editing.AnnualRatePercent" step="0.001" /></div>
                     <div class="field"><label>Term (months)</label><InputNumber @bind-Value="editing.TermMonths" /></div>
-                    <div class="field"><label>Start</label><InputDate @bind-Value="editing.StartDate" /></div>
-                </div>
-                <div class="row">
+                    <div class="field"><label>First payment</label><InputDate @bind-Value="editing.StartDate" /></div>
                     <div class="field"><label>Scheduled payment <span class="muted">(blank = compute)</span></label><InputNumber @bind-Value="editing.ScheduledPayment" step="0.01" /></div>
                     <div class="field"><label>Extra principal / month</label><InputNumber @bind-Value="editing.ExtraMonthlyPayment" step="0.01" /></div>
-                    <div class="field"><label>Bill in the ledger</label><InputSelect @bind-Value="editing.BillId"><option value="">—</option>@foreach (var b in bills) { <option value="@b.Id">@b.Name</option> }</InputSelect></div>
-                    <div class="field"><label class="inline"><InputCheckbox @bind-Value="editing.IsActive" /> Active</label></div>
-                </div>
-                <div class="field"><label>Notes</label><InputTextArea @bind-Value="editing.Notes" rows="2" /></div>
-                <div class="toolbar">
+                </fieldset>
+                <fieldset class="group">
+                    <legend>In the ledger</legend>
+                    <div class="field"><label>Bill that carries the payment</label><InputSelect @bind-Value="editing.BillId"><option value="">—</option>@foreach (var b in bills) { <option value="@b.Id">@b.Name</option> }</InputSelect></div>
+                    <div class="checks"><label class="inline"><InputCheckbox @bind-Value="editing.IsActive" /> Active</label></div>
+                </fieldset>
+                <div class="field full"><label>Notes</label><InputTextArea @bind-Value="editing.Notes" rows="2" /></div>
+                <div class="actions-row">
                     <button type="submit">Save</button>
                     <button class="secondary" type="button" @onclick="() => editing = null">Cancel</button>
-                    @if (editing.Id != 0) { <button class="secondary danger" type="button" @onclick="DeleteEditing">Delete</button> }
+                    @if (editing.Id != 0) { <button class="link danger push-right" type="button" @onclick="DeleteEditing">Delete loan</button> }
                 </div>
             </EditForm>
         </section>

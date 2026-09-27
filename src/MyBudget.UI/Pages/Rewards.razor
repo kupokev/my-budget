@@ -114,7 +114,7 @@ else
                 <tbody>
                 @foreach (var b in report.Bills)
                 {
-                    <tr title="@b.Formula"><td>@b.BillName</td><td><Money Value="b.Monthly" /></td><td>@b.Recommendation</td><td><Money Value="b.CardValue" /></td><td>@(b.BankDiscount > 0 ? Fmt.Money(b.BankDiscount) : "")</td></tr>
+                    <tr title="@b.Formula"><td>@b.BillName</td><td><Money Value="b.Monthly" /></td><td>@b.Recommendation</td><td><Money Value="b.CardValue" /></td><td class="money">@(b.BankDiscount > 0 ? Fmt.Money(b.BankDiscount) : "")</td></tr>
                 }
                 </tbody>
             </table>

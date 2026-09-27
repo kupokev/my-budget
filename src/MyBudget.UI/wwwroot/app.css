@@ -67,7 +67,8 @@ h2 { font-size: 16px; margin: 20px 0 8px; }
 table { border-collapse: collapse; width: 100%; }
 th, td { padding: 6px 10px; border-bottom: 1px solid var(--border); text-align: left; }
 th { color: var(--fg-muted); font-weight: 600; font-size: 12px; border-bottom: 1px solid var(--accent-soft); }
-th:has(> .money), tfoot th:has(> .money) { text-align: right; }
+th:has(> .money), tfoot th:has(> .money), td:has(> .money:only-child), td:has(> .money:first-child:last-child) { text-align: right; }
+td.money, th.money { text-align: right; }
 tbody tr:hover td { background: var(--accent-soft); }
 
 button, .btn { background: var(--accent); color: var(--accent-fg); border: 0; border-radius: var(--radius); padding: 6px 12px; font: inherit; font-weight: 600; cursor: pointer; transition: filter .12s; }
@@ -251,3 +252,22 @@ table.grid .now-bottom { border-bottom: 2px solid var(--accent); border-radius: 
 table.grid tbody tr:hover td.now { background: color-mix(in srgb, var(--accent) 22%, transparent); }
 
 table.grid th.month-head { text-align: center; font-family: var(--font); }
+
+/* table icon actions */
+th.center, td.center { text-align: center; }
+.tick { color: var(--ok); font-weight: 700; }
+.actions.icons { white-space: nowrap; }
+.actions.icons button.link { font-size: 15px; padding: 0 5px; color: var(--fg-muted); }
+.actions.icons button.link:hover { color: var(--accent); text-decoration: none; }
+
+/* editor forms: grouped grid, even widths, checks together, notes full width, delete far right */
+.form fieldset.group { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px 18px; margin-bottom: 14px; padding: 10px 16px 14px; }
+.form fieldset.group legend { font-weight: 600; color: var(--accent); }
+.form .field { margin: 0; min-width: 0; }
+.form .field input, .form .field select, .form .field textarea, .form .field .masked-input { width: 100%; box-sizing: border-box; }
+.form .field .masked-input input { flex: 1; }
+.form .field label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.form .checks { grid-column: -2 / -1; grid-row: 1 / span 2; display: flex; flex-direction: column; gap: 10px; justify-self: end; align-self: start; padding: 22px 8px 0 0; white-space: nowrap; }
+.form .field.full { margin-bottom: 14px; }
+.form .field.full textarea { width: 100%; }
+.form .actions-row { display: flex; align-items: center; gap: 8px; }

@@ -3,7 +3,7 @@
 
 <ErrorBanner @bind-Message="error" />
 
-@if (accounts is null || needs is null)
+@if (accounts is null)
 {
     <p class="muted">Loading…</p>
 }
@@ -15,21 +15,24 @@ else
     </div>
 
     <table>
-        <thead><tr><th>Name</th><th>Type</th><th>Institution</th><th class="money">Min balance</th><th class="money">Latest balance</th><th>As of</th><th>Cadence</th><th></th></tr></thead>
+        <thead><tr><th>Name</th><th>Type</th><th>Institution</th><th class="money">Min balance</th><th class="money">Latest balance</th><th>As of</th><th class="money" title="Cash leaving this account this month: bills paid from it, plus bills on cards it pays">This month</th><th>Cadence</th><th class="center" title="Rainy-day fund">RDF</th><th class="center">Active</th><th></th></tr></thead>
         <tbody>
         @foreach (var a in accounts.Where(a => showInactive || a.IsActive))
         {
             <tr class="@(a.IsActive ? "" : "muted")">
-                <td>@a.Name @(a.IsRainyDayFund ? "☂" : "") <MaskedNumber Value="@a.AccountNumber" /></td>
+                <td>@a.Name <MaskedNumber Value="@a.AccountNumber" /></td>
                 <td>@Fmt.Words(a.Type)</td>
                 <td>@a.Institution</td>
                 <td><Money Value="a.MinimumBalance" /></td>
-                <td>@Fmt.Money(a.LatestBalance)</td>
+                <td class="money">@Fmt.Money(a.LatestBalance)</td>
                 <td>@Fmt.Date(a.LatestBalanceAsOf)</td>
+                <td class="money" title="@a.ThisMonthOutflowDetail">@(a.ThisMonthOutflow > 0 ? Fmt.Money(a.ThisMonthOutflow) : "")</td>
                 <td>@Fmt.Words(a.TransferCadence)</td>
-                <td class="actions">
-                    <button class="secondary" type="button" @onclick="() => Edit(a)">Edit</button>
-                    <button class="secondary" type="button" @onclick="() => OpenLedger(a)">Balance / transfer</button>
+                <td class="center">@if (a.IsRainyDayFund) { <span class="tick" title="Part of the rainy-day fund">✓</span> }</td>
+                <td class="center">@if (a.IsActive) { <span class="tick">✓</span> } else { <span class="muted">—</span> }</td>
+                <td class="actions icons">
+                    <button class="link" type="button" title="Edit account" @onclick="() => Edit(a)">✎</button>
+                    <button class="link" type="button" title="Balances and transfers" @onclick="() => OpenLedger(a)">⇄</button>
                 </td>
             </tr>
         }
@@ -40,29 +43,33 @@ else
     {
         <section class="panel">
             <h2>@(editing.Id == 0 ? "New account" : editing.Name)</h2>
-            <EditForm Model="editing" OnValidSubmit="Save">
+            <EditForm Model="editing" OnValidSubmit="Save" class="form">
                 <DataAnnotationsValidator />
-                <div class="row">
+                <fieldset class="group">
+                    <legend>Account</legend>
                     <div class="field"><label>Name</label><InputText @bind-Value="editing.Name" /><ValidationMessage For="() => editing.Name" /></div>
                     <div class="field"><label>Institution</label><InputText @bind-Value="editing.Institution" /></div>
                     <div class="field"><label>Type</label><InputSelect @bind-Value="editing.Type">
                         @foreach (var t in Enum.GetValues<MyBudget.Domain.AccountType>()) { <option value="@t">@Fmt.Words(t)</option> }
                     </InputSelect></div>
                     <div class="field"><label>Account number</label><MaskedInput @bind-Value="editing.AccountNumber" /></div>
-                </div>
-                <div class="row">
-                    <div class="field"><label>Minimum balance</label><InputNumber @bind-Value="editing.MinimumBalance" step="0.01" /></div>
-                    <div class="field"><label>Transfer cadence</label><InputSelect @bind-Value="editing.TransferCadence">
+                </fieldset>
+                <fieldset class="group">
+                    <legend>Money rules</legend>
+                    <div class="field"><label>Minimum balance to keep</label><InputNumber @bind-Value="editing.MinimumBalance" step="0.01" /></div>
+                    <div class="field"><label>Transfers into it</label><InputSelect @bind-Value="editing.TransferCadence">
                         @foreach (var t in Enum.GetValues<MyBudget.Domain.TransferCadence>()) { <option value="@t">@Fmt.Words(t)</option> }
                     </InputSelect></div>
-                    <div class="field"><label class="inline"><InputCheckbox @bind-Value="editing.IsRainyDayFund" /> Part of rainy-day fund</label></div>
-                    <div class="field"><label class="inline"><InputCheckbox @bind-Value="editing.IsActive" /> Active</label></div>
-                </div>
-                <div class="field"><label>Notes</label><InputTextArea @bind-Value="editing.Notes" rows="2" /></div>
-                <div class="toolbar">
+                    <div class="checks">
+                        <label class="inline"><InputCheckbox @bind-Value="editing.IsRainyDayFund" /> Part of the rainy-day fund</label>
+                        <label class="inline"><InputCheckbox @bind-Value="editing.IsActive" /> Active</label>
+                    </div>
+                </fieldset>
+                <div class="field full"><label>Notes</label><InputTextArea @bind-Value="editing.Notes" rows="2" /></div>
+                <div class="actions-row">
                     <button type="submit">Save</button>
                     <button class="secondary" type="button" @onclick="() => editing = null">Cancel</button>
-                    @if (editing.Id != 0) { <button class="secondary danger" type="button" @onclick="DeleteEditing">Delete</button> }
+                    @if (editing.Id != 0) { <button class="link danger push-right" type="button" @onclick="DeleteEditing">Delete account</button> }
                 </div>
             </EditForm>
         </section>
@@ -118,38 +125,14 @@ else
         <section class="panel rainy @rd.Status.ToLowerInvariant()">
             <h2>Rainy-day fund · @rd.MonthsCovered.ToString("0.#") months covered <span class="rainy-badge">@rd.Status</span></h2>
             <p title="@rd.ExpensesFormula"><Money Value="rd.Balance" /> across @(rd.Accounts.Count == 0 ? "no marked accounts" : string.Join(", ", rd.Accounts)) against @Fmt.Money(rd.MonthlyExpenses)/month of expenses · 3–6 month range @Fmt.Money(rd.LowTarget)–@Fmt.Money(rd.HighTarget). <strong>@rd.Verdict</strong></p>
-            <p class="muted">Mark any account as part of the fund in its editor (a T-Bill account counts). Hover the sentence for how monthly expenses were computed.</p>
+            <p class="muted">Mark any account as part of the fund in its editor (a T-Bill account counts). Hover the sentence for how monthly expenses were computed. Per-account sinking-fund transfer needs with formulas are on the Dashboard.</p>
         </section>
     }
 
-    <section class="panel">
-        <h2>Transfer needs as of @Fmt.Date(needs.AsOf)</h2>
-        <p class="muted">Per-paycheck uses @needs.PaychecksSource.</p>
-        @foreach (var n in needs.Accounts)
-        {
-            <details>
-                <summary>
-                    <strong>@n.AccountName</strong> · <Money Value="n.MonthlyNeed" /> / month · <Money Value="n.PerPaycheckNeed" /> / check
-                    · moved this month <Money Value="n.TransferredThisMonth" /> · long/short <Money Value="n.LongShort" Signed="true" />
-                </summary>
-                <table>
-                    <thead><tr><th>Bill</th><th>Frequency</th><th class="money">Projected</th><th class="money">Monthly accrual</th><th>Formula</th></tr></thead>
-                    <tbody>
-                    @foreach (var l in n.Lines)
-                    {
-                        <tr><td>@l.BillName @(l.PaidByCard ? "💳" : "")</td><td>@Fmt.Words(l.Frequency)</td><td><Money Value="l.ProjectedAmount" /></td><td><Money Value="l.MonthlyAccrual" /></td><td class="muted">@l.Formula</td></tr>
-                    }
-                    <tr><th>Per paycheck</th><td colspan="3"></td><td class="muted">@n.PerPaycheckFormula</td></tr>
-                    </tbody>
-                </table>
-            </details>
-        }
-    </section>
 }
 
 @code {
     private List<AccountDto>? accounts;
-    private TransferNeedsDto? needs;
     private RainyDayDto? rainy;
     private AccountDto? editing;
     private AccountDto? ledger;
@@ -167,7 +150,6 @@ else
         try
         {
             accounts = await Api.GetAccountsAsync();
-            needs = await Api.GetTransferNeedsAsync();
             rainy = await Api.GetRainyDayAsync();
         }
         catch (Exception ex) { error = ex.Message; }

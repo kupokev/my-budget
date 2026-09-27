@@ -27,7 +27,7 @@ else
                 <td>@s.CardName <MaskedNumber Value="@cards.First(c => c.Id == s.CardId).AccountNumber" /></td>
                 <td class="muted">@(s.Bills.Count == 0 ? "—" : string.Join(", ", s.Bills))</td>
                 <td><Money Value="s.MonthlyBillSpend" /></td>
-                <td>@Fmt.Money(s.LatestBalance)</td>
+                <td class="money">@Fmt.Money(s.LatestBalance)</td>
                 <td>@Fmt.Date(s.LatestBalanceAsOf)</td>
                 <td class="money">@Fmt.Pct(s.Utilization)</td>
                 <td>@s.StatementDay / @s.DueDay</td>
@@ -63,10 +63,10 @@ else
                 <tr class="@(row.Net < 0 ? "" : "")" title="@row.Formula">
                     <td>@row.Name</td>
                     <td><Money Value="row.Fee" /></td>
-                    <td>@(row.Interest > 0 ? Fmt.Money(row.Interest) : "—")</td>
+                    <td class="money">@(row.Interest > 0 ? Fmt.Money(row.Interest) : "—")</td>
                     <td><Money Value="row.Cost" /></td>
                     <td><Money Value="row.Value" /></td>
-                    <td>@(row.Thresholds > 0 ? Fmt.Money(row.Thresholds) : "—")</td>
+                    <td class="money">@(row.Thresholds > 0 ? Fmt.Money(row.Thresholds) : "—")</td>
                     <td><Money Value="row.Net" Signed="true" /></td>
                     <td class="@(row.Net < 0 ? "neg" : row.Net == 0 ? "muted" : "pos")">@row.Verdict</td>
                 </tr>
@@ -145,36 +145,39 @@ else
     {
         <section class="panel">
             <h2>@(editing.Id == 0 ? "New card" : editing.Name)</h2>
-            <EditForm Model="editing" OnValidSubmit="Save">
+            <EditForm Model="editing" OnValidSubmit="Save" class="form">
                 <DataAnnotationsValidator />
-                <div class="row">
+                <fieldset class="group">
+                    <legend>Card</legend>
                     <div class="field"><label>Name</label><InputText @bind-Value="editing.Name" /><ValidationMessage For="() => editing.Name" /></div>
                     <div class="field"><label>Issuer</label><InputText @bind-Value="editing.Issuer" /></div>
                     <div class="field"><label>Network</label><InputText @bind-Value="editing.Network" /></div>
                     <div class="field"><label>Card number</label><MaskedInput @bind-Value="editing.AccountNumber" /></div>
-                </div>
-                <div class="row">
+                </fieldset>
+                <fieldset class="group">
+                    <legend>Terms</legend>
                     <div class="field"><label>APR %</label><InputNumber @bind-Value="editing.Apr" step="0.01" /></div>
                     <div class="field"><label>Promo APR %</label><InputNumber @bind-Value="editing.PromoApr" step="0.01" /></div>
                     <div class="field"><label>Promo expires</label><InputDate @bind-Value="editing.PromoAprExpires" /></div>
                     <div class="field"><label>Credit limit</label><InputNumber @bind-Value="editing.CreditLimit" step="0.01" /></div>
-                </div>
-                <div class="row">
-                    <div class="field"><label>Statement day</label><InputNumber @bind-Value="editing.StatementDay" /></div>
-                    <div class="field"><label>Due day</label><InputNumber @bind-Value="editing.DueDay" /></div>
                     <div class="field"><label>Annual fee</label><InputNumber @bind-Value="editing.AnnualFee" step="0.01" /></div>
-                    <div class="field"><label>Fee month (1–12)</label><InputNumber @bind-Value="editing.AnnualFeeMonth" /></div>
+                    <div class="field"><label>Fee posts in month (1–12)</label><InputNumber @bind-Value="editing.AnnualFeeMonth" /></div>
+                </fieldset>
+                <fieldset class="group">
+                    <legend>Statement and payment</legend>
+                    <div class="field"><label>Statement closes on day</label><InputNumber @bind-Value="editing.StatementDay" /></div>
+                    <div class="field"><label>Payment due on day</label><InputNumber @bind-Value="editing.DueDay" /></div>
                     <div class="field"><label>Paid from account</label><InputSelect @bind-Value="editing.PayingAccountId">
                         <option value="">—</option>
                         @foreach (var a in accounts.Where(a => a.IsActive)) { <option value="@a.Id">@a.Name</option> }
                     </InputSelect></div>
-                </div>
-                <div class="field"><label>Notes</label><InputTextArea @bind-Value="editing.Notes" rows="2" /></div>
-                <div class="field"><label class="inline"><InputCheckbox @bind-Value="editing.IsActive" /> Active</label></div>
-                <div class="toolbar">
+                    <div class="checks"><label class="inline"><InputCheckbox @bind-Value="editing.IsActive" /> Active</label></div>
+                </fieldset>
+                <div class="field full"><label>Notes</label><InputTextArea @bind-Value="editing.Notes" rows="2" /></div>
+                <div class="actions-row">
                     <button type="submit">Save</button>
                     <button class="secondary" type="button" @onclick="() => editing = null">Cancel</button>
-                    @if (editing.Id != 0) { <button class="secondary danger" type="button" @onclick="DeleteEditing">Delete</button> }
+                    @if (editing.Id != 0) { <button class="link danger push-right" type="button" @onclick="DeleteEditing">Delete card</button> }
                 </div>
             </EditForm>
         </section>

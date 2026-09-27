@@ -42,7 +42,7 @@ else
                 <tr class="@(open == p.Holding.Id ? "editing" : "")">
                     <td><strong>@p.Holding.Ticker</strong> <span class="muted">@p.Holding.Name</span></td><td>@p.Holding.AccountName</td>
                     <td class="money">@p.Shares.ToString("0.####")</td><td class="money" title="@Fmt.Date(p.PriceDate)">@Fmt.Money(p.Price)</td>
-                    <td>@Fmt.Money(p.MarketValue)</td><td><Money Value="p.CostBasis" /></td><td>@if (p.UnrealizedGain is { } u) { <Money Value="u" Signed="true" /> }</td><td><Money Value="p.DividendsThisYear" /></td>
+                    <td class="money">@Fmt.Money(p.MarketValue)</td><td><Money Value="p.CostBasis" /></td><td>@if (p.UnrealizedGain is { } u) { <Money Value="u" Signed="true" /> }</td><td><Money Value="p.DividendsThisYear" /></td>
                     <td>@(p.Holding.Drip ? "on" : "")</td>
                     <td class="actions"><button class="secondary" type="button" @onclick="() => open = open == p.Holding.Id ? null : p.Holding.Id">Details</button> <button class="secondary" type="button" @onclick="() => Edit(p.Holding)">Edit</button></td>
                 </tr>

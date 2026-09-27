@@ -21,6 +21,9 @@ public sealed class AccountDto
     /// <summary>Latest known balance, read-only.</summary>
     public decimal? LatestBalance { get; set; }
     public DateOnly? LatestBalanceAsOf { get; set; }
+    /// <summary>Cash leaving this account this month: bills paid from it plus bills on cards this account pays. Read-only.</summary>
+    public decimal ThisMonthOutflow { get; set; }
+    public string? ThisMonthOutflowDetail { get; set; }
 }
 
 public sealed class AccountBalanceDto

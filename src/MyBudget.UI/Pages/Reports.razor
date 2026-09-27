@@ -71,7 +71,7 @@ else if (tab == "assets")
             <tbody>
             @foreach (var a in assets ?? [])
             {
-                <tr><td>@a.Name</td><td>@a.Kind</td><td>@Fmt.Money(a.LatestValue)</td><td>@Fmt.Date(a.LatestAsOf)</td>
+                <tr><td>@a.Name</td><td>@a.Kind</td><td class="money">@Fmt.Money(a.LatestValue)</td><td>@Fmt.Date(a.LatestAsOf)</td>
                     <td class="actions"><button class="secondary" type="button" @onclick="() => valueFor = a">Record value</button> <button class="secondary" type="button" @onclick="() => assetEdit = new AssetDto { Id = a.Id, Name = a.Name, Kind = a.Kind, Notes = a.Notes, IsActive = a.IsActive }">Edit</button></td></tr>
             }
             </tbody>

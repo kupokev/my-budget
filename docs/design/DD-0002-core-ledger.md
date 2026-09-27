@@ -43,6 +43,11 @@ Every fact is effective-dated or period-keyed; there is no year table (DD-0001).
 
 Long/Short (ACC-3) is computed in the API: transfers recorded this month − monthly need.
 
+The Accounts page shows a different number, **this month's cash outflow** per account: bills paid
+from the account directly plus bills charged to a card that the account pays, at the month's
+projected amounts. That is what a direct deposit must cover; the funding-account transfer needs
+(with formulas) stay on the Dashboard.
+
 Paychecks per year for the per-paycheck figure comes from the active W-2 source's schedule in
 effect on the as-of date, falling back to 12 with an explanatory string when none exists. The
 source string is returned with the numbers so the UI can show it.

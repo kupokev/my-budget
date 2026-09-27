@@ -167,16 +167,20 @@ else
     {
         <section class="panel">
             <h2>@(editing.Id == 0 ? "New bill" : editing.Name)</h2>
-            <EditForm Model="editing" OnValidSubmit="Save">
+            <EditForm Model="editing" OnValidSubmit="Save" class="form">
                 <DataAnnotationsValidator />
-                <div class="row">
+                <fieldset class="group">
+                    <legend>Bill</legend>
                     <div class="field"><label>Name</label><InputText @bind-Value="editing.Name" /><ValidationMessage For="() => editing.Name" /></div>
                     <div class="field"><label>Category</label><InputSelect @bind-Value="editing.CategoryId">
                         <option value="">—</option>
                         @foreach (var c in categories.Where(c => c.IsActive)) { <option value="@c.Id">@c.Name</option> }
                     </InputSelect></div>
                     <div class="field"><label>Account / member #</label><InputText @bind-Value="editing.AccountNumber" /></div>
-                    <div class="field"><label>Projected amount</label><InputNumber @bind-Value="editing.ProjectedAmount" step="0.01" /></div>
+                </fieldset>
+                <fieldset class="group">
+                    <legend>Amount and timing</legend>
+                    <div class="field"><label>Usual amount</label><InputNumber @bind-Value="editing.ProjectedAmount" step="0.01" /></div>
                     <div class="field"><label>Frequency</label><InputSelect @bind-Value="editing.Frequency">
                         @foreach (var f in Enum.GetValues<BillFrequency>()) { <option value="@f">@Fmt.Words(f)</option> }
                     </InputSelect></div>
@@ -185,8 +189,11 @@ else
                     {
                         <div class="field"><label>@(editing.Frequency == BillFrequency.OneOff ? "Due date" : "A known due date")</label><InputDate @bind-Value="editing.AnchorDueDate" /></div>
                     }
-                </div>
-                <div class="row">
+                    <div class="field"><label>Starts</label><InputDate @bind-Value="editing.StartDate" /></div>
+                    <div class="field"><label>Ends <span class="muted">(last month owed)</span></label><InputDate @bind-Value="editing.EndDate" /></div>
+                </fieldset>
+                <fieldset class="group">
+                    <legend>How it's paid</legend>
                     <div class="field"><label>Paid via</label><InputSelect @bind-Value="editing.PaymentMethod">
                         <option value="@PaymentMethodKind.Account">Bank account</option>
                         <option value="@PaymentMethodKind.Card">Credit card</option>
@@ -205,24 +212,22 @@ else
                             @foreach (var c in cards.Where(c => c.IsActive)) { <option value="@c.Id">@c.Name</option> }
                         </InputSelect></div>
                     }
-                    <div class="field"><label>Funded from (always the real source)</label><InputSelect @bind-Value="editing.FundingAccountId">
+                    <div class="field"><label>Funded from <span class="muted">(where the money really comes from)</span></label><InputSelect @bind-Value="editing.FundingAccountId">
                         <option value="0">—</option>
                         @foreach (var a in accounts.Where(a => a.IsActive)) { <option value="@a.Id">@a.Name</option> }
                     </InputSelect><ValidationMessage For="() => editing.FundingAccountId" /></div>
-                    <div class="field"><label>Bank-autopay discount / mo</label><InputNumber @bind-Value="editing.BankAutopayDiscount" step="0.01" /></div>
-                </div>
-                <div class="row">
-                    <div class="field"><label class="inline"><InputCheckbox @bind-Value="editing.IsAutopay" /> Autopay</label></div>
-                    <div class="field"><label class="inline"><InputCheckbox @bind-Value="editing.IsCardEligible" /> Can go on a card</label></div>
-                    <div class="field"><label>Start</label><InputDate @bind-Value="editing.StartDate" /></div>
-                    <div class="field"><label>End <span class="muted">(last month it's owed)</span></label><InputDate @bind-Value="editing.EndDate" /></div>
-                    <div class="field"><label class="inline"><InputCheckbox @bind-Value="editing.IsActive" /> Active</label></div>
-                </div>
-                <div class="field"><label>Notes</label><InputTextArea @bind-Value="editing.Notes" rows="2" /></div>
-                <div class="toolbar">
+                    <div class="field"><label>Bank-autopay discount / month</label><InputNumber @bind-Value="editing.BankAutopayDiscount" step="0.01" /></div>
+                    <div class="checks">
+                        <label class="inline"><InputCheckbox @bind-Value="editing.IsAutopay" /> Autopay</label>
+                        <label class="inline"><InputCheckbox @bind-Value="editing.IsCardEligible" /> Can go on a card</label>
+                        <label class="inline"><InputCheckbox @bind-Value="editing.IsActive" /> Active</label>
+                    </div>
+                </fieldset>
+                <div class="field full"><label>Notes</label><InputTextArea @bind-Value="editing.Notes" rows="2" /></div>
+                <div class="actions-row">
                     <button type="submit">Save</button>
                     <button class="secondary" type="button" @onclick="() => editing = null">Cancel</button>
-                    @if (editing.Id != 0) { <button class="secondary danger" type="button" @onclick="DeleteEditing">Delete</button> }
+                    @if (editing.Id != 0) { <button class="link danger push-right" type="button" @onclick="DeleteEditing">Delete bill</button> }
                 </div>
             </EditForm>
         </section>

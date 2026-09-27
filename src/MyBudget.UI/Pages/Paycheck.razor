@@ -284,7 +284,7 @@ else
                     <tbody>
                     @foreach (var r in cmp.Rows)
                     {
-                        <tr class="@(r.Name is "Gross" or "Net" ? "total" : "")"><td>@r.Name</td><td>@Fmt.Money(r.Estimated)</td><td>@Fmt.Money(r.Actual)</td><td>@(r.Variance is { } v ? (MarkupString)$"<span class=\"money {(v == 0 ? "" : Math.Abs(v) > 5 ? "neg" : "")}\">{Fmt.Money(v)}</span>" : (MarkupString)"<span class=\"muted\">—</span>")</td></tr>
+                        <tr class="@(r.Name is "Gross" or "Net" ? "total" : "")"><td>@r.Name</td><td class="money">@Fmt.Money(r.Estimated)</td><td class="money">@Fmt.Money(r.Actual)</td><td>@(r.Variance is { } v ? (MarkupString)$"<span class=\"money {(v == 0 ? "" : Math.Abs(v) > 5 ? "neg" : "")}\">{Fmt.Money(v)}</span>" : (MarkupString)"<span class=\"muted\">—</span>")</td></tr>
                     }
                     </tbody>
                 </table>
