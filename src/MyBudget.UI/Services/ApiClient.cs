@@ -171,6 +171,7 @@ public sealed class ApiClient(HttpClient http)
     public Task<List<AlertDto>> GetAlertsAsync(string? kind = null) => Get<List<AlertDto>>(Q("api/alerts", ("kind", kind)));
     public Task<RainyDayDto> GetRainyDayAsync() => Get<RainyDayDto>("api/rainy-day");
     public Task<HomeDashboardDto> GetDashboardAsync() => Get<HomeDashboardDto>("api/home/dashboard");
+    public Task<CumulativeSpendDto> GetCumulativeSpendAsync() => Get<CumulativeSpendDto>("api/spending/cumulative");
     public Task<AiStatusDto> GetAiStatusAsync() => Get<AiStatusDto>("api/ai/status");
     public Task<ChatResponseDto> ChatAsync(ChatRequest req) => Post<ChatRequest, ChatResponseDto>("api/ai/chat", req);
     public Task<AiSummaryDto> GetAiSummaryAsync(int year, int month) => Get<AiSummaryDto>($"api/ai/summary?year={year}&month={month}");

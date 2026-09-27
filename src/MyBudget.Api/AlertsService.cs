@@ -15,14 +15,22 @@ public sealed class AlertsService(BudgetDbContext db, InvestmentService investme
         var alerts = new List<AlertDto>();
         var accounts = await db.Accounts.Include(a => a.Balances).Include(a => a.Transactions).Where(a => a.IsActive).ToListAsync();
 
-        // ALT-1: a line is due soon and its funding account hasn't received this month's transfer need.
+        // ALT-1: a funding account hasn't received this month's transfer need. A line due within the
+        // week makes it a warning; otherwise it's worth knowing but not urgent.
         foreach (var n in needs.Accounts.Where(n => n.LongShort < 0))
         {
             var soon = upcoming.Where(b => b.FundingAccount == n.AccountName && b.DueDate <= today.AddDays(7)).ToList();
-            if (soon.Count == 0) continue;
-            alerts.Add(new("transfer", AlertSeverity.Warning, $"{n.AccountName} is {Math.Abs(n.LongShort):C} short of this month's transfer",
-                $"{string.Join(", ", soon.Select(b => $"{b.LineName} {b.Amount:C} on {b.DueDate:MMM d}"))} come out of it; moved {n.TransferredThisMonth:C} of {n.MonthlyNeed:C} so far.", "accounts"));
+            var moved = $"Moved {n.TransferredThisMonth:C} of {n.MonthlyNeed:C} so far ({Fmt(n.Cadence)}).";
+            alerts.Add(new("transfer",
+                soon.Count > 0 ? AlertSeverity.Warning : AlertSeverity.Info,
+                $"{n.AccountName} is {Math.Abs(n.LongShort):C} short of this month's transfer",
+                soon.Count > 0
+                    ? $"{string.Join(", ", soon.Select(b => $"{b.LineName} {b.Amount:C} on {b.DueDate:MMM d}"))} come out of it. {moved}"
+                    : moved,
+                "accounts"));
         }
+
+        static string Fmt(TransferCadence c) => c == TransferCadence.PerPaycheck ? "per paycheck" : "monthly";
 
         // ALT-2: balance below what the next two weeks of lines (plus the minimum) need.
         foreach (var a in accounts)

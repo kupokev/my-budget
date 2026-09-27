@@ -18,6 +18,15 @@ public static class SpendingEndpoints
             return await Summary(db, year ?? today.Year, month ?? today.Month);
         });
 
+        // The dashboard's "spending vs last month" curve.
+        g.MapGet("/cumulative", async (int? year, int? month, BudgetDbContext db, TimeProvider clock) =>
+        {
+            var today = DateOnly.FromDateTime(clock.GetLocalNow().DateTime);
+            var y = year ?? today.Year;
+            var m = month ?? today.Month;
+            return await Cumulative(db, y, m, today);
+        });
+
         g.MapGet("/matrix", async (int? year, BudgetDbContext db, TimeProvider clock) =>
         {
             var y = year ?? clock.GetLocalNow().Year;
@@ -72,4 +81,62 @@ public static class SpendingEndpoints
     }
 
     private static decimal R(decimal d) => Math.Round(d, 2, MidpointRounding.AwayFromZero);
+
+    /// <summary>
+    /// Money out per day, run up cumulatively, for the named month and the one before it. Transfers and
+    /// card payments are excluded, and a manual row reconciled to an imported one counts once.
+    /// The current month's line stops at today so it doesn't read as a plateau.
+    /// </summary>
+    internal static async Task<CumulativeSpendDto> Cumulative(BudgetDbContext db, int year, int month, DateOnly today)
+    {
+        var start = new DateOnly(year, month, 1);
+        var priorStart = start.AddMonths(-1);
+        var end = start.AddMonths(1);
+
+        var rows = await db.Transactions
+            .Where(t => !t.IsTransfer && t.Amount < 0 && t.Date >= priorStart && t.Date < end)
+            .Where(t => t.Origin != TransactionOrigin.Manual || t.ReconciledWithId == null)
+            .Select(t => new { t.Date, t.Amount })
+            .ToListAsync();
+
+        static decimal[] Daily(IEnumerable<(DateOnly Date, decimal Amount)> src, DateOnly monthStart)
+        {
+            var days = DateTime.DaysInMonth(monthStart.Year, monthStart.Month);
+            var running = new decimal[days];
+            var byDay = new decimal[days];
+            foreach (var r in src) byDay[r.Date.Day - 1] += -r.Amount;
+            decimal total = 0;
+            for (var i = 0; i < days; i++) { total += byDay[i]; running[i] = Math.Round(total, 2); }
+            return running;
+        }
+
+        var thisSeries = Daily(rows.Where(r => r.Date >= start).Select(r => (r.Date, r.Amount)), start);
+        var lastSeries = Daily(rows.Where(r => r.Date < start).Select(r => (r.Date, r.Amount)), priorStart);
+
+        // The axis is as long as the longer of the two months.
+        var span = Math.Max(thisSeries.Length, lastSeries.Length);
+        var labels = Enumerable.Range(1, span).Select(d => d.ToString()).ToList();
+
+        // Today caps the current month; a past month is shown whole.
+        var isCurrent = today.Year == year && today.Month == month;
+        var upTo = isCurrent ? today.Day : thisSeries.Length;
+        var thisOut = thisSeries.Take(upTo).ToList();
+        var lastOut = lastSeries.ToList();
+
+        var toDate = thisOut.Count > 0 ? thisOut[^1] : 0m;
+        var lastSameDay = lastSeries.Length == 0 ? 0m : lastSeries[Math.Min(upTo, lastSeries.Length) - 1];
+        var difference = Math.Round(toDate - lastSameDay, 2);
+
+        var weekStart = (isCurrent ? today : start.AddMonths(1).AddDays(-1)).AddDays(-6);
+        var thisWeek = Math.Round(rows.Where(r => r.Date >= weekStart && r.Date >= start).Sum(r => -r.Amount), 2);
+
+        var summary = difference == 0
+            ? $"You spent {thisWeek:C} in the last seven days. This month is level with the same point last month."
+            : $"You spent {thisWeek:C} in the last seven days, bringing this month's spending to {Math.Abs(difference):C} {(difference < 0 ? "less" : "more")} than this time last month.";
+
+        return new CumulativeSpendDto(
+            year, month, today, upTo, labels, thisOut, lastOut,
+            start.ToString("MMMM"), priorStart.ToString("MMMM"),
+            thisWeek, toDate, lastSameDay, difference, summary);
+    }
 }

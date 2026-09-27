@@ -111,6 +111,21 @@ public sealed record SpendingCategoryDto(int? CategoryId, string Name, decimal T
 public sealed record SpendingSummaryDto(int Year, int Month, decimal ThisMonth, decimal LastMonth, decimal Delta, decimal YearToDate,
     IReadOnlyList<SpendingCategoryDto> Categories, int UncategorizedCount, decimal UncategorizedAmount, decimal IncomeThisMonth);
 
+/// <summary>
+/// Spending run up day by day, this month against last, for the dashboard chart. Both series are
+/// cumulative, so each day's figure includes everything spent before it in that month.
+/// </summary>
+public sealed record CumulativeSpendDto(
+    int Year, int Month, DateOnly AsOf, int DayOfMonth,
+    IReadOnlyList<string> Days,
+    /// <summary>Cumulative spend for each day so far this month; stops at today rather than flat-lining to month end.</summary>
+    IReadOnlyList<decimal> ThisMonth,
+    /// <summary>The whole of last month, for comparison past today's day-of-month.</summary>
+    IReadOnlyList<decimal> LastMonth,
+    string ThisMonthLabel, string LastMonthLabel,
+    decimal SpentThisWeek, decimal ThisMonthToDate, decimal LastMonthToSameDay, decimal Difference,
+    string Summary);
+
 public sealed record SpendingRowDto(int? CategoryId, string Name, IReadOnlyList<decimal> Months, decimal Total);
 
 public sealed record SpendingMatrixDto(int Year, IReadOnlyList<SpendingRowDto> Rows, IReadOnlyList<decimal> MonthTotals, decimal Total);

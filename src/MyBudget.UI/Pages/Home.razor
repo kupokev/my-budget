@@ -12,16 +12,28 @@ else
 {
     @if (d.Alerts.Count > 0)
     {
-        <section class="panel">
-            <h2>Needs attention</h2>
-            <ul class="alerts">
-                @foreach (var a in d.Alerts)
-                {
-                    <li class="alert @a.Severity.ToString().ToLowerInvariant()">
-                        <strong>@a.Title</strong> <span class="muted">@a.Detail</span> @if (a.Link is not null) { <a href="@a.Link">open</a> }
-                    </li>
-                }
-            </ul>
+        <section class="panel alerts-panel">
+            <button type="button" class="alerts-head @(alertsOpen ? "open" : "")" aria-expanded="@alertsOpen" @onclick="() => alertsOpen = !alertsOpen">
+                <span class="caret">@(alertsOpen ? "▾" : "▸")</span>
+                <span class="label">Needs attention</span>
+                <span class="counts">
+                    @if (AlertCount(AlertSeverity.Danger) is > 0 and var dn) { <span class="pill danger">@dn</span> }
+                    @if (AlertCount(AlertSeverity.Warning) is > 0 and var wn) { <span class="pill warning">@wn</span> }
+                    @if (AlertCount(AlertSeverity.Info) is > 0 and var inf) { <span class="pill">@inf</span> }
+                </span>
+                @if (!alertsOpen) { <span class="peek muted">@d.Alerts[0].Title@(d.Alerts.Count > 1 ? $" and {d.Alerts.Count - 1} more" : "")</span> }
+            </button>
+            @if (alertsOpen)
+            {
+                <ul class="alerts tight">
+                    @foreach (var a in d.Alerts)
+                    {
+                        <li class="alert @a.Severity.ToString().ToLowerInvariant()">
+                            <strong>@a.Title</strong> <span class="muted">@a.Detail</span> @if (a.Link is not null) { <a href="@a.Link">open</a> }
+                        </li>
+                    }
+                </ul>
+            }
         </section>
     }
 
@@ -33,19 +45,30 @@ else
     </div>
 
     <div class="row two-up">
+    @if (cumulative is { } cs && cs.ThisMonth.Count > 0)
+    {
+        <section class="panel grow compact-panel">
+            <h2>Spending this month vs last</h2>
+            <LineChart Series="@SpendSeries(cs)" XAxisLabels="@cs.Days.ToList()" SmoothLines="true" CrosshairTooltip="true"
+                       Responsive="true" Width="640" Height="280" Theme="@Palette" Description="@cs.Summary" />
+            <p class="muted">@cs.Summary</p>
+        </section>
+    }
         <section class="panel grow compact-panel">
             <h2>Due in the next 14 days</h2>
             @if (d.UpcomingLines.Count == 0) { <p class="muted">Nothing due.</p> }
             else
             {
                 <table class="compact">
-                    <thead><tr><th>Due</th><th>Budget line</th><th class="money">Amount</th><th>Paid via</th><th>Funded from</th></tr></thead>
-                    <tbody>@foreach (var b in d.UpcomingLines) { <tr><td>@Fmt.Date(b.DueDate)</td><td>@b.LineName @(b.IsAutopay ? "" : "✍")</td><td><Money Value="b.Amount" /></td><td>@b.PaidVia</td><td>@b.FundingAccount</td></tr> }</tbody>
-                    <tfoot><tr><th></th><th>Total</th><th><Money Value="d.UpcomingLines.Sum(b => b.Amount)" /></th><th colspan="2"></th></tr></tfoot>
+                    <thead><tr><th>Due</th><th>Budget line</th><th class="money">Amount</th><th>Paid via</th></tr></thead>
+                    <tbody>@foreach (var b in d.UpcomingLines) { <tr><td>@Fmt.Date(b.DueDate)</td><td>@b.LineName @(b.IsAutopay ? "" : "✍")</td><td><Money Value="b.Amount" /></td><td>@b.PaidVia</td></tr> }</tbody>
+                    <tfoot><tr><th></th><th>Total</th><th><Money Value="d.UpcomingLines.Sum(b => b.Amount)" /></th><th></th></tr></tfoot>
                 </table>
             }
         </section>
+    </div>
 
+    <div class="row two-up">
         <section class="panel grow compact-panel">
             <h2>Goals</h2>
             @if (d.Goals.Count == 0) { <p class="muted">No goals yet.</p> }
@@ -58,19 +81,9 @@ else
             }
             <p class="muted"><a href="goals">Goals</a></p>
         </section>
-    </div>
 
-    <div class="row two-up">
-    <section class="panel grow compact-panel">
-        <h2>Transfer needs</h2>
-        <table class="compact">
-            <thead><tr><th>Account</th><th class="money">Per month</th><th class="money">Per paycheck</th><th class="money">Moved this month</th><th class="money">Long / short</th></tr></thead>
-            <tbody>@foreach (var n in d.Needs) { <tr><td>@n.AccountName <span class="muted">(@Fmt.Words(n.Cadence))</span></td><td><Money Value="n.MonthlyNeed" /></td><td><Money Value="n.PerPaycheckNeed" /></td><td><Money Value="n.TransferredThisMonth" /></td><td><Money Value="n.LongShort" Signed="true" /></td></tr> }</tbody>
-        </table>
-    </section>
-
-    <section class="panel grow compact-panel">
-        <h2>This month in plain English</h2>
+        <section class="panel grow compact-panel">
+            <h2>This month in plain English</h2>
         @if (!d.AiEnabled) { <p class="muted">Local AI is off. Turn it on in the API's appsettings (Ai:Enabled, Ai:BaseUrl, Ai:Model) to get a narrative built from the same numbers above.</p> }
         else
         {
@@ -87,15 +100,38 @@ else
 
 @code {
     private HomeDashboardDto? d;
+    private CumulativeSpendDto? cumulative;
+    /// <summary>Collapsed on arrival: the header carries the counts and the first title, so nothing is hidden silently.</summary>
+    private bool alertsOpen;
     private AiSummaryDto? summary;
     private bool summarizing;
     private string? error;
 
     protected override async Task OnInitializedAsync()
     {
-        try { d = await Api.GetDashboardAsync(); }
+        try { d = await Api.GetDashboardAsync(); cumulative = await Api.GetCumulativeSpendAsync(); }
         catch (Exception ex) { error = "Could not reach the API: " + ex.Message; }
     }
+
+    /// <summary>This month solid in the accent colour, last month behind it for comparison.</summary>
+    private static List<ChartSeries> SpendSeries(CumulativeSpendDto cs) =>
+    [
+        new() { Label = cs.LastMonthLabel, Color = "#6b7f72", Values = cs.LastMonth.ToList() },
+        new() { Label = cs.ThisMonthLabel, Color = "#4fa970", Values = cs.ThisMonth.ToList() },
+    ];
+
+    /// <summary>Matches the app's own palette rather than the library's default light theme.</summary>
+    private static ChartTheme Palette => new()
+    {
+        TextColor = "#8a978f",
+        GridColor = "#2b342e",
+        GridOpacity = 0.9,
+        TooltipBackground = "#151a17",
+        TooltipTextColor = "#e8efe9",
+        Palette = ["#4fa970", "#6b7f72", "#e0a23a", "#ef6b62"],
+    };
+
+    private int AlertCount(AlertSeverity s) => d!.Alerts.Count(a => a.Severity == s);
 
     private async Task Summarize()
     {

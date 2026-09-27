@@ -374,3 +374,26 @@ table.tx td.center { text-align: center; }
 tr.detail > td { background: color-mix(in srgb, var(--accent) 5%, transparent); padding: 10px 12px; }
 tr.detail .panel { margin: 0; }
 tr.selected > td { border-bottom-color: transparent; }
+
+/* Needs attention: collapsed by default, with the counts and the first title in the header
+   so the panel costs one line until you open it. */
+.alerts-panel { padding: 6px 10px; }
+.alerts-head { display: flex; align-items: baseline; gap: 8px; width: 100%; padding: 4px 2px; margin: 0;
+  background: none; border: 0; color: var(--fg); font-family: inherit; font-size: 13px; font-weight: 600;
+  text-align: left; cursor: pointer; box-shadow: none; }
+.alerts-head:hover { background: none; filter: none; color: var(--accent); }
+.alerts-head:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.alerts-head .caret { width: 10px; font-size: 10px; opacity: .8; }
+.alerts-head .label { flex: 0 0 auto; }
+.alerts-head .counts { display: inline-flex; gap: 4px; }
+.alerts-head .peek { flex: 1 1 auto; font-weight: 400; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pill { display: inline-block; min-width: 16px; padding: 0 5px; border-radius: 999px; font-size: 10px; line-height: 15px;
+  text-align: center; background: color-mix(in srgb, var(--fg) 14%, transparent); color: var(--fg-muted); font-weight: 600; }
+.pill.warning { background: color-mix(in srgb, var(--warn) 24%, transparent); color: var(--warn); }
+.pill.danger { background: color-mix(in srgb, var(--danger) 24%, transparent); color: var(--danger); }
+.alerts.tight { margin-top: 6px; gap: 3px; }
+.alerts.tight .alert { padding: 3px 9px; font-size: 12px; line-height: 1.45; border-left-width: 3px; }
+.alerts.tight .alert strong { font-weight: 600; }
+
+/* Charts scale to their panel; belt-and-braces so an SVG can never widen the layout. */
+.panel svg { max-width: 100%; }

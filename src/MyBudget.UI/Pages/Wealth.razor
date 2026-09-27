@@ -1,0 +1,140 @@
+@page "/wealth"
+@inject ApiClient Api
+
+<ErrorBanner @bind-Message="error" />
+
+@if (nw is null || portfolio is null || assets is null || loans is null)
+{
+    <p class="muted">Loading…</p>
+}
+else
+{
+    <div class="row tiles">
+        <section class="panel tile">
+            <h3>Net worth</h3>
+            <p class="big"><Money Value="nw.Total" Signed="true" /></p>
+            <p class="muted" title="@nw.Formula">
+                @if (MonthChange() is { } mc) { <text>vs last month </text><Money Value="mc" Signed="true" /> }
+                @if (YearChange() is { } yc) { <text> · this year </text><Money Value="yc" Signed="true" /> }
+            </p>
+        </section>
+        <section class="panel tile">
+            <h3><a href="investments">Investments</a></h3>
+            <p class="big"><Money Value="portfolio.TotalValue" /></p>
+            <p class="muted">
+                unrealized <Money Value="portfolio.TotalUnrealized" Signed="true" />
+                @if (portfolio.TotalCost > 0) { <text> · @((portfolio.TotalUnrealized / portfolio.TotalCost * 100m).ToString("0.0"))%</text> }
+            </p>
+        </section>
+        <section class="panel tile">
+            <h3><a href="assets">Assets</a></h3>
+            <p class="big"><Money Value="assets.Where(a => a.IsActive).Sum(a => a.LatestValue ?? 0)" /></p>
+            <p class="muted">equity <Money Value="assets.Where(a => a.IsActive).Sum(a => a.Equity ?? 0)" /> after <Money Value="assets.Sum(a => a.LoanBalance)" /> owed</p>
+        </section>
+        <section class="panel tile">
+            <h3>What you owe</h3>
+            <p class="big"><Money Value="nw.Cards + nw.Loans" /></p>
+            <p class="muted">cards <Money Value="nw.Cards" /> · loans <Money Value="nw.Loans" /></p>
+        </section>
+    </div>
+
+    @if (nw.History.Count > 1)
+    {
+        <section class="panel">
+            <h2>Net worth over time</h2>
+            <LineChart Series="@NetWorthSeries()" XAxisLabels="@nw.History.Select(h => h.Period.ToString("MMM yy")).ToList()"
+                       SmoothLines="true" CrosshairTooltip="true" Responsive="true" Width="1100" Height="300" Theme="@Palette"
+                       Description="Net worth by month, with what you own and what you owe behind it." />
+        </section>
+    }
+
+    <div class="row">
+        <section class="panel grow">
+            <h2>Where it sits</h2>
+            <table class="compact">
+                <thead><tr><th>Holding</th><th>Kind</th><th class="money">Value</th><th>As of</th></tr></thead>
+                <tbody>
+                @foreach (var l in nw.Lines.Where(l => l.Balance != 0))
+                {
+                    <tr><td>@l.Name</td><td class="muted">@l.Kind</td><td class="money">@Fmt.Money(l.Balance)</td><td class="muted">@Fmt.Date(l.AsOf)</td></tr>
+                }
+                </tbody>
+                <tfoot><tr><th>Owned</th><th></th><th class="money"><Money Value="nw.Assets" /></th><th></th></tr></tfoot>
+            </table>
+        </section>
+        <section class="panel">
+            <h2>Investment year</h2>
+            <table class="compact">
+                <tbody>
+                    <tr><td>Market value</td><td class="money"><Money Value="portfolio.TotalValue" /></td></tr>
+                    <tr><td>Cost basis</td><td class="money"><Money Value="portfolio.TotalCost" /></td></tr>
+                    <tr><td>Unrealized</td><td class="money"><Money Value="portfolio.TotalUnrealized" Signed="true" /></td></tr>
+                    <tr><td>Dividends @DateTime.Today.Year</td><td class="money"><Money Value="portfolio.DividendsThisYear" /></td></tr>
+                    <tr><td>Realized short-term</td><td class="money"><Money Value="portfolio.RealizedShortTerm" Signed="true" /></td></tr>
+                    <tr><td>Realized long-term</td><td class="money"><Money Value="portfolio.RealizedLongTerm" Signed="true" /></td></tr>
+                </tbody>
+            </table>
+            @if (loans.Any(l => l.IsActive))
+            {
+                <h3>Loans</h3>
+                <table class="compact">
+                    <thead><tr><th>Loan</th><th class="money">Balance</th><th class="money">Rate</th></tr></thead>
+                    <tbody>
+                    @foreach (var l in loans.Where(l => l.IsActive).OrderByDescending(l => l.LatestBalance ?? 0))
+                    {
+                        <tr><td>@l.Name</td><td class="money">@Fmt.Money(l.LatestBalance)</td><td class="money">@l.AnnualRatePercent.ToString("0.##")%</td></tr>
+                    }
+                    </tbody>
+                </table>
+            }
+        </section>
+    </div>
+}
+
+@code {
+    private NetWorthDto? nw;
+    private PortfolioDto? portfolio;
+    private List<AssetDto>? assets;
+    private List<LoanDto>? loans;
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            nw = await Api.GetNetWorthAsync();
+            portfolio = await Api.GetPortfolioAsync();
+            assets = await Api.GetAssetsAsync();
+            loans = await Api.GetLoansAsync();
+        }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    /// <summary>Net worth against the month before, when there is one.</summary>
+    private decimal? MonthChange()
+        => nw!.History.Count < 2 ? null : Math.Round(nw.History[^1].Total - nw.History[^2].Total, 2);
+
+    /// <summary>Net worth against the last reading of the previous year.</summary>
+    private decimal? YearChange()
+    {
+        var start = nw!.History.LastOrDefault(h => h.Period.Year < DateTime.Today.Year);
+        return start is null ? null : Math.Round(nw.History[^1].Total - start.Total, 2);
+    }
+
+    private List<ChartSeries> NetWorthSeries() =>
+    [
+        new() { Label = "Owned", Color = "#6b7f72", Values = nw!.History.Select(h => h.Assets).ToList() },
+        new() { Label = "Owed", Color = "#ef6b62", Values = nw.History.Select(h => h.Cards + h.Loans).ToList() },
+        new() { Label = "Net worth", Color = "#4fa970", Values = nw.History.Select(h => h.Total).ToList() },
+    ];
+
+    private static ChartTheme Palette => new()
+    {
+        TextColor = "#8a978f",
+        GridColor = "#2b342e",
+        GridOpacity = 0.9,
+        TooltipBackground = "#151a17",
+        TooltipTextColor = "#e8efe9",
+        Palette = ["#6b7f72", "#ef6b62", "#4fa970"],
+    };
+}
