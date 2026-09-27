@@ -61,8 +61,10 @@ jobs:
           curl -sSLf "https://github.com/goreleaser/nfpm/releases/download/v${NFPM_VERSION}/nfpm_${NFPM_VERSION}_Linux_x86_64.tar.gz" -o /tmp/nfpm.tar.gz
           sudo tar -xzf /tmp/nfpm.tar.gz -C /usr/local/bin nfpm
           nfpm --version
+          # AppImageKit is retired — its v13 assets were renamed "obsolete-*", which is why a pin
+          # there 404s. appimagetool lives in its own repo now; pinned rather than "continuous".
           curl -fsSL -o /usr/local/bin/appimagetool \
-            https://github.com/AppImage/AppImageKit/releases/download/13/appimagetool-x86_64.AppImage
+            https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage
           sudo chmod +x /usr/local/bin/appimagetool
 
       - name: Build packages
