@@ -1,7 +1,11 @@
+using MyBudget.Domain;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using MyBudget.UI;
 using Photino.Blazor;
+
+// Dollar figures must not depend on whether the session has LANG set.
+AppCulture.Apply();
 
 // WebKitGTK under Wayland misbehaves for Photino; force X11 (XWayland) unless the user set a backend.
 if (OperatingSystem.IsLinux()
