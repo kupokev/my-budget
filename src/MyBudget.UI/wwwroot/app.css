@@ -410,3 +410,25 @@ tr.holding-row > td.indent { padding-left: 26px; }
 tr.lots-row > td { background: color-mix(in srgb, var(--fg) 4%, transparent); padding: 6px 10px 10px 40px; }
 .lots h4 { margin: 4px 0 6px; font-size: 12px; font-weight: 600; }
 .lots table { max-width: 720px; }
+
+/* Settings: a label-and-help column beside its control, so fields line up instead of
+   wrapping into each other at whatever width they happen to be. */
+.settings-form { display: flex; flex-direction: column; gap: 2px; margin-top: 12px; }
+.setting { display: grid; grid-template-columns: minmax(200px, 320px) 1fr; gap: 24px;
+  padding: 12px 2px; border-top: 1px solid var(--border); align-items: start; }
+.setting:first-child { border-top: 0; }
+.setting-label label { display: block; font-weight: 600; margin-bottom: 3px; }
+.setting-label .hint { margin: 0; color: var(--fg-muted); font-size: 12px; line-height: 1.5; }
+.setting-label .hint code { font-size: 11px; }
+.setting-control { min-width: 0; }
+.setting-control input[type=url], .setting-control input[type=text], .setting-control input[type=password], .setting-control select { width: 100%; max-width: 460px; }
+.setting-control input.narrow { width: 80px; }
+.with-button { display: flex; gap: 8px; max-width: 460px; }
+.with-button input { flex: 1 1 auto; min-width: 0; }
+.status-line { margin: 14px 0 0; padding: 8px 12px; border-radius: var(--radius); border-left: 3px solid var(--border);
+  background: color-mix(in srgb, var(--fg) 5%, transparent); font-size: 13px; }
+.status-line.ok { border-left-color: var(--ok); }
+.status-line.bad { border-left-color: var(--danger); }
+.status-line .detail { display: block; margin-top: 4px; color: var(--fg-muted); font-size: 12px; word-break: break-word; }
+.tool-list { columns: 2; margin: 8px 0 0; padding-left: 18px; color: var(--fg-muted); font-size: 12px; }
+.tool-list li { break-inside: avoid; margin-bottom: 2px; }

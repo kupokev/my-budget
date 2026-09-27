@@ -23,3 +23,18 @@
 
 Built 2026-09-26, untested against a live Ollama (none reachable here). The status endpoint reports
 reachability; the chat endpoint returns 400 while disabled.
+
+
+## Connection details moved into the app (2026-09-27)
+
+`Ai:Enabled`, `Ai:BaseUrl` and `Ai:Model` lived in the API's `appsettings.json`. That worked while the
+API was a service you deployed and could edit a file for. Since ADR-0010 it runs inside the desktop
+app, so there is no file to edit and nowhere to put connection details but the database.
+
+They are now one row in `AppSettings`, edited on **Admin → Settings**. `AiOptionsProvider` resolves
+them per request, falling back to configuration when the row is absent — which is what the standalone
+API still does, where an appsettings file remains the natural place.
+
+The settings page also has **Test connection**, which probes an address *without saving it* and
+returns the models Ollama actually has installed, so the model is chosen from a list rather than
+typed from memory. A model still has to support tool calling for ADR-0003 to hold.

@@ -6,6 +6,7 @@ using Microsoft.Extensions.Hosting;
 using MyBudget.Api.Endpoints;
 using MyBudget.Contracts;
 using MyBudget.Data;
+using MyBudget.Domain;
 
 namespace MyBudget.Api;
 
@@ -32,8 +33,9 @@ public static class BudgetApiHost
         builder.Services.AddScoped<AlertsService>();
         builder.Services.AddScoped<AiTools>();
         builder.Services.AddHttpClient<IMarketDataProvider, YahooMarketDataProvider>(c => c.Timeout = TimeSpan.FromSeconds(20));
-        var aiOptions = builder.Configuration.GetSection(AiOptions.Section).Get<AiOptions>() ?? new AiOptions();
-        builder.Services.AddSingleton(aiOptions);
+        var configured = builder.Configuration.GetSection(AiOptions.Section).Get<AiOptions>() ?? new AiOptions();
+        builder.Services.AddSingleton(configured);
+        builder.Services.AddScoped<AiOptionsProvider>();
         builder.Services.AddHttpClient<AiService>(c => c.Timeout = TimeSpan.FromMinutes(3));
         builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter()));
         return builder;
@@ -61,6 +63,18 @@ public static class BudgetApiHost
 
         // Year-keyed reference tables (tax tables, HSA limits) are additive: only missing years are added.
         await ReferenceSeed.SeedAsync(db);
+
+        // One settings row, seeded from configuration the first time so an existing appsettings still applies.
+        if (!await db.AppSettings.AnyAsync())
+        {
+            var configured = scope.ServiceProvider.GetRequiredService<AiOptions>();
+            db.AppSettings.Add(new AppSettings
+            {
+                Id = 1, AiEnabled = configured.Enabled, AiBaseUrl = configured.BaseUrl,
+                AiModel = configured.Model, AiMaxToolRounds = configured.MaxToolRounds,
+            });
+            await db.SaveChangesAsync();
+        }
     }
 
     public static WebApplication MapBudgetApi(this WebApplication app, string? apiKey)

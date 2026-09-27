@@ -13,6 +13,7 @@ public sealed class AiOptions
     public bool Enabled { get; set; }
     public string BaseUrl { get; set; } = "http://localhost:11434";
     public string Model { get; set; } = "llama3.1";
+    public string? ApiKey { get; set; }
     public int MaxToolRounds { get; set; } = 6;
 }
 
@@ -99,27 +100,44 @@ public sealed class AiTools(BudgetDbContext db, PaycheckService paychecks, Inves
 }
 
 /// <summary>Ollama /api/chat with tools. Runs the tool loop, records every call for the audit trail, returns the final text.</summary>
-public sealed class AiService(HttpClient http, AiOptions options, AiTools tools)
+public sealed class AiService(HttpClient http, AiOptionsProvider optionsProvider, AiTools tools)
 {
     private const string System =
         "You are the assistant inside MyBudget, a personal budget app. Answer only from the results of the tools you call; " +
         "never guess or invent numbers. If no tool can answer the question, reply exactly: \"I can't answer that yet — there's no query function for it.\" " +
         "Be concise and plain. Money in US dollars. Today's date is {today}.";
 
+    /// <summary>
+    /// Ollama's own API and an OpenAI-compatible one differ in path shape. An address ending in /v1 is
+    /// treated as the latter, which is what a local runtime behind a gateway usually serves.
+    /// </summary>
+    private static bool IsOpenAiShaped(AiOptions o) => o.BaseUrl.TrimEnd('/').EndsWith("/v1", StringComparison.OrdinalIgnoreCase);
+
+    private static void Authorize(HttpClient http, AiOptions o)
+    {
+        http.DefaultRequestHeaders.Authorization = string.IsNullOrWhiteSpace(o.ApiKey)
+            ? null
+            : new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", o.ApiKey);
+    }
+
     public async Task<AiStatusDto> StatusAsync(CancellationToken ct = default)
     {
-        if (!options.Enabled) return new(false, options.BaseUrl, options.Model, AiTools.Catalog.Select(t => t.Name).ToList(), false, "Set Ai:Enabled=true and Ai:BaseUrl/Ai:Model in appsettings to turn this on.");
+        var options = await optionsProvider.GetAsync(ct);
+        if (!options.Enabled) return new(false, options.BaseUrl, options.Model, AiTools.Catalog.Select(t => t.Name).ToList(), false, "Turn the assistant on under Admin → Settings and point it at your Ollama instance.");
         try
         {
-            using var r = await http.GetAsync($"{options.BaseUrl.TrimEnd('/')}/api/tags", ct);
-            return new(true, options.BaseUrl, options.Model, AiTools.Catalog.Select(t => t.Name).ToList(), r.IsSuccessStatusCode, r.IsSuccessStatusCode ? null : $"Ollama answered {(int)r.StatusCode}");
+            Authorize(http, options);
+            var url = options.BaseUrl.TrimEnd('/');
+            using var r = await http.GetAsync(IsOpenAiShaped(options) ? $"{url}/models" : $"{url}/api/tags", ct);
+            return new(true, options.BaseUrl, options.Model, AiTools.Catalog.Select(t => t.Name).ToList(), r.IsSuccessStatusCode, r.IsSuccessStatusCode ? null : $"The model server answered {(int)r.StatusCode}.");
         }
         catch (Exception ex) { return new(true, options.BaseUrl, options.Model, AiTools.Catalog.Select(t => t.Name).ToList(), false, ex.Message); }
     }
 
     public async Task<ChatResponseDto> ChatAsync(IReadOnlyList<ChatMessageDto> history, DateOnly today, CancellationToken ct = default)
     {
-        if (!options.Enabled) throw new InvalidOperationException("Local AI is not enabled (Ai:Enabled).");
+        var options = await optionsProvider.GetAsync(ct);
+        if (!options.Enabled) throw new InvalidOperationException("The assistant is off. Turn it on under Admin → Settings.");
         var messages = new List<object> { new { role = "system", content = System.Replace("{today}", today.ToString("yyyy-MM-dd")) } };
         messages.AddRange(history.Select(m => new { role = m.Role, content = m.Content }));
         var toolDefs = AiTools.Catalog.Select(t => new { type = "function", function = new { name = t.Name, description = t.Description, parameters = t.Parameters } }).ToList();
@@ -127,11 +145,19 @@ public sealed class AiService(HttpClient http, AiOptions options, AiTools tools)
 
         for (var round = 0; round <= options.MaxToolRounds; round++)
         {
-            var body = new { model = options.Model, messages, tools = toolDefs, stream = false, options = new { temperature = 0.1 } };
-            using var res = await http.PostAsJsonAsync($"{options.BaseUrl.TrimEnd('/')}/api/chat", body, AiTools.Json, ct);
-            if (!res.IsSuccessStatusCode) throw new InvalidOperationException($"Ollama answered {(int)res.StatusCode}: {await res.Content.ReadAsStringAsync(ct)}");
+            Authorize(http, options);
+            var url = options.BaseUrl.TrimEnd('/');
+            var openAi = IsOpenAiShaped(options);
+            object body = openAi
+                ? new { model = options.Model, messages, tools = toolDefs, stream = false, temperature = 0.1 }
+                : new { model = options.Model, messages, tools = toolDefs, stream = false, options = new { temperature = 0.1 } };
+            using var res = await http.PostAsJsonAsync(openAi ? $"{url}/chat/completions" : $"{url}/api/chat", body, AiTools.Json, ct);
+            if (!res.IsSuccessStatusCode) throw new InvalidOperationException($"The model server answered {(int)res.StatusCode}: {await res.Content.ReadAsStringAsync(ct)}");
             using var doc = JsonDocument.Parse(await res.Content.ReadAsStringAsync(ct));
-            var msg = doc.RootElement.GetProperty("message");
+            // Ollama returns one "message"; an OpenAI-compatible server wraps it in "choices[0]".
+            var msg = openAi
+                ? doc.RootElement.GetProperty("choices")[0].GetProperty("message")
+                : doc.RootElement.GetProperty("message");
             var content = msg.TryGetProperty("content", out var c) ? c.GetString() ?? "" : "";
             if (!msg.TryGetProperty("tool_calls", out var toolCalls) || toolCalls.ValueKind != JsonValueKind.Array || toolCalls.GetArrayLength() == 0)
                 return new ChatResponseDto(content, calls, options.Model);
@@ -165,5 +191,27 @@ public sealed class AiService(HttpClient http, AiOptions options, AiTools tools)
                      "Use only those results. Mention the biggest category changes, any budget lines over projection, status goals that are short, goals off track, and the net worth change.";
         var r = await ChatAsync([new ChatMessageDto { Role = "user", Content = prompt }], today, ct);
         return new AiSummaryDto(year, month, r.Reply, r.ToolCalls, r.Model);
+    }
+}
+
+/// <summary>
+/// Reads the AI connection details out of the database rather than configuration, so they can be
+/// changed from the Settings page while the app is running. Configuration is still the fallback for
+/// the standalone API, where an appsettings file is the natural place for them.
+/// </summary>
+public sealed class AiOptionsProvider(BudgetDbContext db, AiOptions configured)
+{
+    public async Task<AiOptions> GetAsync(CancellationToken ct = default)
+    {
+        var row = await db.AppSettings.AsNoTracking().FirstOrDefaultAsync(ct);
+        if (row is null) return configured;
+        return new AiOptions
+        {
+            Enabled = row.AiEnabled,
+            BaseUrl = row.AiBaseUrl,
+            Model = row.AiModel,
+            ApiKey = row.AiApiKey,
+            MaxToolRounds = row.AiMaxToolRounds,
+        };
     }
 }

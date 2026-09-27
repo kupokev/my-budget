@@ -92,6 +92,9 @@ in-memory database resets on every restart either way.)
   groceries, gas). It is not derived from bills. That figure plus card-eligible bill accruals is the
   whole pool the rewards plan allocates, and the table totals it for you. Untick "can go on a card"
   for anything that can't take one.
+- **Admin → Settings.** Where the local AI is switched on and pointed at your Ollama instance. Enter
+  the address, press *Test connection*, and pick the model from the list it comes back with. Nothing
+  leaves your network, and the model only calls a fixed set of functions; it never sees the database.
 - **Admin → Loyalty programs.** Set up once and rarely touched, so it lives in Admin. One program per points currency (IHG One Rewards, Hilton Honors, Delta
   SkyMiles). Set each program's priority (1 = chase first), current and target tier,
   point value, and this year's nights / stays / program spend. Paths list every way to each tier.

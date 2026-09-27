@@ -197,4 +197,44 @@ public class BuildoutEndpointTests : IClassFixture<ApiFixture>
         removed.EnsureSuccessStatusCode();
         Assert.Equal(before, (await _api.Get<List<AssetDto>>("api/assets")).Single(a => a.Name == "Car").History.Count);
     }
+
+    [Fact]
+    public async Task Ai_connection_details_are_edited_in_the_app_not_a_config_file()
+    {
+        // A settings row exists from startup, so there is always something to edit.
+        var before = await _api.Get<AppSettingsDto>("api/settings");
+        Assert.False(before.AiEnabled);
+        Assert.False(string.IsNullOrWhiteSpace(before.AiBaseUrl));
+
+        var saved = await _api.Put<AppSettingsDto, AppSettingsDto>("api/settings", new AppSettingsDto
+        {
+            AiEnabled = true, AiBaseUrl = "http://nas.local:11434/", AiModel = "  qwen2.5:14b  ", AiMaxToolRounds = 99,
+        });
+
+        Assert.True(saved.AiEnabled);
+        Assert.Equal("http://nas.local:11434", saved.AiBaseUrl);   // trailing slash trimmed
+        Assert.Equal("qwen2.5:14b", saved.AiModel);                     // trimmed
+        Assert.Equal(20, saved.AiMaxToolRounds);                        // clamped
+
+        // The assistant reads those settings rather than configuration.
+        var status = await _api.Get<AiStatusDto>("api/ai/status");
+        Assert.True(status.Enabled);
+        Assert.Equal("http://nas.local:11434", status.BaseUrl);
+        Assert.Equal("qwen2.5:14b", status.Model);
+        Assert.NotEmpty(status.Tools);
+
+        // And the dashboard's AI flag follows the same row.
+        Assert.True((await _api.Get<HomeDashboardDto>("api/home/dashboard")).AiEnabled);
+
+        await _api.Put<AppSettingsDto, AppSettingsDto>("api/settings", before);
+    }
+
+    [Fact]
+    public async Task Probing_an_address_that_is_not_there_reports_it_rather_than_throwing()
+    {
+        var probe = await _api.Get<AiProbeDto>("api/settings/ai/probe?baseUrl=http://127.0.0.1:1");
+        Assert.False(probe.Reachable);
+        Assert.Empty(probe.Models);
+        Assert.False(string.IsNullOrWhiteSpace(probe.Error));
+    }
 }

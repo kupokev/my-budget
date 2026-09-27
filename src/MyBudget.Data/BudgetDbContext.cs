@@ -6,6 +6,7 @@ namespace MyBudget.Data;
 public sealed class BudgetDbContext(DbContextOptions<BudgetDbContext> options) : DbContext(options)
 {
     public DbSet<IncomeSource> IncomeSources => Set<IncomeSource>();
+    public DbSet<AppSettings> AppSettings => Set<AppSettings>();
     public DbSet<SalaryRate> SalaryRates => Set<SalaryRate>();
     public DbSet<PaySchedule> PaySchedules => Set<PaySchedule>();
     public DbSet<Account> Accounts => Set<Account>();

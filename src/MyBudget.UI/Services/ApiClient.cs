@@ -173,6 +173,9 @@ public sealed class ApiClient(HttpClient http)
     public Task<HomeDashboardDto> GetDashboardAsync() => Get<HomeDashboardDto>("api/home/dashboard");
     public Task<CumulativeSpendDto> GetCumulativeSpendAsync() => Get<CumulativeSpendDto>("api/spending/cumulative");
     public Task<AiStatusDto> GetAiStatusAsync() => Get<AiStatusDto>("api/ai/status");
+    public Task<AppSettingsDto> GetAppSettingsAsync() => Get<AppSettingsDto>("api/settings");
+    public Task<AppSettingsDto> SaveAppSettingsAsync(AppSettingsDto s) => Put<AppSettingsDto, AppSettingsDto>("api/settings", s);
+    public Task<AiProbeDto> ProbeAiAsync(string? baseUrl, string? apiKey) => Get<AiProbeDto>(Q("api/settings/ai/probe", ("baseUrl", baseUrl), ("apiKey", apiKey)));
     public Task<ChatResponseDto> ChatAsync(ChatRequest req) => Post<ChatRequest, ChatResponseDto>("api/ai/chat", req);
     public Task<AiSummaryDto> GetAiSummaryAsync(int year, int month) => Get<AiSummaryDto>($"api/ai/summary?year={year}&month={month}");
 

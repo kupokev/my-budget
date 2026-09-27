@@ -1,0 +1,166 @@
+@page "/settings"
+@inject ApiClient Api
+
+<ErrorBanner @bind-Message="error" />
+
+@if (settings is null)
+{
+    <p class="muted">Loading…</p>
+}
+else
+{
+    <section class="panel">
+        <h2>Local AI</h2>
+        <p class="muted">
+            The assistant and the monthly narrative run against a model server you control. Nothing leaves your
+            network unless the address you give points off it, and the model never sees the database: it calls a
+            fixed set of functions and narrates what they return.
+        </p>
+
+        <div class="settings-form">
+            <div class="setting">
+                <div class="setting-label">
+                    <label for="ai-enabled">Enabled</label>
+                    <p class="hint">Turn the assistant and the monthly narrative on.</p>
+                </div>
+                <div class="setting-control">
+                    <label class="inline"><input id="ai-enabled" type="checkbox" @bind="settings.AiEnabled" /> Use local AI</label>
+                </div>
+            </div>
+
+            <div class="setting">
+                <div class="setting-label">
+                    <label for="ai-url">Address</label>
+                    <p class="hint">
+                        Ollama's own API, e.g. <code>http://nas.local:11434</code>.
+                        An address ending in <code>/v1</code> is treated as OpenAI-compatible instead.
+                    </p>
+                </div>
+                <div class="setting-control">
+                    <input id="ai-url" type="url" @bind="settings.AiBaseUrl" placeholder="http://localhost:11434" />
+                </div>
+            </div>
+
+            <div class="setting">
+                <div class="setting-label">
+                    <label for="ai-key">API key</label>
+                    <p class="hint">
+                        Optional. A model server on your own machine usually needs none; anything behind a gateway does.
+                        Kept in the local database file and sent only to the address above.
+                    </p>
+                </div>
+                <div class="setting-control">
+                    <div class="with-button">
+                        <input id="ai-key" type="@(showKey ? "text" : "password")" @bind="settings.AiApiKey" placeholder="none" autocomplete="off" />
+                        <button class="secondary" type="button" @onclick="() => showKey = !showKey">@(showKey ? "Hide" : "Show")</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="setting">
+                <div class="setting-label">
+                    <label for="ai-model">Model</label>
+                    <p class="hint">
+                        It has to support tool calling. Test the connection and this becomes a list of what's installed.
+                    </p>
+                </div>
+                <div class="setting-control">
+                    @if (probe is { Reachable: true, Models.Count: > 0 })
+                    {
+                        <select id="ai-model" @bind="settings.AiModel">
+                            @if (!probe.Models.Contains(settings.AiModel ?? "")) { <option value="@settings.AiModel">@settings.AiModel</option> }
+                            @foreach (var m in probe.Models) { <option value="@m">@m</option> }
+                        </select>
+                    }
+                    else
+                    {
+                        <input id="ai-model" type="text" @bind="settings.AiModel" placeholder="llama3.1" />
+                    }
+                </div>
+            </div>
+
+            <div class="setting">
+                <div class="setting-label">
+                    <label for="ai-rounds">Tool rounds</label>
+                    <p class="hint">How many times it may call functions before it has to answer with what it has.</p>
+                </div>
+                <div class="setting-control">
+                    <input id="ai-rounds" type="number" min="1" max="20" class="narrow" @bind="settings.AiMaxToolRounds" />
+                </div>
+            </div>
+        </div>
+
+        @if (probing)
+        {
+            <p class="status-line muted">Checking @settings.AiBaseUrl…</p>
+        }
+        else if (probe is { } p)
+        {
+            <p class="status-line @(p.Reachable ? "ok" : "bad")">
+                <strong>@(p.Reachable ? "Reachable" : "Not reachable")</strong>
+                @if (p.Reachable) { <text> · @p.Models.Count model@(p.Models.Count == 1 ? "" : "s") available</text> }
+                @if (!string.IsNullOrWhiteSpace(p.Error)) { <span class="detail">@p.Error</span> }
+            </p>
+        }
+        else if (saved)
+        {
+            <p class="status-line ok"><strong>Saved.</strong> Test the connection to confirm the address answers.</p>
+        }
+
+        <div class="actions-row">
+            <button class="secondary" type="button" @onclick="Probe" disabled="@probing">Test connection</button>
+            <button type="button" @onclick="Save">Save</button>
+        </div>
+    </section>
+
+    <section class="panel">
+        <h2>What the assistant can answer</h2>
+        @if (status is { Tools.Count: > 0 } st)
+        {
+            <p class="muted">
+                @st.Tools.Count fixed functions. Anything outside them gets "I can't answer that yet" rather than a guess,
+                and the model never writes its own query.
+            </p>
+            <ul class="tool-list">@foreach (var t in st.Tools) { <li><code>@t</code></li> }</ul>
+        }
+        else { <p class="muted">Save the settings to see the function list.</p> }
+    </section>
+}
+
+@code {
+    private AppSettingsDto? settings;
+    private AiProbeDto? probe;
+    private AiStatusDto? status;
+    private bool probing, saved, showKey;
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            settings = await Api.GetAppSettingsAsync();
+            status = await Api.GetAiStatusAsync();
+        }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    /// <summary>Checks what's typed in, without saving it first.</summary>
+    private async Task Probe()
+    {
+        probing = true; saved = false; probe = null;
+        try { probe = await Api.ProbeAiAsync(settings!.AiBaseUrl, settings.AiApiKey); }
+        catch (Exception ex) { error = ex.Message; }
+        finally { probing = false; }
+    }
+
+    private async Task Save()
+    {
+        try
+        {
+            settings = await Api.SaveAppSettingsAsync(settings!);
+            status = await Api.GetAiStatusAsync();
+            saved = true; probe = null;
+        }
+        catch (Exception ex) { error = ex.Message; }
+    }
+}
