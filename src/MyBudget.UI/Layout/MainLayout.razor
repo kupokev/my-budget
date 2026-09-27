@@ -1,36 +1,103 @@
 @inherits LayoutComponentBase
+@implements IDisposable
+@inject NavigationManager Nav
+@using Microsoft.AspNetCore.Components.Routing
 
 <div class="shell">
     <nav class="sidebar">
         <div class="brand">MyBudget</div>
-        <NavLink href="" Match="NavLinkMatch.All">Dashboard</NavLink>
-        <NavLink href="budget">Budget</NavLink>
-        <NavLink href="cards">Cards</NavLink>
-        <NavLink href="paycheck">Paycheck</NavLink>
-        <NavLink href="hsa">HSA</NavLink>
-        <NavLink href="rewards">Rewards status</NavLink>
-        <div class="nav-group">Calculators</div>
-        <NavLink href="points-vs-cash">Points vs cash</NavLink>
-        <div class="nav-group">History</div>
-        <NavLink href="transactions">Transactions</NavLink>
-        <NavLink href="reports">Reports</NavLink>
-        <div class="nav-group">Wealth</div>
-        <NavLink href="investments">Investments</NavLink>
-        <NavLink href="assets">Assets</NavLink>
-        <NavLink href="owed">Owed to me</NavLink>
-        <div class="nav-group">Assistant</div>
-        <NavLink href="assistant">Chat</NavLink>
-        <div class="nav-group">Admin</div>
-        <NavLink href="accounts">Accounts</NavLink>
-        <NavLink href="income">Income sources</NavLink>
-        <NavLink href="loans">Loans</NavLink>
-        <NavLink href="categories">Categories &amp; labels</NavLink>
-        <NavLink href="loyalty-programs">Loyalty programs</NavLink>
-        <NavLink href="goals">Goals</NavLink>
-        <NavLink href="import">Import</NavLink>
-        <NavLink href="tax-tables">Tax tables</NavLink>
+        @foreach (var grp in Sections)
+        {
+            var open = expanded.Contains(grp.Name);
+            var name = grp.Name;
+            <button type="button" class="nav-group @(open ? "open" : "")" aria-expanded="@open" @onclick="() => Toggle(name)">
+                <span class="caret">@(open ? "▾" : "▸")</span>
+                <span class="label">@grp.Name</span>
+                @if (!open && grp.Items.Any(IsCurrent)) { <span class="here" title="The page you're on is in this section">●</span> }
+            </button>
+            @if (open)
+            {
+                foreach (var item in grp.Items)
+                {
+                    <NavLink href="@item.Href" Match="@(item.Exact ? NavLinkMatch.All : NavLinkMatch.Prefix)">@item.Label</NavLink>
+                }
+            }
+        }
     </nav>
     <main class="content" tabindex="-1">
         @Body
     </main>
 </div>
+
+@code {
+    private sealed record NavItem(string Href, string Label, bool Exact = false);
+    private sealed record NavSection(string Name, NavItem[] Items);
+
+    /// <summary>The nav as data. "Budget" heads the group that previously had no header at all.</summary>
+    private static readonly NavSection[] Sections =
+    [
+        new("Budget", [
+            new("", "Dashboard", Exact: true),
+            new("budget", "Budget"),
+            new("cards", "Cards"),
+            new("paycheck", "Paycheck"),
+            new("hsa", "HSA"),
+            new("rewards", "Rewards status"),
+        ]),
+        new("Wealth", [new("investments", "Investments"), new("assets", "Assets"), new("owed", "Owed to me")]),
+        new("Calculators", [new("points-vs-cash", "Points vs cash")]),
+        new("History", [new("transactions", "Transactions"), new("reports", "Reports")]),
+        new("Assistant", [new("assistant", "Chat")]),
+        new("Admin", [
+            new("accounts", "Accounts"),
+            new("income", "Income sources"),
+            new("loans", "Loans"),
+            new("categories", "Categories & labels"),
+            new("loyalty-programs", "Loyalty programs"),
+            new("goals", "Goals"),
+            new("import", "Import"),
+            new("tax-tables", "Tax tables"),
+        ]),
+    ];
+
+    /// <summary>Everything starts collapsed but Budget; the rest opens as you go looking.</summary>
+    private readonly HashSet<string> expanded = ["Budget"];
+
+    protected override void OnInitialized()
+    {
+        Nav.LocationChanged += OnLocationChanged;
+        OpenSectionForCurrentPage();
+    }
+
+    public void Dispose() => Nav.LocationChanged -= OnLocationChanged;
+
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        OpenSectionForCurrentPage();
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// A collapsed section hides the highlight that says where you are, so the section holding the
+    /// current page is opened. Sections opened by hand stay open until they're closed by hand.
+    /// </summary>
+    private void OpenSectionForCurrentPage()
+    {
+        foreach (var section in Sections.Where(s => s.Items.Any(IsCurrent)))
+            expanded.Add(section.Name);
+    }
+
+    private bool IsCurrent(NavItem item)
+    {
+        var path = Nav.ToBaseRelativePath(Nav.Uri).Split('?')[0].Split('#')[0].Trim('/');
+        return item.Exact
+            ? path.Length == 0
+            : path.Equals(item.Href, StringComparison.OrdinalIgnoreCase)
+              || path.StartsWith(item.Href + "/", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private void Toggle(string name)
+    {
+        if (!expanded.Remove(name)) expanded.Add(name);
+    }
+}
