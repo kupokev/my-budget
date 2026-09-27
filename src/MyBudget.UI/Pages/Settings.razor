@@ -1,0 +1,68 @@
+@page "/settings"
+@inject ApiClient Api
+
+<ErrorBanner @bind-Message="error" />
+
+@if (categories is null || bills is null)
+{
+    <p class="muted">Loading…</p>
+}
+else
+{
+    <section class="panel">
+        <h2>Categories</h2>
+        <p class="muted">Spending buckets used by bills, imported transactions, rewards earn rules and planned spend. Retiring one keeps its history but hides it from pickers.</p>
+        <table class="compact">
+            <thead><tr><th>Name</th><th>Bills</th><th class="money">Planned variable spend / month</th><th>Can go on a card</th><th>Active</th><th></th></tr></thead>
+            <tbody>
+            @foreach (var c in categories.OrderBy(c => !c.IsActive).ThenBy(c => c.Name))
+            {
+                <tr class="@(c.IsActive ? "" : "muted")">
+                    <td><input type="text" @bind="c.Name" /></td>
+                    <td>@bills.Count(b => b.CategoryId == c.Id)</td>
+                    <td><input type="number" step="1" class="narrow-money" @bind="c.PlannedMonthly" /></td>
+                    <td><input type="checkbox" @bind="c.IsCardEligible" /></td>
+                    <td><input type="checkbox" @bind="c.IsActive" /></td>
+                    <td><button class="secondary" type="button" @onclick="() => Save(c)">Save</button></td>
+                </tr>
+            }
+            </tbody>
+        </table>
+        <div class="row" style="margin-top:10px">
+            <input type="text" placeholder="New category" @bind="newName" />
+            <button type="button" @onclick="Add" disabled="@string.IsNullOrWhiteSpace(newName)">Add</button>
+            @if (saved is not null) { <span class="pos">@saved</span> }
+        </div>
+    </section>
+
+    <section class="panel">
+        <h2>Other admin</h2>
+        <p><a href="tax-tables">Tax tables and contribution limits</a> · <a href="rewards">Loyalty programs (Rewards → Programs)</a> · <a href="import">Import history and undo</a></p>
+    </section>
+}
+
+@code {
+    private List<CategoryDto>? categories;
+    private List<BillDto>? bills;
+    private string newName = "";
+    private string? saved, error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try { categories = await Api.GetCategoriesAsync(); bills = await Api.GetBillsAsync(); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task Save(CategoryDto c)
+    {
+        if (string.IsNullOrWhiteSpace(c.Name)) return;
+        try { await Api.SaveCategoryAsync(c); saved = $"Saved {c.Name}"; categories = await Api.GetCategoriesAsync(); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task Add()
+    {
+        try { await Api.SaveCategoryAsync(new CategoryDto { Name = newName.Trim() }); newName = ""; categories = await Api.GetCategoriesAsync(); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+}
