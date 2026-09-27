@@ -133,3 +133,51 @@ public class DividendEstimateTests
         Assert.Contains("No dividends recorded", formula);
     }
 }
+
+/// <summary>
+/// Picking the chat endpoint. The base URL alone doesn't say which API a server speaks: a gateway can
+/// serve the OpenAI routes under /api, which is what broke the monthly summary while the connection
+/// test was passing.
+/// </summary>
+public class ChatEndpointTests
+{
+    private static List<string> Urls(string baseUrl, AiApiStyle style)
+        => AiService.ChatEndpoints(new AiOptions { BaseUrl = baseUrl, Style = style }).Select(e => e.Url).ToList();
+
+    [Fact]
+    public void A_gateway_serving_openai_routes_under_api_is_reached_by_falling_back()
+    {
+        var urls = Urls("https://ai.example.com/api", AiApiStyle.Auto);
+
+        // Ollama's path is tried first, then the OpenAI ones beneath the same base.
+        Assert.Equal("https://ai.example.com/api/api/chat", urls[0]);
+        Assert.Contains("https://ai.example.com/api/v1/chat/completions", urls);
+        Assert.Contains("https://ai.example.com/api/chat/completions", urls);
+    }
+
+    [Fact]
+    public void A_base_that_already_ends_in_v1_is_never_tried_as_ollama()
+    {
+        var urls = Urls("http://localhost:11434/v1", AiApiStyle.Auto);
+        Assert.Equal(["http://localhost:11434/v1/chat/completions"], urls);
+        Assert.DoesNotContain(urls, u => u.Contains("/api/chat"));
+    }
+
+    [Fact]
+    public void A_plain_ollama_address_leads_with_its_own_api()
+        => Assert.Equal("http://localhost:11434/api/chat", Urls("http://localhost:11434", AiApiStyle.Auto)[0]);
+
+    [Theory]
+    [InlineData(AiApiStyle.Ollama, "/api/chat")]
+    [InlineData(AiApiStyle.OpenAiCompatible, "/chat/completions")]
+    public void Pinning_the_style_stops_the_other_one_being_tried(AiApiStyle style, string expected)
+    {
+        var urls = Urls("https://ai.example.com/api", style);
+        Assert.All(urls, u => Assert.Contains(expected, u));
+        Assert.NotEmpty(urls);
+    }
+
+    [Fact]
+    public void A_trailing_slash_does_not_double_up()
+        => Assert.DoesNotContain(Urls("http://localhost:11434/", AiApiStyle.Auto), u => u.Contains("//api"));
+}

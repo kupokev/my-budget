@@ -60,6 +60,23 @@ else
 
             <div class="setting">
                 <div class="setting-label">
+                    <label for="ai-style">API style</label>
+                    <p class="hint">
+                        Ollama's own API and an OpenAI-compatible one use different paths and reply shapes.
+                        Leave this on Auto and press Test connection; it sets itself to whatever answers.
+                    </p>
+                </div>
+                <div class="setting-control">
+                    <select id="ai-style" @bind="settings.AiApiStyle">
+                        <option value="@MyBudget.Domain.AiApiStyle.Auto">Auto (work it out)</option>
+                        <option value="@MyBudget.Domain.AiApiStyle.Ollama">Ollama</option>
+                        <option value="@MyBudget.Domain.AiApiStyle.OpenAiCompatible">OpenAI-compatible</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="setting">
+                <div class="setting-label">
                     <label for="ai-model">Model</label>
                     <p class="hint">
                         It has to support tool calling. Test the connection and this becomes a list of what's installed.
@@ -99,7 +116,12 @@ else
         {
             <p class="status-line @(p.Reachable ? "ok" : "bad")">
                 <strong>@(p.Reachable ? "Reachable" : "Not reachable")</strong>
-                @if (p.Reachable) { <text> · @p.Models.Count model@(p.Models.Count == 1 ? "" : "s") available</text> }
+                @if (p.Reachable)
+                {
+                    <text> · @p.Models.Count model@(p.Models.Count == 1 ? "" : "s") available · @(p.Style == MyBudget.Domain.AiApiStyle.Ollama ? "Ollama API" : "OpenAI-compatible API")</text>
+                    @if (p.Endpoint is { } ep) { <span class="detail">Chat will post to @ep</span> }
+                    @if (ModelMissing(p)) { <span class="detail neg">This server doesn't list "@settings!.AiModel". Pick one from the Model list above, or chat will fail.</span> }
+                }
                 @if (!string.IsNullOrWhiteSpace(p.Error)) { <span class="detail">@p.Error</span> }
             </p>
         }
@@ -249,11 +271,26 @@ else
         catch (Exception ex) { error = ex.Message; }
     }
 
+    /// <summary>
+    /// A model the server doesn't list is the difference between a connection test that passes and a
+    /// chat that fails, so it gets called out rather than quietly kept as the selected option.
+    /// </summary>
+    private bool ModelMissing(AiProbeDto p)
+        => p.Models.Count > 0 && !string.IsNullOrWhiteSpace(settings?.AiModel) && !p.Models.Contains(settings!.AiModel!);
+
     /// <summary>Checks what's typed in, without saving it first.</summary>
     private async Task Probe()
     {
         probing = true; saved = false; probe = null;
-        try { probe = await Api.ProbeAiAsync(settings!.AiBaseUrl, settings.AiApiKey); }
+        try
+        {
+            probe = await Api.ProbeAiAsync(settings!.AiBaseUrl, settings.AiApiKey);
+            if (probe is { Reachable: true } ok)
+            {
+                settings.AiApiStyle = ok.Style;
+                if (ModelMissing(ok)) settings.AiModel = ok.Models[0];
+            }
+        }
         catch (Exception ex) { error = ex.Message; }
         finally { probing = false; }
     }

@@ -222,11 +222,12 @@ public sealed class AppSettingsDto
     [StringLength(200)] public string? AiBaseUrl { get; set; }
     [StringLength(100)] public string? AiModel { get; set; }
     [StringLength(400)] public string? AiApiKey { get; set; }
+    public AiApiStyle AiApiStyle { get; set; } = AiApiStyle.Auto;
     [Range(1, 20)] public int AiMaxToolRounds { get; set; } = 6;
 }
 
 /// <summary>Result of pinging an Ollama address: whether it answered, and what it has installed.</summary>
-public sealed record AiProbeDto(bool Reachable, string BaseUrl, IReadOnlyList<string> Models, string? Error);
+public sealed record AiProbeDto(bool Reachable, string BaseUrl, IReadOnlyList<string> Models, string? Error, AiApiStyle Style = AiApiStyle.Auto, string? Endpoint = null);
 
 public sealed record AiStatusDto(bool Enabled, string? BaseUrl, string? Model, IReadOnlyList<string> Tools, bool Reachable, string? Error);
 

@@ -52,6 +52,7 @@ public static class BuildoutEndpoints
             row.AiBaseUrl = (dto.AiBaseUrl ?? "").Trim().TrimEnd('/');
             row.AiModel = (dto.AiModel ?? "").Trim();
             row.AiApiKey = string.IsNullOrWhiteSpace(dto.AiApiKey) ? null : dto.AiApiKey.Trim();
+            row.AiApiStyle = dto.AiApiStyle;
             row.AiMaxToolRounds = Math.Clamp(dto.AiMaxToolRounds, 1, 20);
             await db.SaveChangesAsync();
             return Results.Ok(ToDto(row));
@@ -60,37 +61,40 @@ public static class BuildoutEndpoints
         // the models that are actually installed rather than asking the name to be typed blind.
         // Probes an address without saving it. Tries Ollama's native endpoint first, then the
         // OpenAI-compatible one, because a local runtime behind a proxy usually serves the latter.
+        // Probes an address without saving it, walking the same candidate endpoints the chat call
+        // uses, and reports which dialect answered so the setting can be pinned rather than guessed.
         s.MapGet("/ai/probe", async (string? baseUrl, string? apiKey, IHttpClientFactory factory, BudgetDbContext db) =>
         {
             var saved = await Settings(db);
             var url = (string.IsNullOrWhiteSpace(baseUrl) ? saved.AiBaseUrl : baseUrl!).Trim().TrimEnd('/');
-            // Blank means "use the saved one", so the key doesn't have to be retyped to retest.
             var key = string.IsNullOrWhiteSpace(apiKey) ? saved.AiApiKey : apiKey;
+
             using var http = factory.CreateClient();
             http.Timeout = TimeSpan.FromSeconds(8);
             if (!string.IsNullOrWhiteSpace(key))
                 http.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", key);
 
+            var candidates = AiService.ChatEndpoints(new AiOptions { BaseUrl = url, Style = AiApiStyle.Auto });
             var attempts = new List<string>();
-            foreach (var (path, shape) in new[] { ("/api/tags", "ollama"), ("/v1/models", "openai") })
+            foreach (var (chatUrl, openAi) in candidates)
             {
-                // An address already ending in /v1 is an OpenAI-compatible one; don't glue /api/tags onto it.
-                if (shape == "ollama" && url.EndsWith("/v1", StringComparison.OrdinalIgnoreCase)) continue;
-                var probeUrl = shape == "openai" && url.EndsWith("/v1", StringComparison.OrdinalIgnoreCase) ? $"{url}/models" : $"{url}{path}";
+                var listUrl = chatUrl.Replace("/api/chat", "/api/tags").Replace("/chat/completions", "/models");
                 try
                 {
-                    using var r = await http.GetAsync(probeUrl);
+                    using var r = await http.GetAsync(listUrl);
                     var body = await r.Content.ReadAsStringAsync();
-                    if (!r.IsSuccessStatusCode) { attempts.Add($"{probeUrl} answered {(int)r.StatusCode}"); continue; }
+                    if (!r.IsSuccessStatusCode) { attempts.Add($"{listUrl} answered {(int)r.StatusCode}"); continue; }
                     if (!LooksLikeJson(body))
                     {
-                        attempts.Add($"{probeUrl} returned a web page, not JSON — usually a proxy or sign-in page in front of the model server");
+                        attempts.Add($"{listUrl} returned a web page, not JSON — usually a proxy or sign-in page in front of the model server");
                         continue;
                     }
-                    var models = ReadModels(body, shape);
-                    return new AiProbeDto(true, url, models, models.Count == 0 ? "Reachable, but no models are installed." : null);
+                    var models = ReadModels(body, openAi ? "openai" : "ollama");
+                    var style = openAi ? AiApiStyle.OpenAiCompatible : AiApiStyle.Ollama;
+                    return new AiProbeDto(true, url, models,
+                        models.Count == 0 ? "Reachable, but it lists no models." : null, style, chatUrl);
                 }
-                catch (Exception ex) { attempts.Add($"{probeUrl}: {ex.Message}"); }
+                catch (Exception ex) { attempts.Add($"{listUrl}: {ex.Message}"); }
             }
             return new AiProbeDto(false, url, [], string.Join("; ", attempts));
         });
@@ -145,7 +149,7 @@ public static class BuildoutEndpoints
 
     private static AppSettingsDto ToDto(AppSettings s) => new()
     {
-        AiEnabled = s.AiEnabled, AiBaseUrl = s.AiBaseUrl, AiModel = s.AiModel, AiApiKey = s.AiApiKey, AiMaxToolRounds = s.AiMaxToolRounds,
+        AiEnabled = s.AiEnabled, AiBaseUrl = s.AiBaseUrl, AiModel = s.AiModel, AiApiKey = s.AiApiKey, AiApiStyle = s.AiApiStyle, AiMaxToolRounds = s.AiMaxToolRounds,
     };
 
     private static bool LooksLikeJson(string body)

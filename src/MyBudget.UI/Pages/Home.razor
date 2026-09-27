@@ -88,6 +88,10 @@ else
         else
         {
             <div class="toolbar"><button type="button" @onclick="Summarize" disabled="@summarizing">@(summarizing ? "Asking the model…" : "Write this month's summary")</button></div>
+            @if (summarizing)
+            {
+                <p class="muted">It calls several query functions and then writes the narrative, so a few minutes is normal on a remote model. The answer appears here when it lands.</p>
+            }
             @if (summary is { } s)
             {
                 <p class="narrative">@s.Narrative</p>

@@ -37,7 +37,7 @@ public static class BudgetApiHost
         var configured = builder.Configuration.GetSection(AiOptions.Section).Get<AiOptions>() ?? new AiOptions();
         builder.Services.AddSingleton(configured);
         builder.Services.AddScoped<AiOptionsProvider>();
-        builder.Services.AddHttpClient<AiService>(c => c.Timeout = TimeSpan.FromMinutes(3));
+        builder.Services.AddHttpClient<AiService>(c => c.Timeout = TimeSpan.FromMinutes(4));
         builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter()));
         return builder;
     }

@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using MyBudget.Api.Endpoints;
 using MyBudget.Contracts;
 using MyBudget.Data;
+using MyBudget.Domain;
 
 namespace MyBudget.Api;
 
@@ -14,6 +15,7 @@ public sealed class AiOptions
     public string BaseUrl { get; set; } = "http://localhost:11434";
     public string Model { get; set; } = "llama3.1";
     public string? ApiKey { get; set; }
+    public AiApiStyle Style { get; set; } = AiApiStyle.Auto;
     public int MaxToolRounds { get; set; } = 6;
 }
 
@@ -108,10 +110,33 @@ public sealed class AiService(HttpClient http, AiOptionsProvider optionsProvider
         "Be concise and plain. Money in US dollars. Today's date is {today}.";
 
     /// <summary>
-    /// Ollama's own API and an OpenAI-compatible one differ in path shape. An address ending in /v1 is
-    /// treated as the latter, which is what a local runtime behind a gateway usually serves.
+    /// The candidate chat endpoints for a base URL, best guess first. Ollama serves /api/chat; an
+    /// OpenAI-compatible server serves /v1/chat/completions, except when the base already ends in /v1
+    /// or the gateway mounts the routes somewhere else — so both /v1/... and /... are offered.
     /// </summary>
-    private static bool IsOpenAiShaped(AiOptions o) => o.BaseUrl.TrimEnd('/').EndsWith("/v1", StringComparison.OrdinalIgnoreCase);
+    public static IReadOnlyList<(string Url, bool OpenAi)> ChatEndpoints(AiOptions o)
+    {
+        var url = o.BaseUrl.TrimEnd('/');
+        var ollama = (Url: $"{url}/api/chat", OpenAi: false);
+        var openAi = url.EndsWith("/v1", StringComparison.OrdinalIgnoreCase)
+            ? [(Url: $"{url}/chat/completions", OpenAi: true)]
+            : new[] { (Url: $"{url}/v1/chat/completions", OpenAi: true), (Url: $"{url}/chat/completions", OpenAi: true) };
+
+        return o.Style switch
+        {
+            AiApiStyle.Ollama => [ollama],
+            AiApiStyle.OpenAiCompatible => openAi,
+            // Auto: a base ending in /v1 is plainly OpenAI-shaped; otherwise try Ollama, then fall back.
+            _ when url.EndsWith("/v1", StringComparison.OrdinalIgnoreCase) => openAi,
+            _ => [ollama, .. openAi],
+        };
+    }
+
+    private static string Snippet(string body)
+    {
+        var t = body.Trim().ReplaceLineEndings(" ");
+        return t.Length == 0 ? "" : $": {(t.Length > 160 ? t[..160] + "…" : t)}";
+    }
 
     private static void Authorize(HttpClient http, AiOptions o)
     {
@@ -127,9 +152,17 @@ public sealed class AiService(HttpClient http, AiOptionsProvider optionsProvider
         try
         {
             Authorize(http, options);
-            var url = options.BaseUrl.TrimEnd('/');
-            using var r = await http.GetAsync(IsOpenAiShaped(options) ? $"{url}/models" : $"{url}/api/tags", ct);
-            return new(true, options.BaseUrl, options.Model, AiTools.Catalog.Select(t => t.Name).ToList(), r.IsSuccessStatusCode, r.IsSuccessStatusCode ? null : $"The model server answered {(int)r.StatusCode}.");
+            var reachable = false;
+            string? problem = null;
+            foreach (var (url, _) in ChatEndpoints(options))
+            {
+                // Ask for the model list that sits beside each chat endpoint.
+                var listUrl = url.Replace("/api/chat", "/api/tags").Replace("/chat/completions", "/models");
+                using var r = await http.GetAsync(listUrl, ct);
+                if (r.IsSuccessStatusCode) { reachable = true; break; }
+                problem ??= $"{listUrl} answered {(int)r.StatusCode}.";
+            }
+            return new(true, options.BaseUrl, options.Model, AiTools.Catalog.Select(t => t.Name).ToList(), reachable, reachable ? null : problem);
         }
         catch (Exception ex) { return new(true, options.BaseUrl, options.Model, AiTools.Catalog.Select(t => t.Name).ToList(), false, ex.Message); }
     }
@@ -143,17 +176,54 @@ public sealed class AiService(HttpClient http, AiOptionsProvider optionsProvider
         var toolDefs = AiTools.Catalog.Select(t => new { type = "function", function = new { name = t.Name, description = t.Description, parameters = t.Parameters } }).ToList();
         var calls = new List<ToolCallDto>();
 
+        // Settled on the first round and reused, so a fallback costs one extra request per conversation.
+        (string Url, bool OpenAi)? endpoint = null;
+
         for (var round = 0; round <= options.MaxToolRounds; round++)
         {
             Authorize(http, options);
-            var url = options.BaseUrl.TrimEnd('/');
-            var openAi = IsOpenAiShaped(options);
-            object body = openAi
-                ? new { model = options.Model, messages, tools = toolDefs, stream = false, temperature = 0.1 }
-                : new { model = options.Model, messages, tools = toolDefs, stream = false, options = new { temperature = 0.1 } };
-            using var res = await http.PostAsJsonAsync(openAi ? $"{url}/chat/completions" : $"{url}/api/chat", body, AiTools.Json, ct);
-            if (!res.IsSuccessStatusCode) throw new InvalidOperationException($"The model server answered {(int)res.StatusCode}: {await res.Content.ReadAsStringAsync(ct)}");
-            using var doc = JsonDocument.Parse(await res.Content.ReadAsStringAsync(ct));
+
+            string? payload = null;
+            var problems = new List<string>();
+            foreach (var candidate in endpoint is { } known ? [known] : ChatEndpoints(options))
+            {
+                object body = candidate.OpenAi
+                    ? new { model = options.Model, messages, tools = toolDefs, stream = false, temperature = 0.1 }
+                    : new { model = options.Model, messages, tools = toolDefs, stream = false, options = new { temperature = 0.1 } };
+                HttpResponseMessage res;
+                try
+                {
+                    res = await http.PostAsJsonAsync(candidate.Url, body, AiTools.Json, ct);
+                }
+                catch (TaskCanceledException) when (!ct.IsCancellationRequested)
+                {
+                    // The model didn't answer in time. Say which round, because the summary makes
+                    // several calls and a model that is merely slow will die on the first one.
+                    throw new InvalidOperationException(
+                        $"{options.Model} didn't answer within the time limit (round {round + 1} of up to {options.MaxToolRounds + 1}). " +
+                        "A large model over a remote connection can be too slow for this; try a smaller one, or lower Tool rounds under Admin → Settings.");
+                }
+                using var _ = res;
+                var text = await res.Content.ReadAsStringAsync(ct);
+                if (res.IsSuccessStatusCode) { endpoint = candidate; payload = text; break; }
+                problems.Add($"{candidate.Url} answered {(int)res.StatusCode}{Snippet(text)}");
+            }
+
+            if (payload is null)
+            {
+                // A "model not found" means the address and key are fine and only the name is wrong,
+                // which is a different fix from the address being wrong.
+                var modelRejected = problems.Any(p => p.Contains("model", StringComparison.OrdinalIgnoreCase)
+                                                      && p.Contains("not found", StringComparison.OrdinalIgnoreCase));
+                throw new InvalidOperationException(modelRejected
+                    ? $"The server at {options.BaseUrl} doesn't have a model called \"{options.Model}\". " +
+                      "Press Test connection under Admin → Settings and pick one from the list it returns."
+                    : $"Couldn't reach a chat endpoint on {options.BaseUrl}. Tried: {string.Join("; ", problems)}. " +
+                      "Set the API style explicitly under Admin → Settings if the address is right.");
+            }
+
+            var openAi = endpoint!.Value.OpenAi;
+            using var doc = JsonDocument.Parse(payload);
             // Ollama returns one "message"; an OpenAI-compatible server wraps it in "choices[0]".
             var msg = openAi
                 ? doc.RootElement.GetProperty("choices")[0].GetProperty("message")
@@ -211,6 +281,7 @@ public sealed class AiOptionsProvider(BudgetDbContext db, AiOptions configured)
             BaseUrl = row.AiBaseUrl,
             Model = row.AiModel,
             ApiKey = row.AiApiKey,
+            Style = row.AiApiStyle,
             MaxToolRounds = row.AiMaxToolRounds,
         };
     }

@@ -211,7 +211,11 @@ public sealed class ApiClient(HttpClient http)
     }
 
     private async Task<T> Get<T>(string url)
-        => await http.GetFromJsonAsync<T>(url, Json) ?? throw new InvalidOperationException($"Empty response from {url}");
+    {
+        var r = await http.GetAsync(url);
+        await ThrowIfFailed(r);   // carries the API's own message through, not just the status code
+        return await r.Content.ReadFromJsonAsync<T>(Json) ?? throw new InvalidOperationException($"Empty response from {url}");
+    }
 
     private Task<T> Post<T>(string url, T body) => Post<T, T>(url, body);
 

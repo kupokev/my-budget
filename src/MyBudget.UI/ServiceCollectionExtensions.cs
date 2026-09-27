@@ -14,6 +14,9 @@ public static class ServiceCollectionExtensions
         {
             client.BaseAddress = new Uri(options.BaseUrl.TrimEnd('/') + "/");
             client.DefaultRequestHeaders.Add(ApiKeyHeader.Name, options.ApiKey);
+            // Longer than the API's own limit on a model call, so a slow model produces the API's
+            // explanation rather than the client abandoning the request first with a bare timeout.
+            client.Timeout = TimeSpan.FromMinutes(6);
         });
         return services;
     }
