@@ -133,7 +133,7 @@ public static class RewardsEndpoints
     {
         Id = p.Id, Name = p.Name, PointValueCents = p.PointValueCents, PointsBalance = p.PointsBalance, CurrentTier = p.CurrentTier, TargetTier = p.TargetTier,
         Priority = p.Priority, IsActive = p.IsActive, Notes = p.Notes,
-        Tiers = p.Tiers.OrderBy(t => t.Rank).Select(t => t.Name).ToList(),
+        Tiers = p.Tiers.OrderBy(t => t.Rank).Select(t => new LoyaltyTierDto { Name = t.Name, Benefits = t.Benefits }).ToList(),
         Paths = p.Paths.OrderBy(x => x.TierName).ThenBy(x => x.Kind).Select(x => new StatusPathDto { Id = x.Id, TierName = x.TierName, Kind = x.Kind, Threshold = x.Threshold, CardId = x.CardId, StartYear = x.StartYear, EndYear = x.EndYear, Notes = x.Notes }).ToList(),
         Progress = p.Progress.OrderByDescending(x => x.Year).Select(x => new LoyaltyProgressDto { Year = x.Year, Nights = x.Nights, Stays = x.Stays, ProgramSpend = x.ProgramSpend, QualifyingPoints = x.QualifyingPoints }).ToList(),
     };
@@ -143,7 +143,7 @@ public static class RewardsEndpoints
         e.Name = d.Name.Trim(); e.PointValueCents = d.PointValueCents; e.PointsBalance = d.PointsBalance; e.CurrentTier = Mapping.Clean(d.CurrentTier);
         e.TargetTier = Mapping.Clean(d.TargetTier); e.Priority = d.Priority; e.IsActive = d.IsActive; e.Notes = d.Notes;
         e.Tiers.Clear();
-        e.Tiers.AddRange(d.Tiers.Where(t => !string.IsNullOrWhiteSpace(t)).Select((t, i) => new LoyaltyTier { Name = t.Trim(), Rank = i }));
+        e.Tiers.AddRange(d.Tiers.Where(t => !string.IsNullOrWhiteSpace(t.Name)).Select((t, i) => new LoyaltyTier { Name = t.Name.Trim(), Rank = i, Benefits = Mapping.Clean(t.Benefits) }));
         e.Paths.Clear();
         e.Paths.AddRange(d.Paths.Where(x => !string.IsNullOrWhiteSpace(x.TierName)).Select(x => new StatusPath { TierName = x.TierName.Trim(), Kind = x.Kind, Threshold = x.Threshold, CardId = x.Kind is StatusPathKind.CardSpend or StatusPathKind.HoldCard ? x.CardId : null, StartYear = x.StartYear, EndYear = x.EndYear, Notes = x.Notes }));
         e.Progress.Clear();

@@ -37,7 +37,22 @@ else
                 <div class="field"><label>Points balance</label><input type="number" step="1" @bind="pe.PointsBalance" /></div>
                 <div class="field"><label class="inline"><input type="checkbox" @bind="pe.IsActive" /> Active</label></div>
             </div>
-            <div class="field"><label>Tiers, lowest first (comma-separated)</label><input type="text" value="@string.Join(", ", pe.Tiers)" @onchange="SetTiers" /></div>
+            <h3>Tiers, lowest first</h3>
+        <p class="muted">What each tier actually gets you. This is what shows on Rewards status, so write it the way you'd want to be reminded of it: breakfast, upgrades, lounge, late checkout.</p>
+        <table class="compact">
+            <thead><tr><th>Tier</th><th>What it gets you</th><th></th></tr></thead>
+            <tbody>
+            @foreach (var t in pe.Tiers)
+            {
+                <tr>
+                    <td><input type="text" class="narrow" @bind="t.Name" /></td>
+                    <td><input type="text" @bind="t.Benefits" /></td>
+                    <td class="actions"><button class="link danger" type="button" title="Remove" @onclick="() => pe.Tiers.Remove(t)">✕</button></td>
+                </tr>
+            }
+            </tbody>
+        </table>
+        <button class="secondary" type="button" @onclick="() => pe.Tiers.Add(new LoyaltyTierDto())">Add tier</button>
             <h3>Paths to each tier</h3>
             <table>
                 <thead><tr><th>Tier</th><th>How</th><th class="money">Threshold</th><th>Card</th><th>From year</th><th>Until year</th><th>Notes</th><th></th></tr></thead>
@@ -106,13 +121,10 @@ else
     private void EditProgram(LoyaltyProgramDto p) => programEdit = new()
     {
         Id = p.Id, Name = p.Name, PointValueCents = p.PointValueCents, PointsBalance = p.PointsBalance, CurrentTier = p.CurrentTier, TargetTier = p.TargetTier, Priority = p.Priority, IsActive = p.IsActive, Notes = p.Notes,
-        Tiers = p.Tiers.ToList(),
+        Tiers = p.Tiers.Select(t => new LoyaltyTierDto { Name = t.Name, Benefits = t.Benefits }).ToList(),
         Paths = p.Paths.Select(x => new StatusPathDto { Id = x.Id, TierName = x.TierName, Kind = x.Kind, Threshold = x.Threshold, CardId = x.CardId, StartYear = x.StartYear, EndYear = x.EndYear, Notes = x.Notes }).ToList(),
         Progress = p.Progress.Select(x => new LoyaltyProgressDto { Year = x.Year, Nights = x.Nights, Stays = x.Stays, ProgramSpend = x.ProgramSpend, QualifyingPoints = x.QualifyingPoints }).ToList(),
     };
-
-    private void SetTiers(ChangeEventArgs e)
-        => programEdit!.Tiers = ((string?)e.Value ?? string.Empty).Split(',').Select(t => t.Trim()).Where(t => t.Length > 0).ToList();
 
     private void AddPath() => programEdit!.Paths.Add(new StatusPathDto { TierName = programEdit.TargetTier ?? string.Empty });
 

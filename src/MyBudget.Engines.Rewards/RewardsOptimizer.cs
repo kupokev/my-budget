@@ -124,7 +124,7 @@ public static class RewardsOptimizer
 
             if (p.TargetTier is null)
             {
-                statuses.Add(new ProgramStatusDto(p.Id, p.Name, p.Priority, p.CurrentTier, null, held, false, "no target tier set", null, paths, p.PointsBalance, pointsValue));
+                statuses.Add(new ProgramStatusDto(p.Id, p.Name, p.Priority, p.CurrentTier, null, held, false, "no target tier set", null, paths, p.PointsBalance, pointsValue, TierLadder(p)));
                 continue;
             }
 
@@ -134,21 +134,21 @@ public static class RewardsOptimizer
             if (RankOf(held) >= RankOf(p.TargetTier) && held is not null)
             {
                 steps.Add($"{p.Name}: {p.TargetTier} is held for holding a card; no spend needed");
-                statuses.Add(new ProgramStatusDto(p.Id, p.Name, p.Priority, p.CurrentTier, p.TargetTier, held, true, $"granted for holding a card ({held})", null, paths, p.PointsBalance, pointsValue));
+                statuses.Add(new ProgramStatusDto(p.Id, p.Name, p.Priority, p.CurrentTier, p.TargetTier, held, true, $"granted for holding a card ({held})", null, paths, p.PointsBalance, pointsValue, TierLadder(p)));
                 continue;
             }
             // Status earned last year is status you hold this year: no spend needed now, though next year's plan still shows it.
             if (input.CarryCurrentTier && p.CurrentTier is not null && RankOf(p.CurrentTier) >= RankOf(p.TargetTier))
             {
                 steps.Add($"{p.Name}: already {p.CurrentTier} this year (earned earlier); re-qualifying only matters for next year");
-                statuses.Add(new ProgramStatusDto(p.Id, p.Name, p.Priority, p.CurrentTier, p.TargetTier, held, true, $"already {p.CurrentTier} this year", null, paths, p.PointsBalance, pointsValue));
+                statuses.Add(new ProgramStatusDto(p.Id, p.Name, p.Priority, p.CurrentTier, p.TargetTier, held, true, $"already {p.CurrentTier} this year", null, paths, p.PointsBalance, pointsValue, TierLadder(p)));
                 continue;
             }
             var reached = targetPaths.FirstOrDefault(x => x.Reached);
             if (reached is not null)
             {
                 steps.Add($"{p.Name}: {p.TargetTier} already reached via {Describe(reached)}");
-                statuses.Add(new ProgramStatusDto(p.Id, p.Name, p.Priority, p.CurrentTier, p.TargetTier, held, true, $"reached via {Describe(reached)}", reached, paths, p.PointsBalance, pointsValue));
+                statuses.Add(new ProgramStatusDto(p.Id, p.Name, p.Priority, p.CurrentTier, p.TargetTier, held, true, $"reached via {Describe(reached)}", reached, paths, p.PointsBalance, pointsValue, TierLadder(p)));
                 continue;
             }
 
@@ -161,7 +161,7 @@ public static class RewardsOptimizer
             if (cardPath is null)
             {
                 steps.Add($"{p.Name}: no card-spend path to {p.TargetTier}; other paths: {string.Join("; ", alternatives)}");
-                statuses.Add(new ProgramStatusDto(p.Id, p.Name, p.Priority, p.CurrentTier, p.TargetTier, held, false, "no card-spend path; see other paths", null, paths, p.PointsBalance, pointsValue));
+                statuses.Add(new ProgramStatusDto(p.Id, p.Name, p.Priority, p.CurrentTier, p.TargetTier, held, false, "no card-spend path; see other paths", null, paths, p.PointsBalance, pointsValue, TierLadder(p)));
                 continue;
             }
 
@@ -177,7 +177,7 @@ public static class RewardsOptimizer
                 steps.Add($"{p.Name}: short {required - alloc:C}/mo — {(alternatives.Count > 0 ? "alternatives: " + string.Join("; ", alternatives) : "no other path")}");
             }
             statuses.Add(new ProgramStatusDto(p.Id, p.Name, p.Priority, p.CurrentTier, p.TargetTier, held, false,
-                alloc >= required ? $"on plan: {alloc:C}/mo on {card.Name}" : $"short {required - alloc:C}/mo on {card.Name}", cardPath, paths, p.PointsBalance, pointsValue));
+                alloc >= required ? $"on plan: {alloc:C}/mo on {card.Name}" : $"short {required - alloc:C}/mo on {card.Name}", cardPath, paths, p.PointsBalance, pointsValue, TierLadder(p)));
         }
 
         // Route categories: goal cards first (categories they earn most on), remainder to the best value card.
@@ -215,6 +215,10 @@ public static class RewardsOptimizer
         return (statuses, new SpendPlanDto(input.Year, input.AsOf, monthsLeft, projectedMonthly,
             $"card-eligible bills + planned variable spend by category", allocations, routing, gaps, steps));
     }
+
+    /// <summary>The program's tiers, lowest first, each with what holding it gets you.</summary>
+    private static List<LoyaltyTierDto> TierLadder(LoyaltyProgram p)
+        => p.Tiers.OrderBy(t => t.Rank).Select(t => new LoyaltyTierDto { Name = t.Name, Benefits = t.Benefits }).ToList();
 
     private static PathProgressDto PathProgress(StatusPath path, LoyaltyProgress? progress, Dictionary<int, decimal> ytd, List<Card> cards, int monthsLeft)
     {

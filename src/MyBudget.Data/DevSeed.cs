@@ -88,13 +88,22 @@ public static class DevSeed
             // Diamond was earned by spending $40,000 on the card in 2025, so it is held all through 2026
             // without spending again; the 2027 plan is where the $40,000 shows up as a goal once more.
             Name = "IHG One Rewards", PointValueCents = 0.5m, Priority = 1, TargetTier = "Diamond", CurrentTier = "Diamond", PointsBalance = 85_000m,
-            Tiers = [new() { Name = "Club", Rank = 0 }, new() { Name = "Silver", Rank = 1 }, new() { Name = "Gold", Rank = 2 }, new() { Name = "Platinum", Rank = 3 }, new() { Name = "Diamond", Rank = 4 }],
+            Tiers = [
+                new() { Name = "Club", Rank = 0 },
+                new() { Name = "Silver", Rank = 1, Benefits = "10% bonus points, late checkout when available" },
+                new() { Name = "Gold", Rank = 2, Benefits = "20% bonus points, room upgrade when available" },
+                new() { Name = "Platinum", Rank = 3, Benefits = "60% bonus points, room upgrade, guaranteed late checkout, free breakfast at some brands" },
+                new() { Name = "Diamond", Rank = 4, Benefits = "100% bonus points, best available upgrade incl. suites, free breakfast, welcome amenity, guaranteed 4pm checkout" }],
             Progress = [new LoyaltyProgress { Year = 2026, Nights = 12, QualifyingPoints = 30_000m }, new LoyaltyProgress { Year = 2025, Nights = 21, ProgramSpend = 40_000m }],
         };
         var hiltonProgram = new LoyaltyProgram
         {
             Name = "Hilton Honors", PointValueCents = 0.5m, Priority = 2, TargetTier = "Diamond", CurrentTier = "Gold", PointsBalance = 120_000m,
-            Tiers = [new() { Name = "Member", Rank = 0 }, new() { Name = "Silver", Rank = 1 }, new() { Name = "Gold", Rank = 2 }, new() { Name = "Diamond", Rank = 3 }],
+            Tiers = [
+                new() { Name = "Member", Rank = 0 },
+                new() { Name = "Silver", Rank = 1, Benefits = "20% bonus points, 5th night free on awards, free water" },
+                new() { Name = "Gold", Rank = 2, Benefits = "80% bonus points, free breakfast or daily credit, space-available upgrades, 5th night free" },
+                new() { Name = "Diamond", Rank = 3, Benefits = "100% bonus points, executive lounge access, upgrades incl. suites, guaranteed room availability with 48h notice" }],
             Progress = [new LoyaltyProgress { Year = 2026, Nights = 18, Stays = 9, ProgramSpend = 4_200m }],
         };
         var deltaProgram = new LoyaltyProgram
@@ -105,7 +114,10 @@ public static class DevSeed
         var hertzProgram = new LoyaltyProgram
         {
             Name = "Hertz Gold Plus Rewards", PointValueCents = 0.4m, Priority = 4, TargetTier = "Five Star",
-            Tiers = [new() { Name = "Gold", Rank = 0 }, new() { Name = "Five Star", Rank = 1 }, new() { Name = "President's Circle", Rank = 2 }],
+            Tiers = [
+                new() { Name = "Gold", Rank = 0, Benefits = "Skip the counter, choose from the Gold aisle" },
+                new() { Name = "Five Star", Rank = 1, Benefits = "Free single upgrade, wider car selection" },
+                new() { Name = "President's Circle", Rank = 2, Benefits = "Guaranteed upgrade, any car from the President's Circle aisle" }],
             Notes = "Five Star comes free with the IHG Premier card, not from renting.",
         };
         db.LoyaltyPrograms.AddRange(ihgProgram, hiltonProgram, deltaProgram, hertzProgram);

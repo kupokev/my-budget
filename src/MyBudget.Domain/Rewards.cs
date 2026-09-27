@@ -43,6 +43,8 @@ public class LoyaltyTier
     public required string Name { get; set; }
     /// <summary>Higher is better.</summary>
     public int Rank { get; set; }
+    /// <summary>What holding this tier gets you: breakfast, upgrades, lounge access, late checkout.</summary>
+    public string? Benefits { get; set; }
 }
 
 /// <summary>One way to reach a tier (RWD-2): e.g. Diamond via $40,000 on the IHG Premier, or via 70 nights.</summary>

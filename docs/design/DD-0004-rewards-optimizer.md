@@ -20,6 +20,7 @@ value, and say plainly when the spend can't cover every goal and what the other 
 | Entity | Purpose |
 | --- | --- |
 | `LoyaltyProgram` | Program, point value in cents, points balance, current and target tier, priority (1 first). Tiers ordered by rank |
+| `LoyaltyTier` | One rung of the ladder: name, rank, and `Benefits` — what holding it actually gets you (breakfast, upgrades, lounge). Shown on Rewards status so the reason for chasing a tier is visible next to the progress toward it |
 | `StatusPath` | One way to a tier: CardSpend (card, amount), HoldCard (card), Nights, Stays, ProgramSpend, QualifyingPoints. Optional `StartYear`/`EndYear`. A HoldCard path may point at **any** card, including one from an unrelated brand |
 | `LoyaltyProgress` | Year-to-date nights / stays / program spend / qualifying points, entered by hand |
 | `EarnRule` | Card × category × **label** → points per dollar. Most specific wins: category+label, then label, then category, then the base rate (both null). Annual cap stored, not enforced |
@@ -27,7 +28,7 @@ value, and say plainly when the spend can't cover every goal and what the other 
 | `CardPerk` | Something a card gives you for holding it, with no spend threshold and no program behind it: a TSA PreCheck credit, a travel credit, free bags. Annual dollar value, optional year range |
 | `CardSpend` | Card × month × category actual spend, from statements until import (Phase 4) fills it |
 | `Card` additions | Loyalty program, point-value override |
-| `Category` additions | `PlannedMonthly` variable spend, `IsCardEligible` |
+| `Category` additions | `PlannedMonthly` variable spend, `IsCardEligible`. Edited on Admin → Categories & labels only; the rewards report used to carry a duplicate editor for the same two fields and no longer does |
 | `Label` | Where a purchase happened (Amazon, Costco, IHG) next to the category that says what kind it was. Optional usual category and planned monthly spend, which is **carved out** of that category's planned amount rather than added to it. Carried on transactions, categorization rules, card spend and earn rules |
 | `Bill` additions | `IsCardEligible` (mortgage, HELOC, car: false) |
 

@@ -13,6 +13,7 @@ else
     <section class="panel">
         <h2>Categories</h2>
         <p class="muted">Spending buckets used by bills, imported transactions, rewards earn rules and planned spend. Retiring one keeps its history but hides it from pickers.</p>
+        <p class="muted"><strong>Planned variable spend</strong> is what you expect to put on cards each month beyond tracked bills: restaurants, groceries, gas. It is not derived from bills, and together with card-eligible bills it is the whole pool the <a href="rewards">rewards plan</a> has to allocate. Untick "can go on a card" for anything that can't take one.</p>
         <table class="compact">
             <thead><tr><th>Name</th><th>Bills</th><th class="money">Planned variable spend / month</th><th>Can go on a card</th><th>Active</th><th></th></tr></thead>
             <tbody>
@@ -28,6 +29,7 @@ else
                 </tr>
             }
             </tbody>
+            <tfoot><tr><th>Card-eligible planned spend</th><th></th><th class="money"><Money Value="categories.Where(c => c.IsActive && c.IsCardEligible).Sum(c => c.PlannedMonthly ?? 0)" /></th><th colspan="3"></th></tr></tfoot>
         </table>
         <div class="row" style="margin-top:10px">
             <input type="text" placeholder="New category" @bind="newName" />

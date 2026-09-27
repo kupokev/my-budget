@@ -24,6 +24,10 @@ public class RewardsEndpointTests : IClassFixture<ApiFixture>
         Assert.Contains(ihgProg.Paths, x => x.Kind == StatusPathKind.CardSpend && x.CardId == ihg.Id && x.Threshold == 40_000m);
         Assert.Contains(ihgProg.Paths, x => x.Kind == StatusPathKind.HoldCard && x.TierName == "Platinum");
 
+        // The tier ladder carries what each tier actually gets you, and keeps its order.
+        Assert.Equal(["Club", "Silver", "Gold", "Platinum", "Diamond"], ihgProg.Tiers.Select(t => t.Name));
+        Assert.Contains("breakfast", ihgProg.Tiers.Single(t => t.Name == "Diamond").Benefits!);
+
         // A cash-back card is the same machinery: no program, a point worth 1¢.
         var citi = cards.Single(c => c.Name == "Citi Double Cash");
         var citiRewards = await _api.Get<CardRewardsDto>($"api/cards/{citi.Id}/rewards");
@@ -114,5 +118,20 @@ public class RewardsEndpointTests : IClassFixture<ApiFixture>
         hiltonProgram.Paths.RemoveAll(x => x.CardId == created.Id);
         await _api.Put($"api/loyalty-programs/{hiltonProgram.Id}", hiltonProgram);
         await _api.Client.DeleteAsync($"api/cards/{created.Id}");
+    }
+
+    [Fact]
+    public async Task Tier_benefits_round_trip_and_reach_the_status_report()
+    {
+        var program = (await _api.Get<List<LoyaltyProgramDto>>("api/loyalty-programs")).Single(p => p.Name == "Hertz Gold Plus Rewards");
+        program.Tiers.Single(t => t.Name == "Five Star").Benefits = "Free single upgrade and a wider aisle";
+        var saved = await _api.Put($"api/loyalty-programs/{program.Id}", program);
+        Assert.Equal("Free single upgrade and a wider aisle", saved.Tiers.Single(t => t.Name == "Five Star").Benefits);
+
+        // The Rewards status page reads them off the report, not off the program list.
+        var report = await _api.Get<RewardsReportDto>("api/rewards/report?year=2026&asOf=2026-09-26");
+        var hertz = report.Programs.Single(p => p.Name == "Hertz Gold Plus Rewards");
+        Assert.Equal(["Gold", "Five Star", "President's Circle"], hertz.Tiers.Select(t => t.Name));
+        Assert.Equal("Free single upgrade and a wider aisle", hertz.Tiers.Single(t => t.Name == "Five Star").Benefits);
     }
 }

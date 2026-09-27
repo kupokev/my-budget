@@ -82,15 +82,18 @@ in-memory database resets on every restart either way.)
   thresholds. A rule with a label beats one with only a category, so "General merchandise at Amazon
   5×" and "General merchandise 1×" live side by side. Earn rules and
   thresholds take an optional year range, so a promo rate for one year doesn't skew other years.
-- **Admin → Loyalty programs.** One program per points currency (IHG One Rewards, Hilton Honors, Delta
+- **Admin → Categories & labels.** As well as naming the buckets, this is where planned variable
+  spend lives: what you expect to put on cards each month beyond tracked bills (restaurants,
+  groceries, gas). It is not derived from bills. That figure plus card-eligible bill accruals is the
+  whole pool the rewards plan allocates, and the table totals it for you. Untick "can go on a card"
+  for anything that can't take one.
+- **Admin → Loyalty programs.** Set up once and rarely touched, so it lives in Admin. One program per points currency (IHG One Rewards, Hilton Honors, Delta
   SkyMiles). Set each program's priority (1 = chase first), current and target tier,
   point value, and this year's nights / stays / program spend. Paths list every way to each tier.
-- **Rewards → Card spend.** Type each card's monthly spend by category from statements. This is
+- **Rewards status → Card spend.** Type each card's monthly spend by category from statements. This is
   the year-to-date figure every threshold and card-spend path uses.
-- **Rewards → Planned spend.** Monthly variable spend per category (restaurants, groceries…). With
-  card-eligible bills this is the spend the plan allocates. Untick "can go on a card" for things
-  that can't.
-- **Rewards → Progress / Plan / Bills / Earnings.** Progress shows every path and threshold with
+- **Rewards status → Progress / Plan / Bills / Earnings.** Progress shows each program you're in,
+  the tier you hold and what that tier gets you, then every path and threshold with
   the per-month figure. Plan allocates spend to goals in priority order and shows gaps with the
   other paths. Bills says card or bank per bill, weighing the bank-autopay discount. Earnings shows
   points and dollars per card net of fees. Use the year arrows to see next year's plan from zero.

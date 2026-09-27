@@ -64,6 +64,12 @@ public sealed class StatusPathDto
     public string? Notes { get; set; }
 }
 
+public sealed class LoyaltyTierDto
+{
+    [Required, StringLength(100)] public string Name { get; set; } = "";
+    [StringLength(500)] public string? Benefits { get; set; }
+}
+
 public sealed class LoyaltyProgressDto
 {
     public int Year { get; set; }
@@ -84,8 +90,8 @@ public sealed class LoyaltyProgramDto
     public int Priority { get; set; } = 99;
     public bool IsActive { get; set; } = true;
     public string? Notes { get; set; }
-    /// <summary>Tier names in ascending order.</summary>
-    public List<string> Tiers { get; set; } = [];
+    /// <summary>The tier ladder in ascending order, each with what it gets you.</summary>
+    public List<LoyaltyTierDto> Tiers { get; set; } = [];
     public List<StatusPathDto> Paths { get; set; } = [];
     public List<LoyaltyProgressDto> Progress { get; set; } = [];
 }
@@ -110,7 +116,8 @@ public sealed record PathProgressDto(int PathId, string TierName, StatusPathKind
     decimal? RequiredMonthly, bool Reached, string? CardName, string Formula);
 
 public sealed record ProgramStatusDto(int ProgramId, string Name, int Priority, string? CurrentTier, string? TargetTier, string? HeldTier,
-    bool TargetReached, string HowReached, PathProgressDto? PlannedPath, IReadOnlyList<PathProgressDto> Paths, decimal PointsBalance, decimal PointsValueDollars);
+    bool TargetReached, string HowReached, PathProgressDto? PlannedPath, IReadOnlyList<PathProgressDto> Paths, decimal PointsBalance, decimal PointsValueDollars,
+    IReadOnlyList<LoyaltyTierDto> Tiers);
 
 public sealed record AllocationDto(int CardId, string CardName, decimal Monthly, string Reason);
 

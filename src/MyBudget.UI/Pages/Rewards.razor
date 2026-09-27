@@ -16,7 +16,7 @@ else
         </span>
         <span class="muted">@(year > DateTime.Today.Year ? $"Plan for {year} from January 1 with zero year-to-date spend." : $"As of {Fmt.Date(report.AsOf)} · {report.Plan.MonthsLeft} months left.")</span>
         <span class="tabs">
-            @foreach (var t in new[] { "Progress", "Plan", "Bills", "Earnings", "Card spend", "Planned spend" })
+            @foreach (var t in new[] { "Progress", "Plan", "Bills", "Earnings", "Card spend" })
             {
                 <button type="button" class="@(tab == t ? "" : "secondary")" @onclick="() => tab = t">@t</button>
             }
@@ -34,7 +34,15 @@ else
                     <h2>@p.Name <span class="muted">priority @p.Priority</span> <a class="link" href="@($"loyalty-programs?program={p.ProgramId}")" title="Set up this program">set up</a></h2>
                     <p>Now <strong>@(p.CurrentTier ?? "—")</strong>@(p.HeldTier is not null ? $" (held: {p.HeldTier})" : "") · target <strong>@(p.TargetTier ?? "none")</strong> ·
                         <span class="@(p.TargetReached ? "pos" : "")">@p.HowReached</span></p>
-                    <p class="muted">@p.PointsBalance.ToString("N0") points ≈ @Fmt.Money(p.PointsValueDollars)</p>
+                    <p class="muted">@p.PointsBalance.ToString("N0") points</p>
+                    @if (Benefits(p, p.CurrentTier) is { } nowPerks)
+                    {
+                        <p><strong>@p.CurrentTier gets you:</strong> @nowPerks</p>
+                    }
+                    @if (!p.TargetReached && p.TargetTier is not null && Benefits(p, p.TargetTier) is { } goalPerks)
+                    {
+                        <p class="muted"><strong>@p.TargetTier would add:</strong> @goalPerks</p>
+                    }
                     <table>
                         <thead><tr><th>Tier</th><th>Path</th><th class="money">Have</th><th class="money">Need</th><th class="money">Left</th><th class="money">Per month</th><th></th></tr></thead>
                         <tbody>
@@ -76,7 +84,7 @@ else
     {
         <section class="panel">
             <h2>Spend plan · @Fmt.Money(report.Plan.ProjectedMonthly)/mo card-eligible</h2>
-            <p class="muted">@report.Plan.ProjectedMonthlySource. Goals are filled in priority order; what's left goes to the best value per category.</p>
+            <p class="muted">@report.Plan.ProjectedMonthlySource, set under <a href="categories">Admin → Categories &amp; labels</a>. Goals are filled in priority order; what's left goes to the best value per category.</p>
             @if (report.Plan.Gaps.Count > 0)
             {
                 <div class="warnings">
@@ -181,28 +189,6 @@ else
             </div>
         </section>
     }
-    else if (tab == "Planned spend")
-    {
-        <section class="panel">
-            <h2>Planned variable spend per month</h2>
-            <p class="muted">What you expect to put on cards each month beyond tracked bills (restaurants, groceries, gas…). This plus card-eligible bills is the spend the plan allocates.</p>
-            <table>
-                <thead><tr><th>Category</th><th class="money">Planned / month</th><th>Can go on a card</th><th></th></tr></thead>
-                <tbody>
-                @foreach (var c in categories.Where(c => c.IsActive))
-                {
-                    <tr>
-                        <td>@c.Name</td>
-                        <td><input type="number" step="1" class="narrow-money" @bind="c.PlannedMonthly" /></td>
-                        <td><input type="checkbox" @bind="c.IsCardEligible" /></td>
-                        <td><button class="secondary" type="button" @onclick="() => SavePlan(c)">Save</button></td>
-                    </tr>
-                }
-                </tbody>
-                <tfoot><tr><th>Total planned</th><th><Money Value="categories.Where(c => c.IsActive && c.IsCardEligible).Sum(c => c.PlannedMonthly ?? 0)" /></th><th colspan="2"></th></tr></tfoot>
-            </table>
-        </section>
-    }
 }
 
 @code {
@@ -232,6 +218,10 @@ else
 
     private async Task ChangeYear(int y) { year = y; await Load(); }
 
+    /// <summary>What a named tier gets you, as entered under Admin → Loyalty programs.</summary>
+    private static string? Benefits(ProgramStatusDto p, string? tier)
+        => tier is null ? null : p.Tiers.FirstOrDefault(t => string.Equals(t.Name, tier, StringComparison.OrdinalIgnoreCase))?.Benefits is { Length: > 0 } b ? b : null;
+
     private static string Num(StatusPathKind k, decimal v) => k is StatusPathKind.CardSpend or StatusPathKind.ProgramSpend ? Fmt.Money(v) : k == StatusPathKind.HoldCard ? (v >= 1 ? "held" : "—") : v.ToString("N0");
 
     private void OnSpendCardChanged(ChangeEventArgs e) => spendCardId = int.Parse((string)e.Value!);
@@ -248,9 +238,4 @@ else
         catch (Exception ex) { error = ex.Message; }
     }
 
-    private async Task SavePlan(CategoryDto c)
-    {
-        try { await Api.SaveCategoryPlanAsync(c); report = await Api.GetRewardsReportAsync(year); }
-        catch (Exception ex) { error = ex.Message; }
-    }
 }

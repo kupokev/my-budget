@@ -143,6 +143,7 @@ public sealed class BudgetDbContext(DbContextOptions<BudgetDbContext> options) :
         });
         mb.Entity<SpendThreshold>().Property(x => x.Description).HasMaxLength(200);
         mb.Entity<CardPerk>().Property(x => x.Description).HasMaxLength(200);
+        mb.Entity<LoyaltyTier>().Property(x => x.Benefits).HasMaxLength(500);
         mb.Entity<CardSpend>(e =>
         {
             e.HasOne(x => x.Card).WithMany().HasForeignKey(x => x.CardId).OnDelete(DeleteBehavior.Cascade);
