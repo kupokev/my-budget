@@ -5,7 +5,7 @@
 
 <div class="shell">
     <nav class="sidebar">
-        <div class="brand">MyBudget</div>
+        <div class="brand">MyBudget<span class="version" title="The version you are running">@AppVersion.Display</span></div>
         @foreach (var grp in Sections)
         {
             var open = expanded.Contains(grp.Name);

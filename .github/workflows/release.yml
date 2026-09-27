@@ -110,7 +110,6 @@ jobs:
             | [SQLitePCLRaw](https://github.com/ericsink/SQLitePCL.raw) | Apache-2.0 | The bundled SQLite engine, itself public domain |
             | [Photino](https://github.com/tryphotino) | Apache-2.0 | The desktop window |
             | [FactFoundry.Blazor.Charts](https://github.com/Fact-Foundry/blazor-charts) | MIT | Charts, rendered as SVG |
-            | [Npgsql](https://github.com/npgsql/npgsql) | PostgreSQL | PostgreSQL support, for a future sync server |
             | [.NET runtime](https://github.com/dotnet/runtime) | MIT | Bundled, so nothing needs installing first |
 
             `THIRD-PARTY-NOTICES.md` in this release lists every package including transitive ones,

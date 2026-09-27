@@ -480,3 +480,6 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+# Release packaging output, and the notices file build-packages.sh regenerates per release.
+dist/
+THIRD-PARTY-NOTICES.md
