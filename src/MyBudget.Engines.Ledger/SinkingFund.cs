@@ -2,31 +2,35 @@ using MyBudget.Domain;
 
 namespace MyBudget.Engines.Ledger;
 
-/// <summary>Monthly set-aside for a non-monthly bill (BIL-4). Auditable: returns the formula alongside the number.</summary>
+/// <summary>Monthly set-aside for a non-monthly line (BIL-4). Auditable: returns the formula alongside the number.</summary>
 public static class SinkingFund
 {
     public sealed record Accrual(decimal Monthly, string Formula);
 
-    /// <param name="projectedThisMonth">A per-month projected override for asOf's month; applies to monthly bills only.</param>
-    public static Accrual MonthlyAccrual(Bill bill, DateOnly asOf, decimal? projectedThisMonth = null)
+    /// <param name="projectedThisMonth">A per-month projected override for asOf's month; applies to monthly lines only.</param>
+    public static Accrual MonthlyAccrual(BudgetLine line, DateOnly asOf, decimal? projectedThisMonth = null)
     {
-        var amount = bill.ProjectedAmount;
-        switch (bill.Frequency)
+        var amount = line.ProjectedAmount;
+        switch (line.Frequency)
         {
-            case BillFrequency.Monthly:
+            case BudgetFrequency.Monthly:
                 if (projectedThisMonth is { } o)
                     return new(Round(o), $"{o:C} projected for {asOf:MMMM yyyy} (default {amount:C})");
                 return new(Round(amount), $"{amount:C} monthly");
-            case BillFrequency.OneOff:
+            case BudgetFrequency.Variable:
+                if (projectedThisMonth is { } v)
+                    return new(Round(v), $"{v:C} planned for {asOf:MMMM yyyy} (default {amount:C})");
+                return new(Round(amount), $"{amount:C} planned per month");
+            case BudgetFrequency.OneOff:
             {
-                if (bill.AnchorDueDate is not { } due || due <= asOf)
+                if (line.AnchorDueDate is not { } due || due <= asOf)
                     return new(0m, "one-off, already due or no due date: nothing to accrue");
                 var months = Math.Max(1, MonthsUntil(asOf, due));
                 return new(Round(amount / months), $"{amount:C} ÷ {months} months until {due:yyyy-MM-dd}");
             }
             default:
             {
-                var perYear = BillDueDates.OccurrencesPerYear(bill.Frequency);
+                var perYear = BudgetDueDates.OccurrencesPerYear(line.Frequency);
                 return new(Round(amount * perYear / 12m), $"{amount:C} × {perYear}/yr ÷ 12");
             }
         }

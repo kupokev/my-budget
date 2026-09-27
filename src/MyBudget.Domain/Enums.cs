@@ -36,10 +36,15 @@ public static class AccountTypes
     };
 }
 
-/// <summary>How money is moved into an account to cover the bills funded from it (replaces the sheet's Monthly vs PPP columns).</summary>
+/// <summary>How money is moved into an account to cover the lines funded from it (replaces the sheet's Monthly vs PPP columns).</summary>
 public enum TransferCadence { Monthly, PerPaycheck }
 
-public enum BillFrequency { Monthly, Quarterly, SemiAnnual, Annual, OneOff }
+/// <summary>
+/// How a budget line recurs. <see cref="Variable"/> is the odd one: spend you plan for but that has no
+/// due date and no biller (groceries, restaurants, gas). Its projected amount is simply a monthly figure.
+/// Appended last so stored values of the other members keep their meaning.
+/// </summary>
+public enum BudgetFrequency { Monthly, Quarterly, SemiAnnual, Annual, OneOff, Variable }
 
-/// <summary>What actually pays the bill: a bank account directly, or a credit card whose statement is paid later.</summary>
+/// <summary>What actually pays the line: a bank account directly, or a credit card whose statement is paid later.</summary>
 public enum PaymentMethodKind { Account, Card }

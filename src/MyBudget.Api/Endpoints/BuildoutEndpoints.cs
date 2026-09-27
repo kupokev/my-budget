@@ -12,7 +12,7 @@ public static class BuildoutEndpoints
         {
             var today = DateOnly.FromDateTime(clock.GetLocalNow().DateTime);
             var needs = await ViewEndpoints.Needs(db, today);
-            var upcoming = await BillEndpoints.Upcoming(db, today, 14);
+            var upcoming = await BudgetEndpoints.Upcoming(db, today, 14);
             var rewards = await RewardsEndpoints.Report(db, today.Year, today);
             var hsa = await HsaEndpoints.PlanAsync(db, today.Year, today);
             var all = await alerts.ComputeAsync(today, needs, upcoming, rewards, hsa);
@@ -26,7 +26,7 @@ public static class BuildoutEndpoints
         {
             var today = DateOnly.FromDateTime(clock.GetLocalNow().DateTime);
             var needs = await ViewEndpoints.Needs(db, today);
-            var upcoming = await BillEndpoints.Upcoming(db, today, 14);
+            var upcoming = await BudgetEndpoints.Upcoming(db, today, 14);
             var calendar = await IncomeEndpoints.PayCalendar(db, today.Year);
             var rewards = await RewardsEndpoints.Report(db, today.Year, today);
             var hsa = await HsaEndpoints.PlanAsync(db, today.Year, today);

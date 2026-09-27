@@ -27,7 +27,7 @@ else
 
     <div class="row tiles">
         <section class="panel tile"><h3>Net worth</h3><p class="big"><Money Value="d.NetWorth" Signed="true" /></p><p class="muted">@(d.NetWorthChange is null ? "" : "vs last month ")@if (d.NetWorthChange is { } nwc) { <Money Value="nwc" Signed="true" /> }</p></section>
-        <section class="panel tile"><h3><a href="spending">Spending this month</a></h3><p class="big"><Money Value="d.SpendingThisMonth" /></p><p class="muted">last month <Money Value="d.SpendingLastMonth" /> · <Money Value="d.SpendingThisMonth - d.SpendingLastMonth" Signed="true" />@(d.Uncategorized > 0 ? $" · {d.Uncategorized} uncategorized" : "")</p></section>
+        <section class="panel tile"><h3><a href="budget">Spending this month</a></h3><p class="big"><Money Value="d.SpendingThisMonth" /></p><p class="muted">last month <Money Value="d.SpendingLastMonth" /> · <Money Value="d.SpendingThisMonth - d.SpendingLastMonth" Signed="true" />@(d.Uncategorized > 0 ? $" · {d.Uncategorized} uncategorized" : "")</p></section>
         <section class="panel tile"><h3>Next paycheck</h3>@if (d.NextPayDate is { } np) { <p class="big">@Fmt.Date(np.Date)</p><p class="muted">@np.IncomeSource @(np.ThirdCheckOfMonth ? "· third check this month" : "")</p> } else { <p class="muted">No pay schedule.</p> }</section>
         <section class="panel tile rainy @d.RainyDay.Status.ToLowerInvariant()"><h3>Rainy-day fund</h3><p class="big">@d.RainyDay.MonthsCovered.ToString("0.#") months</p><p class="muted" title="@d.RainyDay.ExpensesFormula"><Money Value="d.RainyDay.Balance" /> vs @Fmt.Money(d.RainyDay.LowTarget)–@Fmt.Money(d.RainyDay.HighTarget) · @d.RainyDay.Verdict</p></section>
     </div>
@@ -35,13 +35,13 @@ else
     <div class="row two-up">
         <section class="panel grow compact-panel">
             <h2>Due in the next 14 days</h2>
-            @if (d.UpcomingBills.Count == 0) { <p class="muted">Nothing due.</p> }
+            @if (d.UpcomingLines.Count == 0) { <p class="muted">Nothing due.</p> }
             else
             {
                 <table class="compact">
-                    <thead><tr><th>Due</th><th>Bill</th><th class="money">Amount</th><th>Paid via</th><th>Funded from</th></tr></thead>
-                    <tbody>@foreach (var b in d.UpcomingBills) { <tr><td>@Fmt.Date(b.DueDate)</td><td>@b.BillName @(b.IsAutopay ? "" : "✍")</td><td><Money Value="b.Amount" /></td><td>@b.PaidVia</td><td>@b.FundingAccount</td></tr> }</tbody>
-                    <tfoot><tr><th></th><th>Total</th><th><Money Value="d.UpcomingBills.Sum(b => b.Amount)" /></th><th colspan="2"></th></tr></tfoot>
+                    <thead><tr><th>Due</th><th>Budget line</th><th class="money">Amount</th><th>Paid via</th><th>Funded from</th></tr></thead>
+                    <tbody>@foreach (var b in d.UpcomingLines) { <tr><td>@Fmt.Date(b.DueDate)</td><td>@b.LineName @(b.IsAutopay ? "" : "✍")</td><td><Money Value="b.Amount" /></td><td>@b.PaidVia</td><td>@b.FundingAccount</td></tr> }</tbody>
+                    <tfoot><tr><th></th><th>Total</th><th><Money Value="d.UpcomingLines.Sum(b => b.Amount)" /></th><th colspan="2"></th></tr></tfoot>
                 </table>
             }
         </section>

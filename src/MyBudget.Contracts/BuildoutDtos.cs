@@ -87,8 +87,8 @@ public sealed class ObligationDto
     public int Id { get; set; }
     [Required, StringLength(200)] public string Description { get; set; } = "";
     public decimal? MonthlyAmount { get; set; }
-    public int? BillId { get; set; }
-    public decimal ShareOfBill { get; set; } = 1.0m;
+    public int? BudgetLineId { get; set; }
+    public decimal ShareOfLine { get; set; } = 1.0m;
     public DateOnly StartPeriod { get; set; }
     public DateOnly? EndPeriod { get; set; }
     /// <summary>1 = every month, 3 = quarterly, 6 = twice a year, 12 = yearly.</summary>
@@ -176,7 +176,7 @@ public sealed record RainyDayDto(decimal MonthlyExpenses, string ExpensesFormula
 
 public sealed record HomeDashboardDto(
     DateOnly AsOf, IReadOnlyList<AlertDto> Alerts,
-    IReadOnlyList<UpcomingBillDto> UpcomingBills, PayDateDto? NextPayDate, IReadOnlyList<AccountNeedDto> Needs,
+    IReadOnlyList<UpcomingLineDto> UpcomingLines, PayDateDto? NextPayDate, IReadOnlyList<AccountNeedDto> Needs,
     decimal SpendingThisMonth, decimal SpendingLastMonth, IReadOnlyList<SpendingCategoryDto> TopCategories, int Uncategorized,
     IReadOnlyList<ProgramStatusDto> Programs, IReadOnlyList<GoalProgressDto> Goals,
     decimal NetWorth, decimal? NetWorthChange, RainyDayDto RainyDay, bool AiEnabled);

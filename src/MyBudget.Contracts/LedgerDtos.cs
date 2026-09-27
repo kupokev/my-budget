@@ -23,7 +23,7 @@ public sealed class AccountDto
     /// <summary>Date of the snapshot the balance is built from.</summary>
     public DateOnly? LatestBalanceAsOf { get; set; }
     public string? BalanceDetail { get; set; }
-    /// <summary>Cash leaving this account this month: bills paid from it plus bills on cards this account pays. Read-only.</summary>
+    /// <summary>Cash leaving this account this month: lines paid from it plus lines on cards this account pays. Read-only.</summary>
     public decimal ThisMonthOutflow { get; set; }
     public string? ThisMonthOutflowDetail { get; set; }
 }
@@ -86,7 +86,6 @@ public sealed class LabelDto
     [Required, StringLength(60)] public string Name { get; set; } = "";
     /// <summary>The category these usually fall in.</summary>
     public int? CategoryId { get; set; }
-    public decimal? PlannedMonthly { get; set; }
     public bool IsActive { get; set; } = true;
     public string? Notes { get; set; }
 }
@@ -96,18 +95,18 @@ public sealed class CategoryDto
     public int Id { get; set; }
     [Required, StringLength(60)] public string Name { get; set; } = "";
     public bool IsActive { get; set; } = true;
-    /// <summary>Planned variable spend per month (feeds the rewards spend plan).</summary>
-    public decimal? PlannedMonthly { get; set; }
     public bool IsCardEligible { get; set; } = true;
 }
 
-public sealed class BillDto
+public sealed class BudgetLineDto
 {
     public int Id { get; set; }
     [Required, StringLength(100)] public string Name { get; set; } = "";
     public int? CategoryId { get; set; }
+    /// <summary>Narrows the line to one merchant, so Amazon is budgeted apart from the rest of its category.</summary>
+    public int? LabelId { get; set; }
     [StringLength(60)] public string? AccountNumber { get; set; }
-    public BillFrequency Frequency { get; set; } = BillFrequency.Monthly;
+    public BudgetFrequency Frequency { get; set; } = BudgetFrequency.Monthly;
     [Range(1, 31)] public int DueDay { get; set; } = 1;
     public DateOnly? AnchorDueDate { get; set; }
     public bool IsAutopay { get; set; }
@@ -124,11 +123,11 @@ public sealed class BillDto
     public bool IsActive { get; set; } = true;
 }
 
-/// <summary>One bill in one month: the actual plus optional per-month overrides (null = use the bill's default).</summary>
-public sealed class BillPeriodDto
+/// <summary>One line in one month: the actual plus optional per-month overrides (null = use the line's default).</summary>
+public sealed class BudgetPeriodDto
 {
     public int Id { get; set; }
-    public int BillId { get; set; }
+    public int BudgetLineId { get; set; }
     public DateOnly Period { get; set; }
     public DateOnly? DueDate { get; set; }
     public decimal? ProjectedAmount { get; set; }

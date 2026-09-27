@@ -12,8 +12,6 @@ public class Label
     /// <summary>The category these purchases usually fall in; used when planning spend.</summary>
     public int? CategoryId { get; set; }
     public Category? Category { get; set; }
-    /// <summary>Planned monthly spend carrying this label, carved out of its category's planned amount.</summary>
-    public decimal? PlannedMonthly { get; set; }
     public bool IsActive { get; set; } = true;
     public string? Notes { get; set; }
 }

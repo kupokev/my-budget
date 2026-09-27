@@ -85,7 +85,7 @@ public static class ReceivableEndpoints
         {
             var expectedParts = active.Where(o => o.DueIn(period))
                 .Select(o => (Description: o.EveryMonths > 1 ? $"{o.Description} ({o.Cadence})" : o.Description,
-                              Amount: o.BillId is not null && o.Bill is not null ? Math.Round(o.Bill.ProjectedAmount * o.ShareOfBill, 2) : o.MonthlyAmount ?? 0m)).ToList();
+                              Amount: o.BudgetLineId is not null && o.BudgetLine is not null ? Math.Round(o.BudgetLine.ProjectedAmount * o.ShareOfLine, 2) : o.MonthlyAmount ?? 0m)).ToList();
             var expected = expectedParts.Sum(x => x.Amount);
             var paid = p.Payments.SelectMany(x => x.Allocations).Where(a => a.Period == period).Sum(a => a.Amount);
             running += paid - expected;
@@ -105,12 +105,12 @@ public static class ReceivableEndpoints
     }
 
     private static IQueryable<Person> Query(BudgetDbContext db)
-        => db.People.Include(p => p.Obligations).ThenInclude(o => o.Bill).Include(p => p.Charges).Include(p => p.Payments).ThenInclude(x => x.Allocations);
+        => db.People.Include(p => p.Obligations).ThenInclude(o => o.BudgetLine).Include(p => p.Charges).Include(p => p.Payments).ThenInclude(x => x.Allocations);
 
     private static PersonDto ToDto(Person p) => new()
     {
         Id = p.Id, Name = p.Name, Notes = p.Notes, IsActive = p.IsActive,
-        Obligations = p.Obligations.OrderBy(o => o.StartPeriod).Select(o => new ObligationDto { Id = o.Id, Description = o.Description, MonthlyAmount = o.MonthlyAmount, BillId = o.BillId, ShareOfBill = o.ShareOfBill, StartPeriod = o.StartPeriod, EndPeriod = o.EndPeriod, EveryMonths = o.EveryMonths, IsActive = o.IsActive }).ToList(),
+        Obligations = p.Obligations.OrderBy(o => o.StartPeriod).Select(o => new ObligationDto { Id = o.Id, Description = o.Description, MonthlyAmount = o.MonthlyAmount, BudgetLineId = o.BudgetLineId, ShareOfLine = o.ShareOfLine, StartPeriod = o.StartPeriod, EndPeriod = o.EndPeriod, EveryMonths = o.EveryMonths, IsActive = o.IsActive }).ToList(),
         Charges = p.Charges.OrderByDescending(c => c.Date).Select(c => new ReceivableChargeDto { Id = c.Id, Date = c.Date, Amount = c.Amount, Description = c.Description }).ToList(),
         Payments = p.Payments.OrderByDescending(x => x.Date).Select(x => new ReceivablePaymentDto { Id = x.Id, Date = x.Date, Amount = x.Amount, Notes = x.Notes, Allocations = x.Allocations.OrderBy(a => a.Period).Select(a => new PaymentAllocationDto { Period = a.Period, Amount = a.Amount }).ToList() }).ToList(),
     };
@@ -121,7 +121,7 @@ public static class ReceivableEndpoints
         e.Obligations.Clear();
         e.Obligations.AddRange(d.Obligations.Where(o => !string.IsNullOrWhiteSpace(o.Description)).Select(o => new Obligation
         {
-            Description = o.Description.Trim(), MonthlyAmount = o.BillId is null ? o.MonthlyAmount : null, BillId = o.BillId, ShareOfBill = o.ShareOfBill <= 0 ? 1m : o.ShareOfBill,
+            Description = o.Description.Trim(), MonthlyAmount = o.BudgetLineId is null ? o.MonthlyAmount : null, BudgetLineId = o.BudgetLineId, ShareOfLine = o.ShareOfLine <= 0 ? 1m : o.ShareOfLine,
             StartPeriod = new DateOnly(o.StartPeriod.Year, o.StartPeriod.Month, 1), EndPeriod = o.EndPeriod is { } ep ? new DateOnly(ep.Year, ep.Month, 1) : null,
             EveryMonths = o.EveryMonths <= 0 ? 1 : o.EveryMonths, IsActive = o.IsActive,
         }));

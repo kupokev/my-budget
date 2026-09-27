@@ -12,7 +12,7 @@ else
     <div class="toolbar"><button type="button" @onclick="() => Edit(new CardDto())">New card</button></div>
 
     <table>
-        <thead><tr><th>Card</th><th class="money">Monthly bill spend</th><th class="money">Balance</th><th>As of</th><th class="money">Utilization</th><th>Stmt / due</th><th>Paid by</th><th></th></tr></thead>
+        <thead><tr><th>Card</th><th class="money">Monthly line spend</th><th class="money">Balance</th><th>As of</th><th class="money">Utilization</th><th>Stmt / due</th><th>Paid by</th><th></th></tr></thead>
         <tbody>
         @foreach (var s in summary)
         {
@@ -21,18 +21,18 @@ else
                     <span class="tip">@s.CardName
                         <span class="tip-box">
                             <b>@s.CardName</b>
-                            @if (s.Bills.Count == 0) { <span class="muted">No bills charged to this card</span> }
+                            @if (s.BudgetLines.Count == 0) { <span class="muted">No lines charged to this card</span> }
                             else
                             {
-                                <span>Bills on this card:</span>
-                                @foreach (var b in s.Bills) { <span class="indent">· @b</span> }
-                                <span class="muted">@Fmt.Money(s.MonthlyBillSpend) a month</span>
+                                <span>Budget lines on this card:</span>
+                                @foreach (var b in s.BudgetLines) { <span class="indent">· @b</span> }
+                                <span class="muted">@Fmt.Money(s.MonthlyBudgetSpend) a month</span>
                             }
                         </span>
                     </span>
                     <MaskedNumber Value="@cards.First(c => c.Id == s.CardId).AccountNumber" />
                 </td>
-                <td><Money Value="s.MonthlyBillSpend" /></td>
+                <td><Money Value="s.MonthlyBudgetSpend" /></td>
                 <td class="money">@Fmt.Money(s.LatestBalance)</td>
                 <td>@Fmt.Date(s.LatestBalanceAsOf)</td>
                 <td class="money">@Fmt.Pct(s.Utilization)</td>

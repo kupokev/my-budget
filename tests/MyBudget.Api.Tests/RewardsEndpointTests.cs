@@ -71,8 +71,8 @@ public class RewardsEndpointTests : IClassFixture<ApiFixture>
         // A benefit with no spend threshold behind it still offsets the fee.
         var premier = r.Earnings.Single(e => e.CardName == "Chase IHG One Rewards Premier");
         Assert.Equal(170m, premier.PerksValue);
-        Assert.Contains(r.Bills, b => b.BillName == "AT&T" && b.BankDiscount == 5m);
-        Assert.DoesNotContain(r.Bills, b => b.BillName == "Mortgage"); // not card-eligible
+        Assert.Contains(r.BudgetLines, b => b.LineName == "AT&T" && b.BankDiscount == 5m);
+        Assert.DoesNotContain(r.BudgetLines, b => b.LineName == "Mortgage"); // not card-eligible
         Assert.Contains(r.Earnings, e => e.YtdPoints > 0);
 
         var next = await _api.Get<RewardsReportDto>("api/rewards/report?year=2027&asOf=2026-09-26");

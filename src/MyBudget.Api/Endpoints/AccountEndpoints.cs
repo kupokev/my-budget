@@ -46,8 +46,8 @@ public static class AccountEndpoints
         {
             var a = await db.Accounts.FindAsync(id);
             if (a is null) return Results.NotFound();
-            if (await db.Bills.AnyAsync(b => b.FundingAccountId == id || b.PaymentAccountId == id) || await db.Cards.AnyAsync(c => c.PayingAccountId == id))
-                return Results.Conflict("Account is referenced by a bill or card. Mark it inactive instead.");
+            if (await db.BudgetLines.AnyAsync(b => b.FundingAccountId == id || b.PaymentAccountId == id) || await db.Cards.AnyAsync(c => c.PayingAccountId == id))
+                return Results.Conflict("Account is referenced by a budget line or card. Mark it inactive instead.");
             db.Accounts.Remove(a);
             await db.SaveChangesAsync();
             return Results.NoContent();
@@ -124,27 +124,27 @@ public static class AccountEndpoints
     };
 
     /// <summary>
-    /// Cash actually leaving each account in the month: bills paid from the account directly, plus bills charged to a
-    /// card that this account pays. Uses each bill's projected amount for the month (with per-month overrides), only
-    /// for months the bill is due. This is what a direct deposit into the account has to cover.
+    /// Cash actually leaving each account in the month: lines paid from the account directly, plus lines charged to a
+    /// card that this account pays. Uses each line's projected amount for the month (with per-month overrides), only
+    /// for months the line is due. This is what a direct deposit into the account has to cover.
     /// </summary>
     internal static async Task<Dictionary<int, (decimal Total, string Detail)>> MonthlyOutflow(BudgetDbContext db, DateOnly month)
     {
         var start = new DateOnly(month.Year, month.Month, 1);
         var end = start.AddMonths(1).AddDays(-1);
-        var bills = await db.Bills.Include(b => b.Periods).Include(b => b.PaymentCard).Where(b => b.IsActive).ToListAsync();
-        var lines = new Dictionary<int, List<(string Name, decimal Amount)>>();
-        foreach (var b in bills)
+        var budgetLines = await db.BudgetLines.Include(b => b.Periods).Include(b => b.PaymentCard).Where(b => b.IsActive).ToListAsync();
+        var byAccount = new Dictionary<int, List<(string Name, decimal Amount)>>();
+        foreach (var b in budgetLines)
         {
-            var due = MyBudget.Engines.Ledger.BillDueDates.Between(b, start, end, BillEndpoints.DueOverrides(b));
+            var due = MyBudget.Engines.Ledger.BudgetDueDates.Between(b, start, end, BudgetEndpoints.DueOverrides(b));
             var period = b.Periods.FirstOrDefault(p => p.Period == start);
             var amount = period?.ProjectedAmount ?? (due.Count > 0 ? b.ProjectedAmount * due.Count : 0m);
             if (amount <= 0) continue;
             int? accountId = b.PaymentMethod == PaymentMethodKind.Card ? b.PaymentCard?.PayingAccountId : b.PaymentAccountId;
             if (accountId is null) continue;
-            if (!lines.TryGetValue(accountId.Value, out var list)) lines[accountId.Value] = list = [];
+            if (!byAccount.TryGetValue(accountId.Value, out var list)) byAccount[accountId.Value] = list = [];
             list.Add((b.PaymentMethod == PaymentMethodKind.Card ? $"{b.Name} (via {b.PaymentCard!.Name})" : b.Name, amount));
         }
-        return lines.ToDictionary(kv => kv.Key, kv => (Math.Round(kv.Value.Sum(x => x.Amount), 2), string.Join(", ", kv.Value.OrderByDescending(x => x.Amount).Select(x => $"{x.Name} {x.Amount:C}"))));
+        return byAccount.ToDictionary(kv => kv.Key, kv => (Math.Round(kv.Value.Sum(x => x.Amount), 2), string.Join(", ", kv.Value.OrderByDescending(x => x.Amount).Select(x => $"{x.Name} {x.Amount:C}"))));
     }
 }

@@ -30,7 +30,7 @@ value, and say plainly when the spend can't cover every goal and what the other 
 | `Card` additions | Loyalty program, point-value override |
 | `Category` additions | `PlannedMonthly` variable spend, `IsCardEligible`. Edited on Admin → Categories & labels only; the rewards report used to carry a duplicate editor for the same two fields and no longer does |
 | `Label` | Where a purchase happened (Amazon, Costco, IHG) next to the category that says what kind it was. Optional usual category and planned monthly spend, which is **carved out** of that category's planned amount rather than added to it. Carried on transactions, categorization rules, card spend and earn rules |
-| `Bill` additions | `IsCardEligible` (mortgage, HELOC, car: false) |
+| `BudgetLine` additions | `IsCardEligible` (mortgage, HELOC, car: false) |
 
 Cards, programs and their rules are entered by hand: "New card" on the Cards page, then the card's
 rewards editor (★) for the program link, point value, earn rules and spend thresholds, and
@@ -101,7 +101,7 @@ tiers, progress), the year's card spend, categories, active bills, and each bill
    everything the card actually returns, not just points.
 5. **Routing:** goal cards take the categories they earn most on first, up to their allocation;
    what's left goes to the highest earn × point value card per category.
-5. **Bills (RWD-4/4a):** each card-eligible bill gets the card its category is routed to; the bank
+5. **Budget lines (RWD-4/4a):** each card-eligible line gets the card its category is routed to; the bank
    discount wins if it is at least the card value, unless that card is a status goal that is short.
 6. **Earnings (RWD-5):** per card per month points = Σ spend × category rate; dollars at the card's
    (or program's) point value; net = value + reached threshold rewards − annual fee.
@@ -116,7 +116,7 @@ Months left counts the current month. A future year runs from January 1 with zer
 `rewards/report?year=&asOf=`.
 
 Rewards page tabs: Progress (programs with every path, thresholds), Plan (gaps, routing, goal
-allocations, steps), Bills (recommendation per bill), Earnings (per card, by month), Programs
+allocations, steps), Budget lines (recommendation per line), Earnings (per card, by month), Programs
 (edit priority, tiers, paths, YTD activity), Card spend (month × category grid per card), Planned
 spend (per category). Cards page: per-card Rewards editor (★).
 

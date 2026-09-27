@@ -334,3 +334,22 @@ table.tx td.center { text-align: center; }
 .bands .band.poor.on { border-color: var(--danger); background: color-mix(in srgb, var(--danger) 14%, transparent); }
 .bands .band.marginal.on { border-color: var(--warn); background: color-mix(in srgb, var(--warn) 14%, transparent); }
 .bands .band.good.on { border-color: var(--ok); background: color-mix(in srgb, var(--ok) 14%, transparent); }
+
+/* Budget line hover: a titled card with label/value rows and a year-on-year block,
+   rather than a stack of sentences. */
+.tip-box .tip-head { display: flex; align-items: baseline; justify-content: space-between; gap: 14px;
+  padding-bottom: 6px; margin-bottom: 6px; border-bottom: 1px solid var(--border); }
+.tip-box .tip-head b { font-size: 13px; }
+.tip-box .tip-grid { display: grid; grid-template-columns: auto 1fr; column-gap: 16px; row-gap: 3px; }
+.tip-box .tip-grid > span:nth-child(odd) { color: var(--fg-muted); }
+.tip-box .tip-grid > span:nth-child(even) { text-align: right; }
+.tip-box .tip-hist { display: grid; grid-template-columns: auto repeat(3, minmax(58px, auto)); column-gap: 14px; row-gap: 3px;
+  margin-top: 8px; padding-top: 7px; border-top: 1px solid var(--border); }
+.tip-box .tip-hist > span { text-align: right; }
+.tip-box .tip-hist > span:nth-child(4n+1) { text-align: left; color: var(--fg-muted); }
+.tip-box .tip-hist .h { color: var(--fg-muted); font-size: 11px; }
+.tip-box .tip-hist .wide { grid-column: 2 / -1; }
+.tip-box .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.tip-box .tip-note { margin-top: 8px; padding-top: 7px; border-top: 1px solid var(--border);
+  color: var(--fg-muted); white-space: normal; max-width: 280px; }
+.chip.small { font-size: 11px; padding: 1px 7px; }

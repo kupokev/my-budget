@@ -4,7 +4,7 @@
 
 <ErrorBanner @bind-Message="error" />
 
-@if (loans is null || bills is null)
+@if (loans is null || lines is null)
 {
     <p class="muted">Loading…</p>
 }
@@ -67,7 +67,7 @@ else
                 </fieldset>
                 <fieldset class="group">
                     <legend>In the ledger</legend>
-                    <div class="field"><label>Bill that carries the payment</label><InputSelect @bind-Value="editing.BillId"><option value="">—</option>@foreach (var b in bills) { <option value="@b.Id">@b.Name</option> }</InputSelect></div>
+                    <div class="field"><label>Budget line that carries the payment</label><InputSelect @bind-Value="editing.BudgetLineId"><option value="">—</option>@foreach (var b in lines) { <option value="@b.Id">@b.Name</option> }</InputSelect></div>
                     <div class="checks"><label class="inline"><InputCheckbox @bind-Value="editing.IsActive" /> Active</label></div>
                 </fieldset>
                 <div class="field full"><label>Notes</label><InputTextArea @bind-Value="editing.Notes" rows="2" /></div>
@@ -118,7 +118,7 @@ else
 
 @code {
     private List<LoanDto>? loans;
-    private List<BillDto>? bills;
+    private List<BudgetLineDto>? lines;
     private LoanDto? editing;
     private LoanDto? balanceFor;
     private LoanBalanceDto newBalance = new();
@@ -130,7 +130,7 @@ else
 
     private async Task Load()
     {
-        try { loans = await Api.GetLoansAsync(); bills = await Api.GetBillsAsync(); }
+        try { loans = await Api.GetLoansAsync(); lines = await Api.GetBudgetLinesAsync(); }
         catch (Exception ex) { error = ex.Message; }
     }
 
@@ -140,7 +140,7 @@ else
         editing = new()
         {
             Id = l.Id, Name = l.Name, Kind = l.Kind, Lender = l.Lender, AccountNumber = l.AccountNumber, OriginalPrincipal = l.OriginalPrincipal, AnnualRatePercent = l.AnnualRatePercent, TermMonths = l.TermMonths,
-            StartDate = l.StartDate, ScheduledPayment = l.ScheduledPayment, ExtraMonthlyPayment = l.ExtraMonthlyPayment, BillId = l.BillId, Notes = l.Notes, IsActive = l.IsActive,
+            StartDate = l.StartDate, ScheduledPayment = l.ScheduledPayment, ExtraMonthlyPayment = l.ExtraMonthlyPayment, BudgetLineId = l.BudgetLineId, Notes = l.Notes, IsActive = l.IsActive,
         };
     }
 

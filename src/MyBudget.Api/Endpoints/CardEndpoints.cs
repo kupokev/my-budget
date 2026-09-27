@@ -15,15 +15,15 @@ public static class CardEndpoints
         g.MapGet("/", async (BudgetDbContext db) =>
             (await db.Cards.Include(c => c.Balances).OrderBy(c => c.Name).ToListAsync()).Select(c => c.ToDto()));
 
-        // CC-2: bills charged to each card, monthly spend from those bills, balance, utilization, paying account.
+        // CC-2: lines charged to each card, monthly spend from those lines, balance, utilization, paying account.
         g.MapGet("/summary", async (BudgetDbContext db, TimeProvider clock) =>
         {
             var asOf = DateOnly.FromDateTime(clock.GetLocalNow().DateTime);
             var cards = await db.Cards.Include(c => c.Balances).Include(c => c.PayingAccount).Where(c => c.IsActive).OrderBy(c => c.Name).ToListAsync();
-            var bills = await db.Bills.Where(b => b.IsActive && b.PaymentMethod == PaymentMethodKind.Card).ToListAsync();
+            var lines = await db.BudgetLines.Where(b => b.IsActive && b.PaymentMethod == PaymentMethodKind.Card).ToListAsync();
             return cards.Select(c =>
             {
-                var mine = bills.Where(b => b.PaymentCardId == c.Id).ToList();
+                var mine = lines.Where(b => b.PaymentCardId == c.Id).ToList();
                 var latest = c.Balances.OrderByDescending(b => b.AsOf).FirstOrDefault();
                 return new CardSummaryDto(
                     c.Id, c.Name, c.PayingAccount?.Name, c.StatementDay, c.DueDay,
@@ -59,8 +59,8 @@ public static class CardEndpoints
         {
             var c = await db.Cards.FindAsync(id);
             if (c is null) return Results.NotFound();
-            if (await db.Bills.AnyAsync(b => b.PaymentCardId == id))
-                return Results.Conflict("Card is the payment method for a bill. Mark it inactive instead.");
+            if (await db.BudgetLines.AnyAsync(b => b.PaymentCardId == id))
+                return Results.Conflict("Card is the payment method for a budget line. Mark it inactive instead.");
             db.Cards.Remove(c);
             await db.SaveChangesAsync();
             return Results.NoContent();

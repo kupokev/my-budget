@@ -25,9 +25,10 @@ the app instead of the 2026 tab.
 | (transfers) | Manual transfers are `Transaction` rows with Origin = Manual and IsTransfer = true (DD-0005); summed per month for Long/Short | One table for every money movement |
 | `Card` | Credit card (CC-1) | APR + promo, statement/due day, limit, fee + month, paying account |
 | `CardBalance` | Statement/month-end balance (CC-3/4 later) | Unique per (card, date) |
-| `Category` | Spending bucket (BIL-8 later) | Bills carry one; imported transactions will too |
-| `Bill` | Obligation (BIL-1/2) | Account/member number (ADR-0008), frequency, due day, anchor due date for non-monthly, autopay, projected, **payment method** (account or card) and **funding account** (always set), optional bank-autopay discount (RWD-4a, stored only) |
-| `BillPeriod` | One bill in one month (BIL-3) | Unique per (bill, month). Holds the actual plus optional **per-month overrides** for due date and expected amount, since real bills drift month to month; null override = bill default. A row may hold only an override. Empty row is deleted on save |
+| `BudgetLine` | Anything you plan to spend money on. A dated obligation (mortgage, insurance) or, with `BudgetFrequency.Variable`, planned spend with no due date and no biller (groceries, restaurants, gas). Optionally carries a `Label` so one merchant can be budgeted apart from its category |
+| `Category` | Spending bucket (BIL-8 later) | Budget lines carry one; imported transactions do too |
+| `BudgetLine` | Obligation (BIL-1/2) | Account/member number (ADR-0008), frequency, due day, anchor due date for non-monthly, autopay, projected, **payment method** (account or card) and **funding account** (always set), optional bank-autopay discount (RWD-4a, stored only) |
+| `BudgetPeriod` | One bill in one month (BIL-3) | Unique per (bill, month). Holds the actual plus optional **per-month overrides** for due date and expected amount, since real bills drift month to month; null override = bill default. A row may hold only an override. Empty row is deleted on save |
 
 Every fact is effective-dated or period-keyed; there is no year table (DD-0001).
 
@@ -37,7 +38,7 @@ Every fact is effective-dated or period-keyed; there is no year table (DD-0001).
 | --- | --- | --- |
 | `PayDates.Generate` | For each date the schedule in effect is the latest EffectiveDate ≤ date. Bi-weekly steps 14 days from the anchor; monthly uses the anchor's day clamped to month end; semi-monthly uses the two days. Weekend dates shift to the prior Friday when the flag is on | INC-3 |
 | `PayDates.ThreePaycheckMonths` | Months with ≥ 3 pay dates, with the dates | INC-4 |
-| `BillDueDates.Between` | Monthly: due day each month (clamped). Quarterly/semi-annual/annual: step 3/6/12 months from the anchor in both directions. One-off: the anchor. Honors start/end/active. Optional per-month due-date overrides replace that month's date, even across the window edge | BIL-1, BIL-5 |
+| `BudgetDueDates.Between` | Monthly: due day each month (clamped). Quarterly/semi-annual/annual: step 3/6/12 months from the anchor in both directions. One-off: the anchor. Honors start/end/active. Optional per-month due-date overrides replace that month's date, even across the window edge | BIL-1, BIL-5 |
 | `SinkingFund.MonthlyAccrual` | Monthly → amount (or this month's override, formula says so). Q/SA/A → amount × occurrences ÷ 12. One-off → amount ÷ whole months until due. Returns the formula string with the number | BIL-4 |
 | `TransferNeeds.Compute` | Group active bills by **funding account** (never the card); monthly need = Σ accruals; per-paycheck = monthly × 12 ÷ paychecks/year; each line carries its formula | ACC-2, ACC-2a |
 
@@ -69,7 +70,7 @@ Enums serialize as strings.
 
 ### UI (`MyBudget.UI`, Razor class library)
 
-Pages: Home, Bills (year grid with prev/next year, optional Category/Due/Paid via/Funded from columns
+Pages: Home, Budget (year grid with prev/next year, optional Category/Due/Paid via/Funded from columns
 hidden by default behind a Columns checklist and shown on a hover card over the bill name; clicking a
 month opens a month editor for actual, expected-this-month, due-this-month, paid-on, notes; bill
 editor, categories), Accounts (list, editor, balance/transfer ledger, transfer-needs breakdown with
@@ -89,13 +90,13 @@ Every computed number's formula is visible next to it (auditability principle).
 
 - Real 2026 pay-schedule anchors and the actual list of open cards; the dev seed uses placeholders.
 - Whether one-off bills should accrue at all or just appear as due items.
-- Column visibility on Bills is per session; persist it (per-viewer local storage) if it gets annoying.
+- Column visibility on Budget is per session; persist it (per-viewer local storage) if it gets annoying.
 - Card balance history (CC-3/4) needs a statement-import path or manual monthly entry habit.
 
 ## Status
 
 Built 2026-09-26: entities, engine (15 tests), API (8 endpoint tests), five pages, Photino host.
-Same day: per-month due/expected overrides, Bills column toggles and hover card, year arrows, full-width layout.
+Same day: per-month due/expected overrides, Budget column toggles and hover card, year arrows, full-width layout.
 Not yet run against PostgreSQL; no migrations generated yet (ADR-0005 dev path only).
 
 ## References
@@ -103,3 +104,22 @@ Not yet run against PostgreSQL; no migrations generated yet (ADR-0005 dev path o
 - DD-0001 architecture overview
 - `src/MyBudget.Engines.Ledger/`, `src/MyBudget.Api/Endpoints/`, `src/MyBudget.UI/Pages/`
 - `tests/MyBudget.Engines.Tests/`, `tests/MyBudget.Api.Tests/`
+
+
+## Budget, not bills (2026-09-27)
+
+The page and the entity were called `Bill`, and planned variable spend lived separately as a
+`PlannedMonthly` amount on `Category` and `Label`. That was two models for one idea. Groceries is
+something you plan to spend money on, exactly like the mortgage is; the only difference is that it has
+no due date and no biller.
+
+So `Bill` became `BudgetLine`, `BudgetFrequency.Variable` was added for undated planned spend, and
+`Category.PlannedMonthly` / `Label.PlannedMonthly` were removed. The Categories screen still shows a
+planned figure per category, but it reads it back from the budget rather than owning it. A budget line
+can now carry a `LabelId`, which is what lets Amazon be budgeted and routed apart from the rest of
+General merchandise; that was previously the label's own planned amount, carved out of its category's.
+
+The payoff is that the rewards spend plan draws its whole pool from one place. It used to add
+card-eligible bill accruals to category planned amounts and then carve label amounts back out of
+those. Now it sums card-eligible budget lines, keyed by (category, label), and reports the split as
+dated versus variable.

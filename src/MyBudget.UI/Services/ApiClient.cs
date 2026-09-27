@@ -30,19 +30,19 @@ public sealed class ApiClient(HttpClient http)
     public Task DeleteCardAsync(int id) => Delete($"api/cards/{id}");
     public Task<CardBalanceDto> SaveCardBalanceAsync(int id, CardBalanceDto b) => Post($"api/cards/{id}/balances", b);
 
-    // Categories & bills
+    // Categories & lines
     public Task<List<CategoryDto>> GetCategoriesAsync() => Get<List<CategoryDto>>("api/categories");
     public Task<List<LabelDto>> GetLabelsAsync() => Get<List<LabelDto>>("api/labels");
     public Task<LabelDto> SaveLabelAsync(LabelDto l) => l.Id == 0 ? Post("api/labels", l) : Put($"api/labels/{l.Id}", l);
     public Task DeleteLabelAsync(int id) => Delete($"api/labels/{id}");
     public Task<CategoryDto> SaveCategoryAsync(CategoryDto c) => c.Id == 0 ? Post("api/categories", c) : Put($"api/categories/{c.Id}", c);
-    public Task<List<BillDto>> GetBillsAsync() => Get<List<BillDto>>("api/bills");
-    public Task<BillDto> SaveBillAsync(BillDto b) => b.Id == 0 ? Post("api/bills", b) : Put($"api/bills/{b.Id}", b);
-    public Task DeleteBillAsync(int id) => Delete($"api/bills/{id}");
-    public Task<List<BillHistoryDto>> GetBillHistoryAsync(int year) => Get<List<BillHistoryDto>>($"api/bills/history?year={year}");
-    public Task<BillPeriodDto> SaveBillPeriodAsync(int billId, DateOnly period, BillPeriodDto p) => Put($"api/bills/{billId}/periods/{period:yyyy-MM-dd}", p);
-    public Task DeleteBillPeriodAsync(int billId, DateOnly period) => Delete($"api/bills/{billId}/periods/{period:yyyy-MM-dd}");
-    public Task<List<UpcomingBillDto>> GetUpcomingBillsAsync(int days) => Get<List<UpcomingBillDto>>($"api/bills/upcoming?days={days}");
+    public Task<List<BudgetLineDto>> GetBudgetLinesAsync() => Get<List<BudgetLineDto>>("api/budget");
+    public Task<BudgetLineDto> SaveBudgetLineAsync(BudgetLineDto b) => b.Id == 0 ? Post("api/budget", b) : Put($"api/budget/{b.Id}", b);
+    public Task DeleteBudgetLineAsync(int id) => Delete($"api/budget/{id}");
+    public Task<List<BudgetHistoryDto>> GetBudgetHistoryAsync(int year) => Get<List<BudgetHistoryDto>>($"api/budget/history?year={year}");
+    public Task<BudgetPeriodDto> SaveBudgetPeriodAsync(int lineId, DateOnly period, BudgetPeriodDto p) => Put($"api/budget/{lineId}/periods/{period:yyyy-MM-dd}", p);
+    public Task DeleteBudgetPeriodAsync(int lineId, DateOnly period) => Delete($"api/budget/{lineId}/periods/{period:yyyy-MM-dd}");
+    public Task<List<UpcomingLineDto>> GetUpcomingLinesAsync(int days) => Get<List<UpcomingLineDto>>($"api/budget/upcoming?days={days}");
 
     // Income
     public Task<List<IncomeSourceDto>> GetIncomeSourcesAsync() => Get<List<IncomeSourceDto>>("api/income-sources");
@@ -109,8 +109,8 @@ public sealed class ApiClient(HttpClient http)
     public Task<ImportResultDto> CommitImportAsync(ImportCommitRequest req) => Post<ImportCommitRequest, ImportResultDto>("api/import/commit", req);
     public Task<List<ImportBatchDto>> GetImportBatchesAsync() => Get<List<ImportBatchDto>>("api/import/batches");
     public Task DeleteImportBatchAsync(int id) => Delete($"api/import/batches/{id}");
-    public Task<List<TransactionDto>> GetTransactionsAsync(int? year = null, int? month = null, int? categoryId = null, bool? uncategorized = null, string? search = null, int? accountId = null, int? cardId = null, int? billId = null, bool? unreconciled = null)
-        => Get<List<TransactionDto>>(Q("api/transactions", ("year", year), ("month", month), ("categoryId", categoryId), ("uncategorized", uncategorized == true ? "true" : null), ("search", string.IsNullOrWhiteSpace(search) ? null : search), ("accountId", accountId), ("cardId", cardId), ("billId", billId), ("unreconciled", unreconciled == true ? "true" : null)));
+    public Task<List<TransactionDto>> GetTransactionsAsync(int? year = null, int? month = null, int? categoryId = null, bool? uncategorized = null, string? search = null, int? accountId = null, int? cardId = null, int? lineId = null, bool? unreconciled = null)
+        => Get<List<TransactionDto>>(Q("api/transactions", ("year", year), ("month", month), ("categoryId", categoryId), ("uncategorized", uncategorized == true ? "true" : null), ("search", string.IsNullOrWhiteSpace(search) ? null : search), ("accountId", accountId), ("cardId", cardId), ("lineId", lineId), ("unreconciled", unreconciled == true ? "true" : null)));
     public Task<List<ReconcileCandidateDto>> GetReconcileCandidatesAsync(int id, bool all = false) => Get<List<ReconcileCandidateDto>>(Q($"api/transactions/{id}/reconcile-candidates", ("all", all ? "true" : null)));
     public Task<TransactionDto> ReconcileAsync(int id, int otherId) => Post<object, TransactionDto>($"api/transactions/{id}/reconcile/{otherId}", new { });
     public Task UnreconcileAsync(int id) => Delete($"api/transactions/{id}/reconcile");
@@ -120,9 +120,6 @@ public sealed class ApiClient(HttpClient http)
     public Task<CategoryRuleDto> SaveCategoryRuleAsync(CategoryRuleDto r) => r.Id == 0 ? Post("api/category-rules", r) : Put($"api/category-rules/{r.Id}", r);
     public Task DeleteCategoryRuleAsync(int id) => Delete($"api/category-rules/{id}");
     public Task ApplyCategoryRulesAsync() => Post<object, object>("api/category-rules/apply", new { });
-    public Task<SpendingSummaryDto> GetSpendingSummaryAsync(int year, int month) => Get<SpendingSummaryDto>($"api/spending/summary?year={year}&month={month}");
-    public Task<SpendingMatrixDto> GetSpendingMatrixAsync(int year) => Get<SpendingMatrixDto>($"api/spending/matrix?year={year}");
-    public Task<CategoryDrilldownDto> GetCategoryDrilldownAsync(int? categoryId, int year, int? month) => Get<CategoryDrilldownDto>(Q($"api/spending/category/{categoryId ?? 0}", ("year", year), ("month", month)));
     public Task<List<GoalDto>> GetGoalsAsync() => Get<List<GoalDto>>("api/goals");
     public Task<GoalDto> SaveGoalAsync(GoalDto g) => g.Id == 0 ? Post("api/goals", g) : Put($"api/goals/{g.Id}", g);
     public Task DeleteGoalAsync(int id) => Delete($"api/goals/{id}");

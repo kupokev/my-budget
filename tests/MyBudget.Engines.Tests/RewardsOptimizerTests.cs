@@ -6,10 +6,10 @@ namespace MyBudget.Engines.Tests;
 /// <summary>The doc's tension made concrete: IHG Diamond and Hilton Diamond both want $40K of card spend a year.</summary>
 public class RewardsOptimizerTests
 {
-    private static readonly Category Restaurants = new() { Id = 1, Name = "Restaurants", PlannedMonthly = 600m };
-    private static readonly Category Groceries = new() { Id = 2, Name = "Groceries", PlannedMonthly = 700m };
-    private static readonly Category Gas = new() { Id = 3, Name = "Gas", PlannedMonthly = 250m };
-    private static readonly Category Other = new() { Id = 4, Name = "Other", PlannedMonthly = 800m };
+    private static readonly Category Restaurants = new() { Id = 1, Name = "Restaurants" };
+    private static readonly Category Groceries = new() { Id = 2, Name = "Groceries" };
+    private static readonly Category Gas = new() { Id = 3, Name = "Gas" };
+    private static readonly Category Other = new() { Id = 4, Name = "Other" };
     private static readonly Category Utilities = new() { Id = 5, Name = "Utilities" };
     private static readonly Category Housing = new() { Id = 6, Name = "Housing", IsCardEligible = false };
 
@@ -52,8 +52,25 @@ public class RewardsOptimizerTests
             new CardSpend { CardId = surpass.Id, Period = new(2026, m, 1), CategoryId = 4, Amount = 300m },
         }).ToList();
 
-    private static RewardsInput Input(DateOnly asOf, List<Card> cards, List<LoyaltyProgram> programs, List<CardSpend> spend, List<Bill>? bills = null, Dictionary<int, decimal>? accrual = null, List<Label>? labels = null)
-        => new(2026, asOf, cards, programs, spend, [Restaurants, Groceries, Gas, Other, Utilities, Housing], labels ?? [], bills ?? [], accrual ?? new());
+    /// <summary>A variable budget line: planned spend with no due date, which is how the plan's pool is built now.</summary>
+    private static BudgetLine V(int id, int categoryId, decimal monthly, int? labelId = null) => new()
+    {
+        Id = id, Name = $"Planned {id}", CategoryId = categoryId, LabelId = labelId,
+        Frequency = BudgetFrequency.Variable, ProjectedAmount = monthly, FundingAccountId = 1,
+    };
+
+    /// <summary>$2,350/mo of planned variable spend, the same total the fixture always assumed.</summary>
+    private static List<BudgetLine> Planned() => [V(101, 1, 600m), V(102, 2, 700m), V(103, 3, 250m), V(104, 4, 800m)];
+
+    private static RewardsInput Input(DateOnly asOf, List<Card> cards, List<LoyaltyProgram> programs, List<CardSpend> spend,
+        List<BudgetLine>? lines = null, Dictionary<int, decimal>? accrual = null, List<Label>? labels = null, List<BudgetLine>? planned = null)
+    {
+        var all = new List<BudgetLine>(planned ?? Planned());
+        all.AddRange(lines ?? []);
+        var acc = all.ToDictionary(b => b.Id, b => b.ProjectedAmount);
+        foreach (var kv in accrual ?? []) acc[kv.Key] = kv.Value;
+        return new(2026, asOf, cards, programs, spend, [Restaurants, Groceries, Gas, Other, Utilities, Housing], labels ?? [], all, acc);
+    }
 
     [Fact]
     public void Both_diamonds_cannot_be_hit_on_the_projected_spend_and_the_report_says_so_in_priority_order()
@@ -96,8 +113,8 @@ public class RewardsOptimizerTests
     public void With_enough_spend_both_goals_are_covered_and_the_rest_goes_to_the_best_value_card()
     {
         var (ihg, surpass, sapphire, ihgProg, hiltonProg) = Fixture();
-        var big = new Category { Id = 4, Name = "Other", PlannedMonthly = 20_000m };
-        var input = Input(new(2026, 9, 26), [ihg, surpass, sapphire], [ihgProg, hiltonProg], Spend(ihg, surpass, 9)) with { Categories = [Restaurants, Groceries, Gas, big, Utilities, Housing] };
+        var input = Input(new(2026, 9, 26), [ihg, surpass, sapphire], [ihgProg, hiltonProg], Spend(ihg, surpass, 9),
+            planned: [V(101, 1, 600m), V(102, 2, 700m), V(103, 3, 250m), V(104, 4, 20_000m)]);
         var r = RewardsOptimizer.Run(input);
 
         Assert.Empty(r.Plan.Gaps);
@@ -129,26 +146,26 @@ public class RewardsOptimizerTests
     }
 
     [Fact]
-    public void Bill_recommendation_weighs_the_bank_discount_unless_a_goal_card_is_short()
+    public void Budget_line_recommendation_weighs_the_bank_discount_unless_a_goal_card_is_short()
     {
         var (ihg, surpass, sapphire, ihgProg, hiltonProg) = Fixture();
-        var att = new Bill { Id = 1, Name = "AT&T", CategoryId = 5, Category = Utilities, ProjectedAmount = 85m, BankAutopayDiscount = 5m, FundingAccountId = 1 };
-        var hulu = new Bill { Id = 2, Name = "Hulu", CategoryId = 5, Category = Utilities, ProjectedAmount = 18.99m, FundingAccountId = 1 };
-        var mortgage = new Bill { Id = 3, Name = "Mortgage", CategoryId = 6, Category = Housing, ProjectedAmount = 2_100m, FundingAccountId = 1, IsCardEligible = false };
+        var att = new BudgetLine { Id = 1, Name = "AT&T", CategoryId = 5, Category = Utilities, ProjectedAmount = 85m, BankAutopayDiscount = 5m, FundingAccountId = 1 };
+        var hulu = new BudgetLine { Id = 2, Name = "Hulu", CategoryId = 5, Category = Utilities, ProjectedAmount = 18.99m, FundingAccountId = 1 };
+        var mortgage = new BudgetLine { Id = 3, Name = "Mortgage", CategoryId = 6, Category = Housing, ProjectedAmount = 2_100m, FundingAccountId = 1, IsCardEligible = false };
         var accrual = new Dictionary<int, decimal> { [1] = 85m, [2] = 18.99m, [3] = 2_100m };
 
         // No goals short: only Sapphire (no goal) → AT&T $85 × 1 × 1.25¢ = $1.06 < $5 discount → bank.
         var calm = RewardsOptimizer.Run(Input(new(2026, 9, 26), [sapphire], [], [], [att, hulu, mortgage], accrual));
-        var attRec = calm.Bills.Single(b => b.BillName == "AT&T");
+        var attRec = calm.BudgetLines.Single(b => b.LineName == "AT&T");
         Assert.Null(attRec.CardId);
         Assert.StartsWith("Pay from bank", attRec.Recommendation);
         Assert.Equal(1.06m, attRec.CardValue);
-        Assert.Contains(calm.Bills, b => b.BillName == "Hulu" && b.CardId == sapphire.Id);
-        Assert.DoesNotContain(calm.Bills, b => b.BillName == "Mortgage");
+        Assert.Contains(calm.BudgetLines, b => b.LineName == "Hulu" && b.CardId == sapphire.Id);
+        Assert.DoesNotContain(calm.BudgetLines, b => b.LineName == "Mortgage");
 
         // IHG short: utilities routed to the IHG card → AT&T goes on the card despite the discount.
         var tight = RewardsOptimizer.Run(Input(new(2026, 9, 26), [ihg, surpass, sapphire], [ihgProg, hiltonProg], Spend(ihg, surpass, 9), [att, hulu, mortgage], accrual));
-        var attTight = tight.Bills.Single(b => b.BillName == "AT&T");
+        var attTight = tight.BudgetLines.Single(b => b.LineName == "AT&T");
         Assert.Equal(ihg.Id, attTight.CardId);
         Assert.Contains("status goal that is short", attTight.Recommendation);
     }
@@ -196,7 +213,7 @@ public class RewardsOptimizerTests
     public void A_label_beats_the_category_rate_so_the_same_category_can_earn_differently()
     {
         // "General merchandise" earns 1× everywhere, except at Amazon where this card pays 5×.
-        var amazon = new Label { Id = 1, Name = "Amazon", CategoryId = 4, PlannedMonthly = 300m };
+        var amazon = new Label { Id = 1, Name = "Amazon", CategoryId = 4 };
         var card = new Card
         {
             Id = 30, Name = "Cash back", PointValueCents = 1.0m,
@@ -216,8 +233,9 @@ public class RewardsOptimizerTests
         var r = RewardsOptimizer.Run(Input(new(2026, 12, 31), [card], [], spend, labels: [amazon]));
         Assert.Equal(200m * 5 + 100m * 1, r.Earnings.Single().YtdPoints);
 
-        // Planning splits the category: the label's planned spend is carved out, not added on top.
-        var plan = RewardsOptimizer.Run(Input(new(2026, 12, 31), [card], [], [], labels: [amazon]));
+        // Planning splits the category: Amazon is its own line, carved out of Other's $800 rather than added on top.
+        var plan = RewardsOptimizer.Run(Input(new(2026, 12, 31), [card], [], [], labels: [amazon],
+            planned: [V(101, 1, 600m), V(102, 2, 700m), V(103, 3, 250m), V(104, 4, 500m), V(105, 4, 300m, labelId: 1)]));
         Assert.Equal(2_350m, plan.Plan.ProjectedMonthly);                 // unchanged total
         var amazonRoute = plan.Plan.Routing.Single(x => x.LabelId == 1);
         Assert.Equal(300m, amazonRoute.Monthly);
@@ -300,5 +318,39 @@ public class RewardsOptimizerTests
         Assert.Equal(20m, e.PerksValue);
         Assert.Equal(e.YtdDollars + e.ThresholdRewardsValue + 20m - e.AnnualFee, e.NetValue);
         Assert.Contains("perks", e.Formula);
+    }
+
+    [Fact]
+    public void The_whole_projected_pool_comes_from_the_budget_and_says_how_it_splits()
+    {
+        var (ihg, surpass, sapphire, ihgProg, hiltonProg) = Fixture();
+        var att = new BudgetLine { Id = 1, Name = "AT&T", CategoryId = 5, Category = Utilities, ProjectedAmount = 85m, FundingAccountId = 1 };
+
+        var r = RewardsOptimizer.Run(Input(new(2026, 9, 26), [ihg, surpass, sapphire], [ihgProg, hiltonProg], [], [att]));
+
+        Assert.Equal(2_435m, r.Plan.ProjectedMonthly);                    // $2,350 variable + $85 dated
+        Assert.Contains("$85.00/mo dated", r.Plan.ProjectedMonthlySource);
+        Assert.Contains("$2,350.00/mo variable", r.Plan.ProjectedMonthlySource);
+    }
+
+    [Fact]
+    public void A_line_that_is_not_card_eligible_stays_out_of_the_pool()
+    {
+        var (ihg, surpass, sapphire, ihgProg, hiltonProg) = Fixture();
+        var mortgage = new BudgetLine { Id = 3, Name = "Mortgage", CategoryId = 6, Category = Housing, ProjectedAmount = 2_100m, FundingAccountId = 1, IsCardEligible = false };
+
+        var r = RewardsOptimizer.Run(Input(new(2026, 9, 26), [ihg, surpass, sapphire], [ihgProg, hiltonProg], [], [mortgage]));
+
+        Assert.Equal(2_350m, r.Plan.ProjectedMonthly);
+        Assert.DoesNotContain(r.Plan.Routing, x => x.Category.Contains("Housing"));
+    }
+
+    [Fact]
+    public void An_empty_budget_says_to_add_lines_rather_than_to_set_category_amounts()
+    {
+        var (ihg, surpass, sapphire, ihgProg, hiltonProg) = Fixture();
+        var r = RewardsOptimizer.Run(Input(new(2026, 9, 26), [ihg, surpass, sapphire], [ihgProg, hiltonProg], [], planned: []));
+        Assert.Equal(0m, r.Plan.ProjectedMonthly);
+        Assert.Contains(r.Warnings, w => w.Contains("add budget lines"));
     }
 }

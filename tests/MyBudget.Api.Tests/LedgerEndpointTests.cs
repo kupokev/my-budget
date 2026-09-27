@@ -30,7 +30,7 @@ public class LedgerEndpointTests : IClassFixture<ApiFixture>
 
         Assert.Equal(26, needs.PaychecksPerYear); // bi-weekly since 2026-02-01
         var automated = Assert.Single(needs.Accounts, a => a.AccountName == "Chase Automated Bills");
-        var hulu = Assert.Single(automated.Lines, l => l.BillName == "Hulu");
+        var hulu = Assert.Single(automated.Lines, l => l.LineName == "Hulu");
         Assert.True(hulu.PaidByCard);
         Assert.Equal(18.99m, hulu.MonthlyAccrual);
         Assert.DoesNotContain(needs.Accounts, a => a.AccountName.Contains("IHG"));
@@ -38,20 +38,20 @@ public class LedgerEndpointTests : IClassFixture<ApiFixture>
         var savings = Assert.Single(needs.Accounts, a => a.AccountName == "Chase Premier Savings");
         Assert.Equal(102m + 10m + 5.42m, savings.MonthlyNeed); // car insurance 612/6, AAA 120/12, Costco 65/12
         Assert.Equal(Math.Round(savings.MonthlyNeed * 12 / 26, 2), savings.PerPaycheckNeed);
-        Assert.Contains("612", savings.Lines.Single(l => l.BillName == "Car insurance").Formula);
+        Assert.Contains("612", savings.Lines.Single(l => l.LineName == "Car insurance").Formula);
     }
 
     [Fact]
-    public async Task Bill_month_upsert_shows_variance_in_history()
+    public async Task Budget_month_upsert_shows_variance_in_history()
     {
-        var bills = await _api.Get<List<BillDto>>("api/bills");
-        var electric = bills.Single(b => b.Name == "Electric");
+        var lines = await _api.Get<List<BudgetLineDto>>("api/budget");
+        var electric = lines.Single(b => b.Name == "Electric");
 
-        await _api.Put($"api/bills/{electric.Id}/periods/2026-09-15", new BillPeriodDto { ActualAmount = 151.20m });
-        await _api.Put($"api/bills/{electric.Id}/periods/2026-09-01", new BillPeriodDto { ActualAmount = 149.50m }); // same month → overwrite
+        await _api.Put($"api/budget/{electric.Id}/periods/2026-09-15", new BudgetPeriodDto { ActualAmount = 151.20m });
+        await _api.Put($"api/budget/{electric.Id}/periods/2026-09-01", new BudgetPeriodDto { ActualAmount = 149.50m }); // same month → overwrite
 
-        var history = await _api.Get<List<BillHistoryDto>>("api/bills/history?year=2026");
-        var row = history.Single(h => h.BillId == electric.Id);
+        var history = await _api.Get<List<BudgetHistoryDto>>("api/budget/history?year=2026");
+        var row = history.Single(h => h.BudgetLineId == electric.Id);
         var sep = row.Months.Single(m => m.Period == new DateOnly(2026, 9, 1));
         Assert.Equal(149.50m, sep.Actual);
         Assert.Equal(140m, sep.Projected);
@@ -64,16 +64,16 @@ public class LedgerEndpointTests : IClassFixture<ApiFixture>
     [Fact]
     public async Task Per_month_due_date_and_projected_overrides_flow_to_history_upcoming_and_needs()
     {
-        var bills = await _api.Get<List<BillDto>>("api/bills");
-        var water = bills.Single(b => b.Name == "Water");
+        var lines = await _api.Get<List<BudgetLineDto>>("api/budget");
+        var water = lines.Single(b => b.Name == "Water");
 
         // October: water is due on the 3rd this time and expected to be $72, not the usual 20th / $60.
-        await _api.Put($"api/bills/{water.Id}/periods/2026-10-01", new BillPeriodDto { DueDate = new(2026, 10, 3), ProjectedAmount = 72m });
-        // December: no water bill (say the account closes) → projected 0 for that month only.
-        await _api.Put($"api/bills/{water.Id}/periods/2026-12-01", new BillPeriodDto { ProjectedAmount = 0m });
+        await _api.Put($"api/budget/{water.Id}/periods/2026-10-01", new BudgetPeriodDto { DueDate = new(2026, 10, 3), ProjectedAmount = 72m });
+        // December: no water line (say the account closes) → projected 0 for that month only.
+        await _api.Put($"api/budget/{water.Id}/periods/2026-12-01", new BudgetPeriodDto { ProjectedAmount = 0m });
 
-        var history = await _api.Get<List<BillHistoryDto>>("api/bills/history?year=2026");
-        var months = history.Single(h => h.BillId == water.Id).Months;
+        var history = await _api.Get<List<BudgetHistoryDto>>("api/budget/history?year=2026");
+        var months = history.Single(h => h.BudgetLineId == water.Id).Months;
         var oct = months.Single(m => m.Period == new DateOnly(2026, 10, 1));
         Assert.Equal(new DateOnly(2026, 10, 3), oct.DueDate);
         Assert.True(oct.DueDateIsOverride);
@@ -83,21 +83,21 @@ public class LedgerEndpointTests : IClassFixture<ApiFixture>
         Assert.Equal(60m, months.Single(m => m.Period == new DateOnly(2026, 11, 1)).Projected);
 
         var needs = await _api.Get<TransferNeedsDto>("api/transfer-needs?asOf=2026-10-15");
-        var line = needs.Accounts.Single(a => a.AccountName == "Chase Automated Bills").Lines.Single(l => l.BillName == "Water");
+        var line = needs.Accounts.Single(a => a.AccountName == "Chase Automated Bills").Lines.Single(l => l.LineName == "Water");
         Assert.Equal(72m, line.MonthlyAccrual);
         Assert.Contains("October 2026", line.Formula);
 
         // Clean up so other tests see the seed as-is.
-        await _api.Client.DeleteAsync($"api/bills/{water.Id}/periods/2026-10-01");
-        await _api.Client.DeleteAsync($"api/bills/{water.Id}/periods/2026-12-01");
+        await _api.Client.DeleteAsync($"api/budget/{water.Id}/periods/2026-10-01");
+        await _api.Client.DeleteAsync($"api/budget/{water.Id}/periods/2026-12-01");
     }
 
     [Fact]
-    public async Task Bill_validation_requires_a_card_when_paid_by_card()
+    public async Task Budget_line_validation_requires_a_card_when_paid_by_card()
     {
         var accounts = await _api.Get<List<AccountDto>>("api/accounts");
-        var dto = new BillDto { Name = "Bad bill", ProjectedAmount = 1m, PaymentMethod = PaymentMethodKind.Card, FundingAccountId = accounts[0].Id, DueDay = 1 };
-        var r = await _api.Client.PostAsJsonAsync("api/bills", dto, ApiFixture.Json);
+        var dto = new BudgetLineDto { Name = "Bad line", ProjectedAmount = 1m, PaymentMethod = PaymentMethodKind.Card, FundingAccountId = accounts[0].Id, DueDay = 1 };
+        var r = await _api.Client.PostAsJsonAsync("api/budget", dto, ApiFixture.Json);
         Assert.Equal(HttpStatusCode.BadRequest, r.StatusCode);
         Assert.Contains("PaymentCardId", await r.Content.ReadAsStringAsync());
     }
@@ -118,7 +118,7 @@ public class LedgerEndpointTests : IClassFixture<ApiFixture>
         var home = await _api.Get<HomeDto>("api/home");
         Assert.NotNull(home.NextPayDate);
         Assert.NotEmpty(home.NeedsThisPayPeriod);
-        Assert.All(home.UpcomingBills, b => Assert.InRange(b.DueDate.DayNumber - home.AsOf.DayNumber, 0, 14));
+        Assert.All(home.UpcomingLines, b => Assert.InRange(b.DueDate.DayNumber - home.AsOf.DayNumber, 0, 14));
     }
 
     [Fact]
@@ -127,7 +127,7 @@ public class LedgerEndpointTests : IClassFixture<ApiFixture>
         var accounts = await _api.Get<List<AccountDto>>("api/accounts");
         var main = accounts.Single(a => a.Name == "Chase Main");
         var auto = accounts.Single(a => a.Name == "Chase Automated Bills");
-        var t = await _api.Post($"api/accounts/{main.Id}/transfers", new TransferDto { AccountId = main.Id, Date = new(2026, 9, 20), Amount = -330m, CounterpartyAccountId = auto.Id, Notes = "monthly bills" });
+        var t = await _api.Post($"api/accounts/{main.Id}/transfers", new TransferDto { AccountId = main.Id, Date = new(2026, 9, 20), Amount = -330m, CounterpartyAccountId = auto.Id, Notes = "monthly budget lines" });
         Assert.Equal(-330m, t.Amount);
         Assert.Equal("Chase Automated Bills", t.CounterpartyName);
         Assert.NotNull(t.LinkedTransferId);

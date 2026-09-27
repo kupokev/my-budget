@@ -30,8 +30,8 @@ public class HistoryEndpointTests : IClassFixture<ApiFixture>
     {
         var cards = await _api.Get<List<CardDto>>("api/cards");
         var ihg = cards.Single(c => c.Name == "Chase IHG One Rewards Premier");
-        var bills = await _api.Get<List<BillDto>>("api/bills");
-        var hulu = bills.Single(b => b.Name == "Hulu");
+        var lines = await _api.Get<List<BudgetLineDto>>("api/budget");
+        var hulu = lines.Single(b => b.Name == "Hulu");
         var categories = await _api.Get<List<CategoryDto>>("api/categories");
 
         var pv = await Preview(ihg.Id, ChaseCsv);
@@ -44,15 +44,15 @@ public class HistoryEndpointTests : IClassFixture<ApiFixture>
         Assert.Equal(categories.Single(c => c.Name == "Gas").Id, pv.Rows.Single(r => r.Description.StartsWith("SHELL")).CategoryId); // statement category "Gas"
         Assert.Equal("Blue Bottle Coffee", pv.Rows.Single(r => r.Description.Contains("BLUE BOTTLE")).Merchant);
 
-        // Match Hulu to its bill before committing.
-        huluRow.BillId = hulu.Id;
+        // Match Hulu to its line before committing.
+        huluRow.BudgetLineId = hulu.Id;
         var result = await _api.Post<ImportCommitRequest, ImportResultDto>("api/import/commit", new() { FileName = "chase.csv", Profile = pv.Profile, CardId = ihg.Id, Rows = pv.Rows.ToList() });
         Assert.Equal(4, result.Imported);
-        Assert.Equal(1, result.BillMonthsUpdated);
+        Assert.Equal(1, result.BudgetMonthsUpdated);
         Assert.Equal(1, result.CardMonthsUpdated);
 
-        var history = await _api.Get<List<BillHistoryDto>>("api/bills/history?year=2026");
-        Assert.Equal(18.99m, history.Single(h => h.BillId == hulu.Id).Months.Single(m => m.Period == new DateOnly(2026, 9, 1)).Actual);
+        var history = await _api.Get<List<BudgetHistoryDto>>("api/budget/history?year=2026");
+        Assert.Equal(18.99m, history.Single(h => h.BudgetLineId == hulu.Id).Months.Single(m => m.Period == new DateOnly(2026, 9, 1)).Actual);
 
         var spend = await _api.Get<List<CardSpendDto>>($"api/card-spend?year=2026&cardId={ihg.Id}");
         var sept = spend.Where(s => s.Period == new DateOnly(2026, 9, 1)).ToList();
@@ -121,7 +121,7 @@ public class HistoryEndpointTests : IClassFixture<ApiFixture>
         Assert.Equal(2, result.Imported);
         Assert.Equal(1, result.Reconciled);
 
-        // Balance moved once for the transfer (not twice) plus the electric bill.
+        // Balance moved once for the transfer (not twice) plus the electric line.
         Assert.Equal(before - 500m - 140m, (await _api.Get<List<AccountDto>>("api/accounts")).Single(a => a.Id == main.Id).LatestBalance);
         var lines = await _api.Get<List<TransactionDto>>($"api/transactions?year=2026&month=9&accountId={main.Id}");
         var manualLine = lines.Single(l => l.Id == manual.Id);
@@ -194,8 +194,8 @@ public class HistoryEndpointTests : IClassFixture<ApiFixture>
         Assert.Equal(2025, yoy.PriorYear);
         Assert.All(yoy.Categories, r => { Assert.Equal(12, r.ThisMonths.Count); Assert.Equal(12, r.LastMonths.Count); });
 
-        var csv = await _api.Client.GetStringAsync("api/export/bills.csv?year=2026");
-        Assert.StartsWith("Bill,Category,Funded from,Projected,Jan", csv);
+        var csv = await _api.Client.GetStringAsync("api/export/budget.csv?year=2026");
+        Assert.StartsWith("Budget line,Category,Funded from,Projected,Jan", csv);
         Assert.Contains("Mortgage", csv);
     }
 }

@@ -15,7 +15,7 @@ else
     </div>
 
     <table>
-        <thead><tr><th>Name</th><th>Type</th><th>Institution</th><th class="money">Min balance</th><th class="money" title="Latest snapshot plus transfers since it">Balance</th><th>Snapshot</th><th class="money" title="Cash leaving this account this month: bills paid from it, plus bills on cards it pays">This month</th><th>Cadence</th><th class="center" title="Rainy-day fund">RDF</th><th class="center">Active</th><th></th></tr></thead>
+        <thead><tr><th>Name</th><th>Type</th><th>Institution</th><th class="money">Min balance</th><th class="money" title="Latest snapshot plus transfers since it">Balance</th><th>Snapshot</th><th class="money" title="Cash leaving this account this month: lines paid from it, plus lines on cards it pays">This month</th><th>Cadence</th><th class="center" title="Rainy-day fund">RDF</th><th class="center">Active</th><th></th></tr></thead>
         <tbody>
         @foreach (var a in accounts.Where(a => showInactive || a.IsActive))
         {

@@ -75,7 +75,7 @@ public class BuildoutEndpointTests : IClassFixture<ApiFixture>
         Assert.Equal(0m, robin.OneOffBalance);
         Assert.True(robin.TotalOwed > 0);
         var sam = ledgers.Single(l => l.Person.Name == "Sam");
-        Assert.Equal(250m, sam.Periods.First().Expected);                 // 100% of the Amex loan bill
+        Assert.Equal(250m, sam.Periods.First().Expected);                 // 100% of the Amex loan line
         Assert.Equal("Due", sam.Periods.Single(r => r.Period == new DateOnly(2026, 9, 1)).Status);
     }
 
@@ -128,7 +128,7 @@ public class BuildoutEndpointTests : IClassFixture<ApiFixture>
         var rewardsAlerts = await _api.Get<List<AlertDto>>("api/alerts?kind=rewards");
         Assert.NotEmpty(rewardsAlerts);                                    // both Diamonds short on the seed
         Assert.All(rewardsAlerts, a => Assert.Equal("rewards", a.Kind));
-        Assert.Equal(2, d.RainyDay.Accounts.Count);                       // T-Bill + Wealthfront marked
+        Assert.Equal(2, d.RainyDay.Accounts.Count);                       // T-BudgetLine + Wealthfront marked
         Assert.False(d.AiEnabled);
 
         await _api.Client.PostAsync("api/investments/prices?ticker=VTI&date=2026-09-25&price=300", null); // seeded holding gets a price

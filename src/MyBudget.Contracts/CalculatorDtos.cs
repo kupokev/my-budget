@@ -194,7 +194,7 @@ public sealed class LoanDto
     public DateOnly StartDate { get; set; }
     public decimal? ScheduledPayment { get; set; }
     [Range(0, 1_000_000)] public decimal ExtraMonthlyPayment { get; set; }
-    public int? BillId { get; set; }
+    public int? BudgetLineId { get; set; }
     public string? Notes { get; set; }
     public bool IsActive { get; set; } = true;
     public decimal? LatestBalance { get; set; }

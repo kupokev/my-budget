@@ -46,9 +46,9 @@ public class Transaction
     /// <summary>Where it was: Amazon, Costco, an IHG property. Sharpens rewards rates (see <see cref="Label"/>).</summary>
     public int? LabelId { get; set; }
     public Label? Label { get; set; }
-    /// <summary>The tracked bill this line pays, if any (BIL-3 actuals come from these).</summary>
-    public int? BillId { get; set; }
-    public Bill? Bill { get; set; }
+    /// <summary>The tracked line this line pays, if any (BIL-3 actuals come from these).</summary>
+    public int? BudgetLineId { get; set; }
+    public BudgetLine? BudgetLine { get; set; }
     /// <summary>Money moved between own accounts (or a card payment): excluded from spending.</summary>
     public bool IsTransfer { get; set; }
     /// <summary>OFX FITID, or a hash of date/amount/description/source for CSV; unique per source for de-duplication.</summary>
@@ -79,7 +79,7 @@ public class Transaction
 
 public enum RuleMatch { Contains, StartsWith, Regex }
 
-/// <summary>"Always file lines matching X under category Y (and bill Z)". Created from the Transactions page (BIL-8).</summary>
+/// <summary>"Always file transactions matching X under category Y (and budget line Z)". Created from the Transactions page (BIL-8).</summary>
 public class CategoryRule
 {
     public int Id { get; set; }
@@ -89,8 +89,8 @@ public class CategoryRule
     public Category? Category { get; set; }
     public int? LabelId { get; set; }
     public Label? Label { get; set; }
-    public int? BillId { get; set; }
-    public Bill? Bill { get; set; }
+    public int? BudgetLineId { get; set; }
+    public BudgetLine? BudgetLine { get; set; }
     public bool MarkAsTransfer { get; set; }
     /// <summary>Lower runs first.</summary>
     public int Priority { get; set; } = 100;

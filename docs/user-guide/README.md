@@ -32,7 +32,12 @@ in-memory database resets on every restart either way.)
   transfer out. For transfers, pick the other account (the matching entry is written there too and
   the pair deletes together) or "Other" for money from or to outside. Long/Short on the Dashboard
   compares transfers this month to the monthly need.
-- **Bills:** the year grid is the old bill tab. Click a month cell to open that month's editor:
+- **Budget:** everything you plan to spend money on. Dated lines (mortgage, insurance, subscriptions)
+  behave as bills always did, with a due day and a year grid. Set a line's frequency to **Variable**
+  for planned spend with no due date and no biller: groceries, restaurants, gas. A variable line just
+  carries a monthly figure. Give a line a label to budget one merchant apart from its category, so
+  Amazon can be planned and routed separately from the rest of General merchandise.
+  The year grid is the old bill tab. Click a month cell to open that month's editor:
   type the actual and press Enter for the quick case, or also set this month's due date or expected
   amount when they differ from the bill's defaults (a blank field means "use the default"). A blue
   dot on a cell marks a month with an override; hover a cell for its details. Grey parentheses are
@@ -92,10 +97,10 @@ in-memory database resets on every restart either way.)
   point value, and this year's nights / stays / program spend. Paths list every way to each tier.
 - **Rewards status → Card spend.** Type each card's monthly spend by category from statements. This is
   the year-to-date figure every threshold and card-spend path uses.
-- **Rewards status → Progress / Plan / Bills / Earnings.** Progress shows each program you're in,
+- **Rewards status → Progress / Plan / Budget lines / Earnings.** Progress shows each program you're in,
   the tier you hold and what that tier gets you, then every path and threshold with
   the per-month figure. Plan allocates spend to goals in priority order and shows gaps with the
-  other paths. Bills says card or bank per bill, weighing the bank-autopay discount. Earnings shows
+  other paths. Budget lines says card or bank per line, weighing the bank-autopay discount. Earnings shows
   points and dollars per card net of fees. Use the year arrows to see next year's plan from zero.
 - **Calculators → Points vs cash.** Standing at a booking page, price the stay both ways and enter
   the two totals. It returns cents per point and tells you to pay cash under 0.45¢, calls it a wash
@@ -110,7 +115,7 @@ in-memory database resets on every restart either way.)
   choose the CSV/OFX/QFX file. The preview shows every line with a suggested category, bill, or
   transfer flag and why. Fix anything, untick "skip" lines you don't want, then Import. Lines
   already imported are marked as duplicates and left out. A line matched to a bill sets that
-  month's actual on the Bills grid; card lines feed the Rewards card-spend figures. Undo removes a
+  month's actual on the Budget grid; card lines feed the Rewards card-spend figures. Undo removes a
   whole file's lines.
 - **Labels** (Admin → Categories) say *where* a purchase happened next to the category's *what kind*:
   Amazon vs Costco within General merchandise, or IHG vs Hilton within Travel. Give a label a usual
@@ -123,8 +128,6 @@ in-memory database resets on every restart either way.)
   import links them automatically when amount and date (±3 days) match, or use "reconcile…" to pick
   the line yourself. A reconciled pair counts once in balances. A deposit that is someone paying you back: edit it and pick the person under "Repayment from"; the payment lands on their Owed-to-me ledger (oldest months first) and the line stops counting as income. Tick "always" when saving to create a rule that files every line with
   that merchant the same way, now and in future imports. The Rules panel lists and edits them.
-- **Spending.** This month vs last, year to date, money in, uncategorized. Per-category table with
-  drill-down to merchants and lines, and a month-over-month matrix.
 - **Goals.** Financial goals read their current value from a metric (net worth, chosen account
   balances, contributions into an account type such as HSA or Roth IRA, 401(k) deferrals, category
   totals, a loan balance) or a typed value.

@@ -10,21 +10,21 @@ namespace MyBudget.Api;
 /// <summary>ALT-1..6 plus housekeeping, computed on request from the same data the pages show. No push; the Home page is the inbox.</summary>
 public sealed class AlertsService(BudgetDbContext db, InvestmentService investments, PaycheckService paychecks)
 {
-    public async Task<List<AlertDto>> ComputeAsync(DateOnly today, TransferNeedsDto needs, IReadOnlyList<UpcomingBillDto> upcoming, RewardsReportDto rewards, HsaPlanDto? hsa)
+    public async Task<List<AlertDto>> ComputeAsync(DateOnly today, TransferNeedsDto needs, IReadOnlyList<UpcomingLineDto> upcoming, RewardsReportDto rewards, HsaPlanDto? hsa)
     {
         var alerts = new List<AlertDto>();
         var accounts = await db.Accounts.Include(a => a.Balances).Include(a => a.Transactions).Where(a => a.IsActive).ToListAsync();
 
-        // ALT-1: a bill is due soon and its funding account hasn't received this month's transfer need.
+        // ALT-1: a line is due soon and its funding account hasn't received this month's transfer need.
         foreach (var n in needs.Accounts.Where(n => n.LongShort < 0))
         {
             var soon = upcoming.Where(b => b.FundingAccount == n.AccountName && b.DueDate <= today.AddDays(7)).ToList();
             if (soon.Count == 0) continue;
             alerts.Add(new("transfer", AlertSeverity.Warning, $"{n.AccountName} is {Math.Abs(n.LongShort):C} short of this month's transfer",
-                $"{string.Join(", ", soon.Select(b => $"{b.BillName} {b.Amount:C} on {b.DueDate:MMM d}"))} come out of it; moved {n.TransferredThisMonth:C} of {n.MonthlyNeed:C} so far.", "accounts"));
+                $"{string.Join(", ", soon.Select(b => $"{b.LineName} {b.Amount:C} on {b.DueDate:MMM d}"))} come out of it; moved {n.TransferredThisMonth:C} of {n.MonthlyNeed:C} so far.", "accounts"));
         }
 
-        // ALT-2: balance below what the next two weeks of bills (plus the minimum) need.
+        // ALT-2: balance below what the next two weeks of lines (plus the minimum) need.
         foreach (var a in accounts)
         {
             if (a.Balances.Count == 0 && a.Transactions.Count == 0) continue;
@@ -79,13 +79,13 @@ public sealed class AlertsService(BudgetDbContext db, InvestmentService investme
         return alerts.OrderBy(a => a.Severity == AlertSeverity.Danger ? 0 : a.Severity == AlertSeverity.Warning ? 1 : 2).ToList();
     }
 
-    /// <summary>ACC-5: monthly expenses = bill accruals + planned variable spend; compare marked accounts to 3–6 months of that.</summary>
+    /// <summary>ACC-5: monthly expenses = line accruals + planned variable spend; compare marked accounts to 3–6 months of that.</summary>
     public async Task<RainyDayDto> RainyDayAsync(DateOnly today)
     {
-        var bills = await db.Bills.Include(b => b.Periods).Where(b => b.IsActive).ToListAsync();
-        var billsMonthly = bills.Sum(b => SinkingFund.MonthlyAccrual(b, today).Monthly);
-        var planned = await db.Categories.Where(c => c.IsActive && c.PlannedMonthly != null).SumAsync(c => c.PlannedMonthly!.Value);
-        var monthly = Math.Round(billsMonthly + planned, 2);
+        var lines = await db.BudgetLines.Include(b => b.Periods).Where(b => b.IsActive).ToListAsync();
+        var dated = lines.Where(b => b.Frequency != BudgetFrequency.Variable).Sum(b => SinkingFund.MonthlyAccrual(b, today).Monthly);
+        var variable = lines.Where(b => b.Frequency == BudgetFrequency.Variable).Sum(b => SinkingFund.MonthlyAccrual(b, today).Monthly);
+        var monthly = Math.Round(dated + variable, 2);
         var marked = await db.Accounts.Include(a => a.Balances).Include(a => a.Transactions).Where(a => a.IsActive && a.IsRainyDayFund).ToListAsync();
         var balance = marked.Sum(a => BalanceMath.Of(a, today).Balance);
         var months = monthly == 0 ? 0 : Math.Round(balance / monthly, 1);
@@ -95,6 +95,6 @@ public sealed class AlertsService(BudgetDbContext db, InvestmentService investme
             : status == "Low" ? $"Below the 3-month minimum by {low - balance:C}."
             : status == "Marginal" ? $"Above the minimum, but less than 25% over it ({comfort:C})."
             : months <= 6 ? "More than 25% above the minimum; within the 3–6 month range." : $"Above 6 months by {balance - high:C}.";
-        return new RainyDayDto(monthly, $"bills {billsMonthly:C}/mo + planned variable spend {planned:C}/mo", balance, marked.Select(a => a.Name).ToList(), months, low, high, comfort, status, verdict);
+        return new RainyDayDto(monthly, $"budget: {dated:C}/mo dated + {variable:C}/mo variable", balance, marked.Select(a => a.Name).ToList(), months, low, high, comfort, status, verdict);
     }
 }

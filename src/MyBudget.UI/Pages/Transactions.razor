@@ -4,7 +4,7 @@
 
 <ErrorBanner @bind-Message="error" />
 
-@if (categories is null || bills is null || accounts is null || cards is null)
+@if (categories is null || lines is null || accounts is null || cards is null)
 {
     <p class="muted">Loading…</p>
 }
@@ -26,9 +26,9 @@ else
     @if (rulesOpen)
     {
         <section class="panel">
-            <h3>Categorization rules <span class="muted">(run in priority order; a match sets category, bill, transfer)</span></h3>
+            <h3>Categorization rules <span class="muted">(run in priority order; a match sets category, line, transfer)</span></h3>
             <table class="compact">
-                <thead><tr><th>Priority</th><th>Match</th><th>Pattern</th><th>Category</th><th>Label</th><th>Bill</th><th>Transfer</th><th>Active</th><th></th></tr></thead>
+                <thead><tr><th>Priority</th><th>Match</th><th>Pattern</th><th>Category</th><th>Label</th><th>Budget line</th><th>Transfer</th><th>Active</th><th></th></tr></thead>
                 <tbody>
                 @foreach (var r in rules)
                 {
@@ -38,7 +38,7 @@ else
                         <td><input type="text" @bind="r.Pattern" /></td>
                         <td><select @bind="r.CategoryId"><option value="">—</option>@foreach (var c in categories) { <option value="@c.Id">@c.Name</option> }</select></td>
                         <td><select @bind="r.LabelId"><option value="">—</option>@foreach (var l in labels ?? []) { <option value="@l.Id">@l.Name</option> }</select></td>
-                        <td><select @bind="r.BillId"><option value="">—</option>@foreach (var b in bills) { <option value="@b.Id">@b.Name</option> }</select></td>
+                        <td><select @bind="r.BudgetLineId"><option value="">—</option>@foreach (var b in lines) { <option value="@b.Id">@b.Name</option> }</select></td>
                         <td><input type="checkbox" @bind="r.MarkAsTransfer" /></td>
                         <td><input type="checkbox" @bind="r.IsActive" /></td>
                         <td><button class="secondary" type="button" @onclick="() => SaveRule(r)">Save</button> <button class="secondary" type="button" @onclick="() => DeleteRule(r)">✕</button></td>
@@ -58,8 +58,8 @@ else
     else
     {
         <table class="tx">
-            <colgroup><col class="c-date" /><col class="c-src" /><col class="c-desc" /><col class="c-amt" /><col class="c-cat" /><col class="c-label" /><col class="c-bill" /><col class="c-xfer" /><col class="c-rec" /><col class="c-act" /></colgroup>
-            <thead><tr><th>Date</th><th>Source</th><th>Description</th><th class="money">Amount</th><th>Category</th><th>Label</th><th>Bill</th><th>Transfer</th><th>Rec.</th><th></th></tr></thead>
+            <colgroup><col class="c-date" /><col class="c-src" /><col class="c-desc" /><col class="c-amt" /><col class="c-cat" /><col class="c-label" /><col class="c-line" /><col class="c-xfer" /><col class="c-rec" /><col class="c-act" /></colgroup>
+            <thead><tr><th>Date</th><th>Source</th><th>Description</th><th class="money">Amount</th><th>Category</th><th>Label</th><th>Budget line</th><th>Transfer</th><th>Rec.</th><th></th></tr></thead>
             <tbody>
             @foreach (var t in rows)
             {
@@ -70,7 +70,7 @@ else
                     <td class="money"><Money Value="t.Amount" Signed="true" /></td>
                     <td class="ellipsis">@(t.RepaymentFromPersonName is { } who ? $"Repayment · {who}" : t.CategoryName ?? (t.IsTransfer ? "" : "—"))</td>
                     <td class="ellipsis muted">@t.LabelName</td>
-                    <td class="ellipsis">@t.BillName</td>
+                    <td class="ellipsis">@t.LineName</td>
                     <td class="center muted">@(t.IsTransfer ? "✓" : "")</td>
                     <td class="center">
                         @if (t.ReconciledWithId is not null) { <button class="link ok" type="button" title="@("Reconciled with " + t.ReconciledWithSummary + " · click to unlink")" @onclick="() => Unreconcile(t)">✓</button> }
@@ -93,14 +93,14 @@ else
                     <legend>File it under</legend>
                     <div class="field"><label>Category</label><select @bind="editDto.CategoryId"><option value="">—</option>@foreach (var c in categories) { <option value="@c.Id">@c.Name</option> }</select></div>
                     <div class="field"><label>Label <span class="muted">(where)</span></label><select @bind="editDto.LabelId"><option value="">—</option>@foreach (var l in labels ?? []) { <option value="@l.Id">@l.Name</option> }</select></div>
-                    <div class="field"><label>Bill it pays</label><select @bind="editDto.BillId"><option value="">—</option>@foreach (var b in bills) { <option value="@b.Id">@b.Name</option> }</select></div>
+                    <div class="field"><label>BudgetLine it pays</label><select @bind="editDto.BudgetLineId"><option value="">—</option>@foreach (var b in lines) { <option value="@b.Id">@b.Name</option> }</select></div>
                     @if (et.Amount > 0)
                     {
                         <div class="field"><label>Repayment from <span class="muted">(someone who owes you)</span></label><select @bind="editDto.RepaymentFromPersonId"><option value="">—</option>@foreach (var pp in people ?? []) { <option value="@pp.Id">@pp.Name</option> }</select></div>
                     }
                     <div class="checks">
                         <label class="inline"><input type="checkbox" @bind="editDto.IsTransfer" /> Transfer / card payment (not spending)</label>
-                        <label class="inline" title="Create a rule so every line with this merchant gets the same category and bill, now and in future imports"><input type="checkbox" @bind="editDto.CreateRule" /> Always file "@(et.Merchant ?? et.Description)" this way</label>
+                        <label class="inline" title="Create a rule so every line with this merchant gets the same category and line, now and in future imports"><input type="checkbox" @bind="editDto.CreateRule" /> Always file "@(et.Merchant ?? et.Description)" this way</label>
                     </div>
                 </fieldset>
                 <div class="field full"><label>Notes</label><input type="text" @bind="editDto.Notes" /></div>
@@ -144,7 +144,7 @@ else
     private string sourceFilter = "", search = "";
     private List<TransactionDto>? rows;
     private List<CategoryDto>? categories;
-    private List<BillDto>? bills;
+    private List<BudgetLineDto>? lines;
     private List<AccountDto>? accounts;
     private List<CardDto>? cards;
     private List<PersonDto>? people;
@@ -156,7 +156,7 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        try { categories = await Api.GetCategoriesAsync(); bills = await Api.GetBillsAsync(); accounts = await Api.GetAccountsAsync(); cards = await Api.GetCardsAsync(); people = await Api.GetPeopleAsync(); labels = await Api.GetLabelsAsync(); }
+        try { categories = await Api.GetCategoriesAsync(); lines = await Api.GetBudgetLinesAsync(); accounts = await Api.GetAccountsAsync(); cards = await Api.GetCardsAsync(); people = await Api.GetPeopleAsync(); labels = await Api.GetLabelsAsync(); }
         catch (Exception ex) { error = ex.Message; }
         await Load();
     }
@@ -176,7 +176,7 @@ else
         catch (Exception ex) { error = ex.Message; }
     }
 
-    private void StartEdit(TransactionDto t) { edit = t; editDto = new() { CategoryId = t.CategoryId, LabelId = t.LabelId, BillId = t.BillId, IsTransfer = t.IsTransfer, Notes = t.Notes, RepaymentFromPersonId = t.RepaymentFromPersonId }; }
+    private void StartEdit(TransactionDto t) { edit = t; editDto = new() { CategoryId = t.CategoryId, LabelId = t.LabelId, BudgetLineId = t.BudgetLineId, IsTransfer = t.IsTransfer, Notes = t.Notes, RepaymentFromPersonId = t.RepaymentFromPersonId }; }
 
     private async Task SaveEdit()
     {

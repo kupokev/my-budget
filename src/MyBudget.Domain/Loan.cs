@@ -20,9 +20,9 @@ public class Loan
     public decimal? ScheduledPayment { get; set; }
     /// <summary>Extra principal paid every month on top of the scheduled payment.</summary>
     public decimal ExtraMonthlyPayment { get; set; }
-    /// <summary>The bill that carries this loan's payment in the ledger, if any.</summary>
-    public int? BillId { get; set; }
-    public Bill? Bill { get; set; }
+    /// <summary>The line that carries this loan's payment in the ledger, if any.</summary>
+    public int? BudgetLineId { get; set; }
+    public BudgetLine? BudgetLine { get; set; }
     public string? Notes { get; set; }
     public bool IsActive { get; set; } = true;
     public List<LoanBalance> Balances { get; set; } = [];

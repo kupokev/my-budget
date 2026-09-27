@@ -90,7 +90,7 @@ public static class LoanEndpoints
         {
             Id = l.Id, Name = l.Name, Kind = l.Kind, Lender = l.Lender, AccountNumber = l.AccountNumber, OriginalPrincipal = l.OriginalPrincipal, AnnualRatePercent = l.AnnualRate * 100m,
             TermMonths = l.TermMonths, StartDate = l.StartDate, ScheduledPayment = l.ScheduledPayment, ExtraMonthlyPayment = l.ExtraMonthlyPayment,
-            BillId = l.BillId, Notes = l.Notes, IsActive = l.IsActive, LatestBalance = latest?.Balance, LatestBalanceAsOf = latest?.AsOf,
+            BudgetLineId = l.BudgetLineId, Notes = l.Notes, IsActive = l.IsActive, LatestBalance = latest?.Balance, LatestBalanceAsOf = latest?.AsOf,
         };
     }
 
@@ -98,6 +98,6 @@ public static class LoanEndpoints
     {
         l.Name = d.Name.Trim(); l.Kind = d.Kind; l.Lender = d.Lender; l.AccountNumber = Mapping.Clean(d.AccountNumber); l.OriginalPrincipal = d.OriginalPrincipal; l.AnnualRate = d.AnnualRatePercent / 100m;
         l.TermMonths = d.TermMonths; l.StartDate = d.StartDate; l.ScheduledPayment = d.ScheduledPayment; l.ExtraMonthlyPayment = d.ExtraMonthlyPayment;
-        l.BillId = d.BillId; l.Notes = d.Notes; l.IsActive = d.IsActive;
+        l.BudgetLineId = d.BudgetLineId; l.Notes = d.Notes; l.IsActive = d.IsActive;
     }
 }

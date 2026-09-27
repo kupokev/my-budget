@@ -21,12 +21,12 @@ public static class ReportEndpoints
                 Enumerable.Range(1, 12).Select(m => -grp.Where(t => t.Date.Year == y && t.Date.Month == m).Sum(t => t.Amount)).ToList(),
                 Enumerable.Range(1, 12).Select(m => -grp.Where(t => t.Date.Year == y - 1 && t.Date.Month == m).Sum(t => t.Amount)).ToList())).OrderByDescending(r => r.ThisYear).ToList();
 
-            var periods = await db.BillPeriods.Include(p => p.Bill).Where(p => p.ActualAmount != null && (p.Period.Year == y || p.Period.Year == y - 1)).ToListAsync();
-            var bills = periods.GroupBy(p => p.Bill!.Name).Select(grp => Row(grp.Key,
+            var periods = await db.BudgetPeriods.Include(p => p.BudgetLine).Where(p => p.ActualAmount != null && (p.Period.Year == y || p.Period.Year == y - 1)).ToListAsync();
+            var lineRows = periods.GroupBy(p => p.BudgetLine!.Name).Select(grp => Row(grp.Key,
                 Enumerable.Range(1, 12).Select(m => grp.Where(p => p.Period.Year == y && p.Period.Month == m).Sum(p => p.ActualAmount ?? 0)).ToList(),
                 Enumerable.Range(1, 12).Select(m => grp.Where(p => p.Period.Year == y - 1 && p.Period.Month == m).Sum(p => p.ActualAmount ?? 0)).ToList())).OrderByDescending(r => r.ThisYear).ToList();
 
-            return new YearOverYearDto(y, y - 1, cats, bills, cats.Sum(c => c.ThisYear), cats.Sum(c => c.LastYear), bills.Sum(b => b.ThisYear), bills.Sum(b => b.LastYear));
+            return new YearOverYearDto(y, y - 1, cats, lineRows, cats.Sum(c => c.ThisYear), cats.Sum(c => c.LastYear), lineRows.Sum(b => b.ThisYear), lineRows.Sum(b => b.LastYear));
         });
 
         g.MapGet("/net-worth", async (BudgetDbContext db, TimeProvider clock) => await NetWorth(db, DateOnly.FromDateTime(clock.GetLocalNow().DateTime), history: true));
@@ -37,17 +37,17 @@ public static class ReportEndpoints
             var q = TransactionEndpoints.Query(db);
             if (year is { } y) q = q.Where(t => t.Date.Year == y);
             var rows = await q.OrderBy(t => t.Date).ToListAsync();
-            var sb = new StringBuilder("Date,Posted,Source,Description,Merchant,Amount,Category,Bill,Transfer,Notes\n");
+            var sb = new StringBuilder("Date,Posted,Source,Description,Merchant,Amount,Category,Budget line,Transfer,Notes\n");
             foreach (var t in rows)
-                sb.Append(Csv(t.Date.ToString("yyyy-MM-dd"), t.PostedDate?.ToString("yyyy-MM-dd"), t.Account?.Name ?? t.Card?.Name, t.Description, t.Merchant, t.Amount.ToString("0.00"), t.Category?.Name, t.Bill?.Name, t.IsTransfer ? "yes" : "", t.Notes));
+                sb.Append(Csv(t.Date.ToString("yyyy-MM-dd"), t.PostedDate?.ToString("yyyy-MM-dd"), t.Account?.Name ?? t.Card?.Name, t.Description, t.Merchant, t.Amount.ToString("0.00"), t.Category?.Name, t.BudgetLine?.Name, t.IsTransfer ? "yes" : "", t.Notes));
             return Results.Text(sb.ToString(), "text/csv");
         });
-        x.MapGet("/bills.csv", async (int? year, BudgetDbContext db, TimeProvider clock) =>
+        x.MapGet("/budget.csv", async (int? year, BudgetDbContext db, TimeProvider clock) =>
         {
             var y = year ?? clock.GetLocalNow().Year;
-            var bills = await db.Bills.Include(b => b.Periods).Include(b => b.Category).Include(b => b.FundingAccount).OrderBy(b => b.Name).ToListAsync();
-            var sb = new StringBuilder("Bill,Category,Funded from,Projected," + string.Join(",", Enumerable.Range(1, 12).Select(m => new DateOnly(y, m, 1).ToString("MMM"))) + ",Total\n");
-            foreach (var b in bills)
+            var lines = await db.BudgetLines.Include(b => b.Periods).Include(b => b.Category).Include(b => b.FundingAccount).OrderBy(b => b.Name).ToListAsync();
+            var sb = new StringBuilder("Budget line,Category,Funded from,Projected," + string.Join(",", Enumerable.Range(1, 12).Select(m => new DateOnly(y, m, 1).ToString("MMM"))) + ",Total\n");
+            foreach (var b in lines)
             {
                 var months = Enumerable.Range(1, 12).Select(m => b.Periods.FirstOrDefault(p => p.Period == new DateOnly(y, m, 1))?.ActualAmount).ToList();
                 sb.Append(Csv([b.Name, b.Category?.Name, b.FundingAccount?.Name, b.ProjectedAmount.ToString("0.00"), .. months.Select(m => m?.ToString("0.00")), months.Sum(m => m ?? 0).ToString("0.00")]));

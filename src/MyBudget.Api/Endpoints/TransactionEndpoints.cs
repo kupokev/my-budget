@@ -11,7 +11,7 @@ public static class TransactionEndpoints
     {
         var g = api.MapGroup("/transactions");
 
-        g.MapGet("/", async (int? year, int? month, int? categoryId, bool? uncategorized, string? search, int? accountId, int? cardId, int? billId, int? limit, bool? unreconciled, BudgetDbContext db) =>
+        g.MapGet("/", async (int? year, int? month, int? categoryId, bool? uncategorized, string? search, int? accountId, int? cardId, int? lineId, int? limit, bool? unreconciled, BudgetDbContext db) =>
         {
             var q = Query(db);
             if (unreconciled == true) q = q.Where(t => t.Origin == TransactionOrigin.Manual && t.ReconciledWithId == null);
@@ -21,7 +21,7 @@ public static class TransactionEndpoints
             if (uncategorized == true) q = q.Where(t => t.CategoryId == null && !t.IsTransfer);
             if (accountId is { } a) q = q.Where(t => t.AccountId == a);
             if (cardId is { } cd) q = q.Where(t => t.CardId == cd);
-            if (billId is { } b) q = q.Where(t => t.BillId == b);
+            if (lineId is { } b) q = q.Where(t => t.BudgetLineId == b);
             if (!string.IsNullOrWhiteSpace(search)) q = q.Where(t => t.Description.Contains(search) || (t.Merchant != null && t.Merchant.Contains(search)));
             return (await q.OrderByDescending(t => t.Date).ThenByDescending(t => t.Id).Take(limit ?? 500).ToListAsync()).Select(ToDto);
         });
@@ -30,8 +30,8 @@ public static class TransactionEndpoints
         {
             var t = await Query(db).FirstOrDefaultAsync(x => x.Id == id);
             if (t is null) return Results.NotFound();
-            t.CategoryId = dto.CategoryId; t.LabelId = dto.LabelId; t.BillId = dto.BillId; t.IsTransfer = dto.IsTransfer; t.Notes = dto.Notes; t.IsManuallyCategorized = true;
-            if (t.BillId is { } b && t.CategoryId is null) t.CategoryId = (await db.Bills.FindAsync(b))?.CategoryId;
+            t.CategoryId = dto.CategoryId; t.LabelId = dto.LabelId; t.BudgetLineId = dto.BudgetLineId; t.IsTransfer = dto.IsTransfer; t.Notes = dto.Notes; t.IsManuallyCategorized = true;
+            if (t.BudgetLineId is { } b && t.CategoryId is null) t.CategoryId = (await db.BudgetLines.FindAsync(b))?.CategoryId;
             // Repayment from a person: create/replace/remove the receivable payment this line represents.
             var existingPayment = t.ReceivablePaymentId is { } rp ? await db.ReceivablePayments.Include(x => x.Allocations).FirstOrDefaultAsync(x => x.Id == rp) : null;
             if (dto.RepaymentFromPersonId is { } personId && t.Amount > 0)
@@ -39,9 +39,9 @@ public static class TransactionEndpoints
                 if (existingPayment is not null && existingPayment.PersonId != personId) { db.ReceivablePayments.Remove(existingPayment); existingPayment = null; }
                 if (existingPayment is null)
                 {
-                    var person = await db.People.Include(p => p.Obligations).ThenInclude(o => o.Bill).Include(p => p.Charges).Include(p => p.Payments).ThenInclude(x => x.Allocations).FirstOrDefaultAsync(p => p.Id == personId);
+                    var person = await db.People.Include(p => p.Obligations).ThenInclude(o => o.BudgetLine).Include(p => p.Charges).Include(p => p.Payments).ThenInclude(x => x.Allocations).FirstOrDefaultAsync(p => p.Id == personId);
                     if (person is null) return Results.NotFound("Person not found.");
-                    var payment = new ReceivablePayment { PersonId = personId, Date = t.Date, Amount = t.Amount, Notes = $"from bank line: {t.Merchant ?? t.Description}" };
+                    var payment = new ReceivablePayment { PersonId = personId, Date = t.Date, Amount = t.Amount, Notes = $"from bank feed: {t.Merchant ?? t.Description}" };
                     payment.Allocations.AddRange(ReceivableEndpoints.AutoAllocate(person, t.Amount, t.Date));
                     db.ReceivablePayments.Add(payment);
                     await db.SaveChangesAsync();
@@ -57,7 +57,7 @@ public static class TransactionEndpoints
             if (dto.CreateRule)
             {
                 var pattern = string.IsNullOrWhiteSpace(dto.RulePattern) ? t.Merchant ?? t.Description : dto.RulePattern.Trim();
-                rule = new CategoryRule { Pattern = pattern, Match = RuleMatch.Contains, CategoryId = dto.CategoryId, LabelId = dto.LabelId, BillId = dto.BillId, MarkAsTransfer = dto.IsTransfer };
+                rule = new CategoryRule { Pattern = pattern, Match = RuleMatch.Contains, CategoryId = dto.CategoryId, LabelId = dto.LabelId, BudgetLineId = dto.BudgetLineId, MarkAsTransfer = dto.IsTransfer };
                 db.CategoryRules.Add(rule);
             }
             await db.SaveChangesAsync();
@@ -98,7 +98,7 @@ public static class TransactionEndpoints
         {
             var a = await db.Transactions.FindAsync(id); var b = await db.Transactions.FindAsync(otherId);
             if (a is null || b is null) return Results.NotFound();
-            if (a.Origin == b.Origin) return Results.Problem("Reconcile a manual entry with an imported line, not two of the same kind.", statusCode: 400);
+            if (a.Origin == b.Origin) return Results.Problem("Reconcile a manual entry with an imported transaction, not two of the same kind.", statusCode: 400);
             if (a.ReconciledWithId != null || b.ReconciledWithId != null) return Results.Problem("One of them is already reconciled; unlink it first.", statusCode: 400);
             var (imported, manual) = a.Origin == TransactionOrigin.Imported ? (a, b) : (b, a);
             ImportService.Link(imported, manual);
@@ -121,7 +121,7 @@ public static class TransactionEndpoints
         r.MapGet("/", async (BudgetDbContext db) => (await db.CategoryRules.OrderBy(x => x.Priority).ThenBy(x => x.Pattern).ToListAsync()).Select(ToDto));
         r.MapPost("/", async (CategoryRuleDto dto, BudgetDbContext db) =>
         {
-            var e = new CategoryRule { Pattern = dto.Pattern.Trim(), Match = dto.Match, CategoryId = dto.CategoryId, LabelId = dto.LabelId, BillId = dto.BillId, MarkAsTransfer = dto.MarkAsTransfer, Priority = dto.Priority, IsActive = dto.IsActive };
+            var e = new CategoryRule { Pattern = dto.Pattern.Trim(), Match = dto.Match, CategoryId = dto.CategoryId, LabelId = dto.LabelId, BudgetLineId = dto.BudgetLineId, MarkAsTransfer = dto.MarkAsTransfer, Priority = dto.Priority, IsActive = dto.IsActive };
             db.CategoryRules.Add(e);
             await db.SaveChangesAsync();
             return Results.Created($"/api/category-rules/{e.Id}", ToDto(e));
@@ -130,7 +130,7 @@ public static class TransactionEndpoints
         {
             var e = await db.CategoryRules.FindAsync(id);
             if (e is null) return Results.NotFound();
-            e.Pattern = dto.Pattern.Trim(); e.Match = dto.Match; e.CategoryId = dto.CategoryId; e.LabelId = dto.LabelId; e.BillId = dto.BillId; e.MarkAsTransfer = dto.MarkAsTransfer; e.Priority = dto.Priority; e.IsActive = dto.IsActive;
+            e.Pattern = dto.Pattern.Trim(); e.Match = dto.Match; e.CategoryId = dto.CategoryId; e.LabelId = dto.LabelId; e.BudgetLineId = dto.BudgetLineId; e.MarkAsTransfer = dto.MarkAsTransfer; e.Priority = dto.Priority; e.IsActive = dto.IsActive;
             await db.SaveChangesAsync();
             return Results.Ok(ToDto(e));
         });
@@ -148,12 +148,12 @@ public static class TransactionEndpoints
     }
 
     internal static IQueryable<Transaction> Query(BudgetDbContext db)
-        => db.Transactions.Include(t => t.Account).Include(t => t.Card).Include(t => t.Category).Include(t => t.Label).Include(t => t.Bill).Include(t => t.CounterpartyAccount).Include(t => t.ReconciledWith).Include(t => t.ReceivablePayment).ThenInclude(p => p!.Person);
+        => db.Transactions.Include(t => t.Account).Include(t => t.Card).Include(t => t.Category).Include(t => t.Label).Include(t => t.BudgetLine).Include(t => t.CounterpartyAccount).Include(t => t.ReconciledWith).Include(t => t.ReceivablePayment).ThenInclude(p => p!.Person);
 
     internal static TransactionDto ToDto(Transaction t) => new(t.Id, t.AccountId, t.CardId, t.Account?.Name ?? t.Card?.Name ?? "—", t.Date, t.PostedDate, t.Amount,
-        t.Description, t.Merchant, t.CategoryId, t.Category?.Name, t.BillId, t.Bill?.Name, t.IsTransfer, t.Notes, t.IsManuallyCategorized, t.Origin, t.CounterpartyAccount?.Name,
+        t.Description, t.Merchant, t.CategoryId, t.Category?.Name, t.BudgetLineId, t.BudgetLine?.Name, t.IsTransfer, t.Notes, t.IsManuallyCategorized, t.Origin, t.CounterpartyAccount?.Name,
         t.ReconciledWithId, t.ReconciledWith is { } r ? $"{r.Date:MMM d} {r.Amount:C} {(r.Merchant ?? r.Description)}" : null,
         t.ReceivablePayment?.PersonId, t.ReceivablePayment?.Person?.Name, t.LabelId, t.Label?.Name);
 
-    private static CategoryRuleDto ToDto(CategoryRule r) => new() { Id = r.Id, Pattern = r.Pattern, Match = r.Match, CategoryId = r.CategoryId, LabelId = r.LabelId, BillId = r.BillId, MarkAsTransfer = r.MarkAsTransfer, Priority = r.Priority, IsActive = r.IsActive };
+    private static CategoryRuleDto ToDto(CategoryRule r) => new() { Id = r.Id, Pattern = r.Pattern, Match = r.Match, CategoryId = r.CategoryId, LabelId = r.LabelId, BudgetLineId = r.BudgetLineId, MarkAsTransfer = r.MarkAsTransfer, Priority = r.Priority, IsActive = r.IsActive };
 }

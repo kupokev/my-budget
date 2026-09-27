@@ -15,9 +15,9 @@ public sealed record RewardsInput(
     IReadOnlyList<CardSpend> Spend,
     IReadOnlyList<Category> Categories,
     IReadOnlyList<Label> Labels,
-    IReadOnlyList<Bill> Bills,
-    /// <summary>Monthly accrual per bill id (from the ledger engine), for card-eligible bill spend.</summary>
-    IReadOnlyDictionary<int, decimal> BillMonthlyAccrual,
+    IReadOnlyList<BudgetLine> BudgetLines,
+    /// <summary>Monthly accrual per line id (from the ledger engine), for card-eligible line spend.</summary>
+    IReadOnlyDictionary<int, decimal> LineMonthlyAccrual,
     /// <summary>True when the year being reported is the current one, so a tier already held counts without re-earning it.</summary>
     bool CarryCurrentTier = true);
 
@@ -38,44 +38,29 @@ public static class RewardsOptimizer
         foreach (var c in activeCards.Where(c => c.EarnRules.Count(r => r.AppliesIn(input.Year)) == 0))
             warnings.Add($"{c.Name} has no earn rules; it earns nothing in this plan.");
 
-        // Projected monthly card-eligible spend by category: card-eligible bills' accruals + planned variable spend.
-        // Keyed by (category, label): a label's planned spend is carved out of its category's.
+        // Projected monthly card-eligible spend comes from one place: the budget. Dated lines contribute
+        // their sinking-fund accrual, variable lines their monthly figure. Keyed by (category, label) so a
+        // line for Amazon competes for a different earn rate than the rest of General merchandise.
         var projected = new Dictionary<SpendKey, decimal>();
-        var sourceParts = new List<string>();
-        var eligibleBills = input.Bills.Where(b => b.IsActive && b.IsCardEligible && (b.Category?.IsCardEligible ?? true)).ToList();
-        decimal billsTotal = 0, plannedTotal = 0;
-        foreach (var b in eligibleBills)
+        var eligibleLines = input.BudgetLines.Where(b => b.IsActive && b.IsCardEligible && (b.Category?.IsCardEligible ?? true)).ToList();
+        decimal datedTotal = 0, variableTotal = 0;
+        foreach (var b in eligibleLines)
         {
-            var amt = input.BillMonthlyAccrual.GetValueOrDefault(b.Id);
-            var billKey = new SpendKey(b.CategoryId, null);
-            projected[billKey] = projected.GetValueOrDefault(billKey) + amt;
-            billsTotal += amt;
-        }
-        foreach (var cat in input.Categories.Where(c => c.IsActive && c.IsCardEligible && c.PlannedMonthly is > 0))
-        {
-            var key = new SpendKey(cat.Id, null);
-            projected[key] = projected.GetValueOrDefault(key) + cat.PlannedMonthly!.Value;
-            plannedTotal += cat.PlannedMonthly.Value;
-        }
-        foreach (var label in input.Labels.Where(l => l.IsActive && l.PlannedMonthly is > 0))
-        {
-            var labelKey = new SpendKey(label.CategoryId, label.Id);
-            projected[labelKey] = projected.GetValueOrDefault(labelKey) + label.PlannedMonthly!.Value;
-            var parent = new SpendKey(label.CategoryId, null);
-            if (projected.TryGetValue(parent, out var owned))
-                projected[parent] = Math.Max(0, owned - label.PlannedMonthly.Value);   // carved out, not added on top
-            else
-                plannedTotal += label.PlannedMonthly.Value;
+            var amt = input.LineMonthlyAccrual.GetValueOrDefault(b.Id);
+            if (amt <= 0) continue;
+            var lineKey = new SpendKey(b.CategoryId, b.LabelId);
+            projected[lineKey] = projected.GetValueOrDefault(lineKey) + amt;
+            if (b.Frequency == BudgetFrequency.Variable) variableTotal += amt; else datedTotal += amt;
         }
         var projectedMonthly = Round(projected.Values.Sum());
-        var projectedSource = $"card-eligible bills {billsTotal:C}/mo + planned variable spend {plannedTotal:C}/mo";
-        if (projectedMonthly == 0) warnings.Add("No projected card-eligible spend: set planned monthly amounts on categories or mark bills card-eligible.");
+        var projectedSource = $"card-eligible budget: {datedTotal:C}/mo dated + {variableTotal:C}/mo variable";
+        if (projectedMonthly == 0) warnings.Add("No projected card-eligible spend: add budget lines and mark them card-eligible.");
 
         var thresholds = Thresholds(activeCards, ytd, projectedMonthly, monthsLeft, input.Year);
-        var (programs, plan) = Plan(input, activeCards, ytd, projected, projectedMonthly, monthsLeft, warnings);
-        var bills = BillRecommendations(eligibleBills, input, activeCards, plan);
+        var (programs, plan) = Plan(input, activeCards, ytd, projected, projectedMonthly, projectedSource, monthsLeft, warnings);
+        var lines = BudgetRecommendations(eligibleLines, input, activeCards, plan);
         var earnings = Earnings(activeCards, input.Spend.Where(s => s.Period.Year == input.Year).ToList(), thresholds, input.Year);
-        return new RewardsReportDto(input.Year, input.AsOf, thresholds, programs, plan, bills, earnings, warnings);
+        return new RewardsReportDto(input.Year, input.AsOf, thresholds, programs, plan, lines, earnings, warnings);
     }
 
     // ---- Thresholds (RWD-3) ----------------------------------------------------------------
@@ -102,7 +87,7 @@ public static class RewardsOptimizer
     // ---- Status + spend plan (RWD-2, RWD-4, RWD-6) -------------------------------------------
 
     private static (List<ProgramStatusDto>, SpendPlanDto) Plan(RewardsInput input, List<Card> cards, Dictionary<int, decimal> ytd,
-        Dictionary<SpendKey, decimal> projected, decimal projectedMonthly, int monthsLeft, List<string> warnings)
+        Dictionary<SpendKey, decimal> projected, decimal projectedMonthly, string projectedSource, int monthsLeft, List<string> warnings)
     {
         var steps = new List<string> { $"{monthsLeft} months left in {input.Year}; projected card-eligible spend {projectedMonthly:C}/mo" };
         var pool = projectedMonthly;
@@ -213,7 +198,7 @@ public static class RewardsOptimizer
         if (routing.Count > 0) steps.Add("Remaining spend routed by earn rate × point value per category.");
 
         return (statuses, new SpendPlanDto(input.Year, input.AsOf, monthsLeft, projectedMonthly,
-            $"card-eligible bills + planned variable spend by category", allocations, routing, gaps, steps));
+            projectedSource, allocations, routing, gaps, steps));
     }
 
     /// <summary>The program's tiers, lowest first, each with what holding it gets you.</summary>
@@ -258,18 +243,18 @@ public static class RewardsOptimizer
         _ => p.Formula,
     };
 
-    // ---- Per-bill (RWD-4, RWD-4a) ---------------------------------------------------------------
+    // ---- Per-line (RWD-4, RWD-4a) ---------------------------------------------------------------
 
-    private static List<BillRecommendationDto> BillRecommendations(List<Bill> bills, RewardsInput input, List<Card> cards, SpendPlanDto plan)
+    private static List<BudgetRecommendationDto> BudgetRecommendations(List<BudgetLine> lines, RewardsInput input, List<Card> cards, SpendPlanDto plan)
     {
-        var list = new List<BillRecommendationDto>();
+        var list = new List<BudgetRecommendationDto>();
         var shortGoalCards = plan.Gaps.Count > 0 ? plan.Allocations.Select(a => a.CardId).ToHashSet() : [];
-        foreach (var b in bills.OrderBy(b => b.Name))
+        foreach (var b in lines.OrderBy(b => b.Name))
         {
-            var monthly = input.BillMonthlyAccrual.GetValueOrDefault(b.Id);
+            var monthly = input.LineMonthlyAccrual.GetValueOrDefault(b.Id);
             var route = plan.Routing.Where(r => r.CategoryId == b.CategoryId && r.LabelId is null && r.CardId is not null).OrderByDescending(r => r.Monthly).FirstOrDefault();
             var card = route is null ? cards.Where(c => c.EarnRules.Any(r => r.AppliesIn(input.Year))).OrderByDescending(c => CentsPerDollar(c, b.CategoryId, null, input.Year)).FirstOrDefault() : cards.First(c => c.Id == route.CardId);
-            if (card is null) { list.Add(new BillRecommendationDto(b.Id, b.Name, monthly, null, "no card with earn rules", 0, b.BankAutopayDiscount ?? 0, "")); continue; }
+            if (card is null) { list.Add(new BudgetRecommendationDto(b.Id, b.Name, monthly, null, "no card with earn rules", 0, b.BankAutopayDiscount ?? 0, "")); continue; }
             var cents = CentsPerDollar(card, b.CategoryId, null, input.Year);
             var cardValue = Round(monthly * cents / 100m);
             var discount = b.BankAutopayDiscount ?? 0;
@@ -278,7 +263,7 @@ public static class RewardsOptimizer
             var rec = useBank ? $"Pay from bank: {discount:C} discount beats {cardValue:C} in rewards"
                 : goalShort ? $"{card.Name}: every dollar counts toward a status goal that is short" + (discount > 0 ? $" (forgoing the {discount:C} bank discount)" : "")
                 : $"{card.Name}: {cardValue:C}/mo in rewards" + (discount > 0 ? $" beats the {discount:C} bank discount" : "");
-            list.Add(new BillRecommendationDto(b.Id, b.Name, monthly, useBank ? null : card.Id, rec, cardValue, discount,
+            list.Add(new BudgetRecommendationDto(b.Id, b.Name, monthly, useBank ? null : card.Id, rec, cardValue, discount,
                 $"{monthly:C} × {EarnRate(card, b.CategoryId, null, input.Year):0.##} pts/$ × {PointValue(card):0.##}¢ = {cardValue:C}" + (discount > 0 ? $" vs bank discount {discount:C}" : "")));
         }
         return list;

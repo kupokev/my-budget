@@ -43,7 +43,7 @@ app.MapGet("/health", (DatabaseOptions db, IHostEnvironment env) =>
 app.MapGroup("/api")
     .MapAccounts()
     .MapCards()
-    .MapBills()
+    .MapBudget()
     .MapIncome()
     .MapViews()
     .MapPaycheck()

@@ -128,7 +128,7 @@ public sealed record CategoryRouteDto(int? CategoryId, int? LabelId, string Cate
 public sealed record SpendPlanDto(int Year, DateOnly AsOf, int MonthsLeft, decimal ProjectedMonthly, string ProjectedMonthlySource,
     IReadOnlyList<AllocationDto> Allocations, IReadOnlyList<CategoryRouteDto> Routing, IReadOnlyList<GapDto> Gaps, IReadOnlyList<string> Steps);
 
-public sealed record BillRecommendationDto(int BillId, string BillName, decimal Monthly, int? CardId, string Recommendation, decimal CardValue, decimal BankDiscount, string Formula);
+public sealed record BudgetRecommendationDto(int BudgetLineId, string LineName, decimal Monthly, int? CardId, string Recommendation, decimal CardValue, decimal BankDiscount, string Formula);
 
 public sealed record MonthEarningsDto(DateOnly Period, decimal Spend, decimal Points, decimal Dollars);
 
@@ -136,4 +136,4 @@ public sealed record CardEarningsDto(int CardId, string CardName, decimal PointV
     decimal YtdSpend, decimal YtdPoints, decimal YtdDollars, decimal AnnualFee, decimal ThresholdRewardsValue, decimal PerksValue, decimal NetValue, string Formula);
 
 public sealed record RewardsReportDto(int Year, DateOnly AsOf, IReadOnlyList<ThresholdProgressDto> Thresholds, IReadOnlyList<ProgramStatusDto> Programs,
-    SpendPlanDto Plan, IReadOnlyList<BillRecommendationDto> Bills, IReadOnlyList<CardEarningsDto> Earnings, IReadOnlyList<string> Warnings);
+    SpendPlanDto Plan, IReadOnlyList<BudgetRecommendationDto> BudgetLines, IReadOnlyList<CardEarningsDto> Earnings, IReadOnlyList<string> Warnings);

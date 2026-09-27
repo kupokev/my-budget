@@ -4,7 +4,7 @@
 
 <ErrorBanner @bind-Message="error" />
 
-@if (accounts is null || cards is null || profiles is null || categories is null || bills is null)
+@if (accounts is null || cards is null || profiles is null || categories is null || lines is null)
 {
     <p class="muted">Loading…</p>
 }
@@ -29,7 +29,7 @@ else
     {
         <section class="panel">
             <h2>@fileName · @pv.SourceName · @pv.ProfileName</h2>
-            <p class="muted">@pv.Rows.Count lines from @Fmt.Date(pv.FirstDate) to @Fmt.Date(pv.LastDate): <strong>@pv.NewCount new</strong>, @pv.DuplicateCount already imported. Fix categories here or later on Transactions; a match to a bill fills that month's actual.</p>
+            <p class="muted">@pv.Rows.Count lines from @Fmt.Date(pv.FirstDate) to @Fmt.Date(pv.LastDate): <strong>@pv.NewCount new</strong>, @pv.DuplicateCount already imported. Fix categories here or later on Transactions; a match to a line fills that month's actual.</p>
             <Warnings Items="pv.Warnings" />
             <div class="toolbar">
                 <button type="button" @onclick="Commit" disabled="@(pv.NewCount == 0)">Import @pv.Rows.Count(r => !r.IsDuplicate && !r.Skip) lines</button>
@@ -37,7 +37,7 @@ else
             </div>
             <div class="scroll-x">
             <table class="grid">
-                <thead><tr><th>Date</th><th>Description</th><th>Merchant</th><th class="money">Amount</th><th>Category</th><th>Bill</th><th>Transfer</th><th>Skip</th><th>Why</th></tr></thead>
+                <thead><tr><th>Date</th><th>Description</th><th>Merchant</th><th class="money">Amount</th><th>Category</th><th>Budget line</th><th>Transfer</th><th>Skip</th><th>Why</th></tr></thead>
                 <tbody>
                 @foreach (var r in pv.Rows.Where(r => !hideDupes || !r.IsDuplicate))
                 {
@@ -47,7 +47,7 @@ else
                         <td class="muted">@r.Merchant</td>
                         <td><Money Value="r.Amount" Signed="true" /></td>
                         <td>@if (!r.IsDuplicate) { <select @bind="r.CategoryId"><option value="">—</option>@foreach (var c in categories.Where(c => c.IsActive)) { <option value="@c.Id">@c.Name</option> }</select> }</td>
-                        <td>@if (!r.IsDuplicate) { <select @bind="r.BillId"><option value="">—</option>@foreach (var b in bills.Where(b => b.IsActive)) { <option value="@b.Id">@b.Name</option> }</select> }</td>
+                        <td>@if (!r.IsDuplicate) { <select @bind="r.BudgetLineId"><option value="">—</option>@foreach (var b in lines.Where(b => b.IsActive)) { <option value="@b.Id">@b.Name</option> }</select> }</td>
                         <td>@if (!r.IsDuplicate) { <input type="checkbox" @bind="r.IsTransfer" /> }</td>
                         <td>@if (r.IsDuplicate) { <span class="muted">dup</span> } else { <input type="checkbox" @bind="r.Skip" /> }</td>
                         <td class="muted">@r.SuggestionSource</td>
@@ -63,7 +63,7 @@ else
     {
         <section class="panel">
             <h2>Imported</h2>
-            <p>@res.Imported lines imported, @res.Duplicates duplicates skipped, @res.Skipped skipped by you, @res.Reconciled reconciled with entries you'd made by hand. @res.BillMonthsUpdated bill-month actuals and @res.CardMonthsUpdated card-month spend figures updated.</p>
+            <p>@res.Imported lines imported, @res.Duplicates duplicates skipped, @res.Skipped skipped by you, @res.Reconciled reconciled with entries you'd made by hand. @res.BudgetMonthsUpdated line-month actuals and @res.CardMonthsUpdated card-month spend figures updated.</p>
         </section>
     }
 
@@ -92,7 +92,7 @@ else
     private List<CardDto>? cards;
     private List<ImportProfileDto>? profiles;
     private List<CategoryDto>? categories;
-    private List<BillDto>? bills;
+    private List<BudgetLineDto>? lines;
     private List<ImportBatchDto>? batches;
     private string source = "";
     private string profile = "auto";
@@ -107,7 +107,7 @@ else
         try
         {
             accounts = await Api.GetAccountsAsync(); cards = await Api.GetCardsAsync(); profiles = await Api.GetImportProfilesAsync();
-            categories = await Api.GetCategoriesAsync(); bills = await Api.GetBillsAsync(); batches = await Api.GetImportBatchesAsync();
+            categories = await Api.GetCategoriesAsync(); lines = await Api.GetBudgetLinesAsync(); batches = await Api.GetImportBatchesAsync();
         }
         catch (Exception ex) { error = ex.Message; }
     }

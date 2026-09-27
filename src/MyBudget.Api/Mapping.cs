@@ -55,20 +55,20 @@ internal static class Mapping
 
     public static CardBalanceDto ToDto(this CardBalance b) => new() { Id = b.Id, CardId = b.CardId, AsOf = b.AsOf, Balance = b.Balance };
 
-    public static CategoryDto ToDto(this Category c) => new() { Id = c.Id, Name = c.Name, IsActive = c.IsActive, PlannedMonthly = c.PlannedMonthly, IsCardEligible = c.IsCardEligible };
+    public static CategoryDto ToDto(this Category c) => new() { Id = c.Id, Name = c.Name, IsActive = c.IsActive, IsCardEligible = c.IsCardEligible };
 
-    public static BillDto ToDto(this Bill b) => new()
+    public static BudgetLineDto ToDto(this BudgetLine b) => new()
     {
-        Id = b.Id, Name = b.Name, CategoryId = b.CategoryId, AccountNumber = b.AccountNumber, Frequency = b.Frequency, DueDay = b.DueDay,
+        Id = b.Id, Name = b.Name, CategoryId = b.CategoryId, LabelId = b.LabelId, AccountNumber = b.AccountNumber, Frequency = b.Frequency, DueDay = b.DueDay,
         AnchorDueDate = b.AnchorDueDate, IsAutopay = b.IsAutopay, ProjectedAmount = b.ProjectedAmount,
         PaymentMethod = b.PaymentMethod, PaymentAccountId = b.PaymentAccountId, PaymentCardId = b.PaymentCardId,
         FundingAccountId = b.FundingAccountId, BankAutopayDiscount = b.BankAutopayDiscount, IsCardEligible = b.IsCardEligible,
         StartDate = b.StartDate, EndDate = b.EndDate, Notes = b.Notes, IsActive = b.IsActive,
     };
 
-    public static void Apply(this Bill b, BillDto d)
+    public static void Apply(this BudgetLine b, BudgetLineDto d)
     {
-        b.Name = d.Name.Trim(); b.CategoryId = d.CategoryId; b.AccountNumber = Clean(d.AccountNumber); b.Frequency = d.Frequency; b.DueDay = d.DueDay;
+        b.Name = d.Name.Trim(); b.CategoryId = d.CategoryId; b.LabelId = d.LabelId; b.AccountNumber = Clean(d.AccountNumber); b.Frequency = d.Frequency; b.DueDay = d.DueDay;
         b.AnchorDueDate = d.AnchorDueDate; b.IsAutopay = d.IsAutopay; b.ProjectedAmount = d.ProjectedAmount;
         b.PaymentMethod = d.PaymentMethod;
         b.PaymentAccountId = d.PaymentMethod == PaymentMethodKind.Account ? d.PaymentAccountId : null;
@@ -77,9 +77,9 @@ internal static class Mapping
         b.StartDate = d.StartDate; b.EndDate = d.EndDate; b.Notes = d.Notes; b.IsActive = d.IsActive;
     }
 
-    public static BillPeriodDto ToDto(this BillPeriod p) => new()
+    public static BudgetPeriodDto ToDto(this BudgetPeriod p) => new()
     {
-        Id = p.Id, BillId = p.BillId, Period = p.Period, DueDate = p.DueDate, ProjectedAmount = p.ProjectedAmount,
+        Id = p.Id, BudgetLineId = p.BudgetLineId, Period = p.Period, DueDate = p.DueDate, ProjectedAmount = p.ProjectedAmount,
         ActualAmount = p.ActualAmount, PaidOn = p.PaidOn, Notes = p.Notes,
     };
 

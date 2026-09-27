@@ -20,9 +20,9 @@ public sealed class ImportRowDto
     public bool IsDuplicate { get; set; }
     public int? CategoryId { get; set; }
     public int? LabelId { get; set; }
-    public int? BillId { get; set; }
+    public int? BudgetLineId { get; set; }
     public bool IsTransfer { get; set; }
-    /// <summary>Why the category/bill/transfer flag was suggested (rule, source category, bill name).</summary>
+    /// <summary>Why the category/line/transfer flag was suggested (rule, source category, line name).</summary>
     public string? SuggestionSource { get; set; }
     public bool Skip { get; set; }
 }
@@ -39,7 +39,7 @@ public sealed class ImportCommitRequest
     public List<ImportRowDto> Rows { get; set; } = [];
 }
 
-public sealed record ImportResultDto(int BatchId, int Imported, int Duplicates, int Skipped, int BillMonthsUpdated, int CardMonthsUpdated, int Reconciled);
+public sealed record ImportResultDto(int BatchId, int Imported, int Duplicates, int Skipped, int BudgetMonthsUpdated, int CardMonthsUpdated, int Reconciled);
 
 public sealed record ImportBatchDto(int Id, string FileName, ImportFormat Format, string? Profile, DateTime ImportedAt, string SourceName,
     int RowCount, int ImportedCount, int DuplicateCount, DateOnly? FirstDate, DateOnly? LastDate);
@@ -47,7 +47,7 @@ public sealed record ImportBatchDto(int Id, string FileName, ImportFormat Format
 // ---- Transactions (BIL-8/9) ------------------------------------------------------------------
 
 public sealed record TransactionDto(int Id, int? AccountId, int? CardId, string SourceName, DateOnly Date, DateOnly? PostedDate, decimal Amount,
-    string Description, string? Merchant, int? CategoryId, string? CategoryName, int? BillId, string? BillName, bool IsTransfer, string? Notes, bool IsManuallyCategorized,
+    string Description, string? Merchant, int? CategoryId, string? CategoryName, int? BudgetLineId, string? LineName, bool IsTransfer, string? Notes, bool IsManuallyCategorized,
     TransactionOrigin Origin, string? CounterpartyName, int? ReconciledWithId, string? ReconciledWithSummary, int? RepaymentFromPersonId, string? RepaymentFromPersonName,
     int? LabelId, string? LabelName);
 
@@ -57,12 +57,12 @@ public sealed class TransactionUpdateDto
 {
     public int? CategoryId { get; set; }
     public int? LabelId { get; set; }
-    public int? BillId { get; set; }
+    public int? BudgetLineId { get; set; }
     public bool IsTransfer { get; set; }
     public string? Notes { get; set; }
     /// <summary>Money in that repays what this person owes: creates (or removes) the payment on their ledger.</summary>
     public int? RepaymentFromPersonId { get; set; }
-    /// <summary>Also create a rule so future lines with this merchant get the same category/bill.</summary>
+    /// <summary>Also create a rule so future lines with this merchant get the same category/line.</summary>
     public bool CreateRule { get; set; }
     public string? RulePattern { get; set; }
     /// <summary>Apply the new rule to existing lines that aren't manually categorized.</summary>
@@ -76,7 +76,7 @@ public sealed class CategoryRuleDto
     public RuleMatch Match { get; set; } = RuleMatch.Contains;
     public int? CategoryId { get; set; }
     public int? LabelId { get; set; }
-    public int? BillId { get; set; }
+    public int? BudgetLineId { get; set; }
     public bool MarkAsTransfer { get; set; }
     public int Priority { get; set; } = 100;
     public bool IsActive { get; set; } = true;
@@ -127,7 +127,7 @@ public sealed record GoalProgressDto(GoalDto Goal, decimal Current, string Curre
 
 public sealed record YoyRowDto(string Name, decimal ThisYear, decimal LastYear, decimal Delta, decimal? DeltaPercent, IReadOnlyList<decimal> ThisMonths, IReadOnlyList<decimal> LastMonths);
 
-public sealed record YearOverYearDto(int Year, int PriorYear, IReadOnlyList<YoyRowDto> Categories, IReadOnlyList<YoyRowDto> Bills, decimal CategoriesThisYear, decimal CategoriesLastYear, decimal BillsThisYear, decimal BillsLastYear);
+public sealed record YearOverYearDto(int Year, int PriorYear, IReadOnlyList<YoyRowDto> Categories, IReadOnlyList<YoyRowDto> BudgetLines, decimal CategoriesThisYear, decimal CategoriesLastYear, decimal BudgetThisYear, decimal BudgetLastYear);
 
 public sealed record NetWorthLineDto(string Name, string Kind, decimal Balance, DateOnly? AsOf);
 

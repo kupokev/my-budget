@@ -28,9 +28,9 @@ public sealed class AiTools(BudgetDbContext db, PaycheckService paychecks, Inves
     [
         new("spend_by_category", "Spending by category for a month: this month vs last month, year to date, uncategorized count.", Obj(("year", "integer"), ("month", "integer"))),
         new("account_balances", "Latest balance of every account and card.", Obj()),
-        new("upcoming_bills", "Bills due in the next N days with amounts and funding accounts.", Obj(("days", "integer"))),
+        new("upcoming_bills", "Dated budget lines due in the next N days with amounts and funding accounts.", Obj(("days", "integer"))),
         new("transfer_needs", "Required transfer per account this month and per paycheck, and what's been moved so far.", Obj()),
-        new("bill_status", "Each bill's projected vs actual amount for a month.", Obj(("year", "integer"), ("month", "integer"))),
+        new("bill_status", "Each budget line's projected vs actual amount for a month.", Obj(("year", "integer"), ("month", "integer"))),
         new("rewards_progress", "Loyalty status progress, card thresholds, spend plan gaps for a year.", Obj(("year", "integer"))),
         new("hsa_plan", "HSA limit, contributions, room, recommended pace for a year.", Obj(("year", "integer"))),
         new("goals_progress", "Every goal's current value, prorated target and status.", Obj()),
@@ -50,9 +50,9 @@ public sealed class AiTools(BudgetDbContext db, PaycheckService paychecks, Inves
                 accounts = (await db.Accounts.Include(a => a.Balances).Include(a => a.Transactions).Where(a => a.IsActive).ToListAsync()).Select(a => { var c = BalanceMath.Of(a, today); return new { a.Name, a.Type, balance = c.Balance, detail = c.Detail }; }),
                 cards = (await db.Cards.Include(c => c.Balances).Where(c => c.IsActive).ToListAsync()).Select(c => new { c.Name, balance = c.Balances.OrderByDescending(b => b.AsOf).FirstOrDefault()?.Balance, asOf = c.Balances.OrderByDescending(b => b.AsOf).FirstOrDefault()?.AsOf }),
             },
-            "upcoming_bills" => await BillEndpoints.Upcoming(db, today, Math.Clamp(Int("days", 14), 1, 90)),
+            "upcoming_bills" => await BudgetEndpoints.Upcoming(db, today, Math.Clamp(Int("days", 14), 1, 90)),
             "transfer_needs" => await ViewEndpoints.Needs(db, today),
-            "bill_status" => await BillStatus(Int("year", today.Year), Int("month", today.Month)),
+            "bill_status" => await BudgetStatus(Int("year", today.Year), Int("month", today.Month)),
             "rewards_progress" => Slim(await RewardsEndpoints.Report(db, Int("year", today.Year), today)),
             "hsa_plan" => await HsaEndpoints.PlanAsync(db, Int("year", today.Year), today),
             "goals_progress" => await GoalEndpoints.AllProgress(db, paychecks, today),
@@ -63,11 +63,11 @@ public sealed class AiTools(BudgetDbContext db, PaycheckService paychecks, Inves
         return JsonSerializer.Serialize(result, Json);
     }
 
-    private async Task<object> BillStatus(int year, int month)
+    private async Task<object> BudgetStatus(int year, int month)
     {
         var period = new DateOnly(year, month, 1);
-        var bills = await db.Bills.Include(b => b.Periods).Where(b => b.IsActive).OrderBy(b => b.Name).ToListAsync();
-        return bills.Select(b =>
+        var lines = await db.BudgetLines.Include(b => b.Periods).Where(b => b.IsActive).OrderBy(b => b.Name).ToListAsync();
+        return lines.Select(b =>
         {
             var p = b.Periods.FirstOrDefault(x => x.Period == period);
             return new { b.Name, projected = p?.ProjectedAmount ?? b.ProjectedAmount, actual = p?.ActualAmount, dueDay = b.DueDay, paidVia = b.PaymentMethod.ToString() };
@@ -162,7 +162,7 @@ public sealed class AiService(HttpClient http, AiOptions options, AiTools tools)
     {
         var prompt = $"Write a short monthly summary for {new DateOnly(year, month, 1):MMMM yyyy}: what changed and why, in plain English, 5 to 8 sentences. " +
                      $"Call spend_by_category for {year}-{month} and bill_status for {year}-{month}, then rewards_progress for {year}, goals_progress, and net_worth. " +
-                     "Use only those results. Mention the biggest category changes, any bills over projection, status goals that are short, goals off track, and the net worth change.";
+                     "Use only those results. Mention the biggest category changes, any budget lines over projection, status goals that are short, goals off track, and the net worth change.";
         var r = await ChatAsync([new ChatMessageDto { Role = "user", Content = prompt }], today, ct);
         return new AiSummaryDto(year, month, r.Reply, r.ToolCalls, r.Model);
     }

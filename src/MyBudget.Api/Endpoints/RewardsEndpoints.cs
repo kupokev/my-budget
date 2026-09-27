@@ -83,15 +83,6 @@ public static class RewardsEndpoints
             return Results.Ok(new CardSpendDto { Id = row.Id, CardId = row.CardId, Period = row.Period, CategoryId = row.CategoryId, LabelId = row.LabelId, Amount = row.Amount, Notes = row.Notes });
         });
 
-        // ---- Category planning (planned variable spend, card eligibility) ----
-        api.MapPut("/categories/{id:int}/plan", async (int id, CategoryDto dto, BudgetDbContext db) =>
-        {
-            var c = await db.Categories.FindAsync(id);
-            if (c is null) return Results.NotFound();
-            c.PlannedMonthly = dto.PlannedMonthly; c.IsCardEligible = dto.IsCardEligible;
-            await db.SaveChangesAsync();
-            return Results.Ok(c.ToDto());
-        });
 
         // ---- The report (RWD-3..6) ----
         api.MapGet("/rewards/report", async (int? year, DateOnly? asOf, BudgetDbContext db, TimeProvider clock) =>
@@ -113,9 +104,9 @@ public static class RewardsEndpoints
         var spend = await db.CardSpend.Where(s => s.Period.Year == year).ToListAsync();
         var categories = await db.Categories.ToListAsync();
         var labels = await db.Labels.ToListAsync();
-        var bills = await db.Bills.Include(b => b.Category).Include(b => b.Periods).Where(b => b.IsActive).ToListAsync();
-        var accrual = bills.ToDictionary(b => b.Id, b => SinkingFund.MonthlyAccrual(b, asOf).Monthly);
-        return RewardsOptimizer.Run(new RewardsInput(year, asOf, cards, programs, spend, categories, labels, bills, accrual, carryCurrentTier));
+        var lines = await db.BudgetLines.Include(b => b.Category).Include(b => b.Periods).Where(b => b.IsActive).ToListAsync();
+        var accrual = lines.ToDictionary(b => b.Id, b => SinkingFund.MonthlyAccrual(b, asOf).Monthly);
+        return RewardsOptimizer.Run(new RewardsInput(year, asOf, cards, programs, spend, categories, labels, lines, accrual, carryCurrentTier));
     }
 
     private static IQueryable<LoyaltyProgram> Programs(BudgetDbContext db)

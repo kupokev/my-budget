@@ -1,17 +1,18 @@
+@page "/budget"
 @page "/bills"
 @inject ApiClient Api
 @using MyBudget.Domain
 
 <ErrorBanner @bind-Message="error" />
 
-@if (bills is null || accounts is null || cards is null || categories is null || history is null)
+@if (lines is null || accounts is null || cards is null || categories is null || labels is null || history is null)
 {
     <p class="muted">Loading…</p>
 }
 else
 {
     <div class="toolbar">
-        <button type="button" @onclick="() => Edit(new BillDto())">New bill</button>
+        <button type="button" @onclick="() => Edit(new BudgetLineDto())">New budget line</button>
         <span class="year-nav">
             <button class="secondary" type="button" title="Previous year" @onclick="() => ChangeYear(year - 1)">‹</button>
             <strong>@year</strong>
@@ -33,7 +34,7 @@ else
                 @foreach (var c in categories.Where(c => c.IsActive).OrderBy(c => c.Name))
                 {
                     var cat = c;
-                    <label class="inline"><input type="radio" name="catf" checked="@(categoryFilter == cat.Id)" @onchange="() => categoryFilter = cat.Id" /> @cat.Name <span class="muted">@bills.Count(b => b.CategoryId == cat.Id)</span></label>
+                    <label class="inline"><input type="radio" name="catf" checked="@(categoryFilter == cat.Id)" @onchange="() => categoryFilter = cat.Id" /> @cat.Name <span class="muted">@lines.Count(b => b.CategoryId == cat.Id)</span></label>
                 }
                 <a class="muted" href="categories">Manage categories and labels…</a>
             </div>
@@ -45,7 +46,7 @@ else
     {
         <section class="panel month-editor">
             <div class="month-head">
-                <h3>@monthEdit.BillName · @monthEdit.Period.ToString("MMMM yyyy")</h3>
+                <h3>@monthEdit.LineName · @monthEdit.Period.ToString("MMMM yyyy")</h3>
                 <span class="muted">Usually @Fmt.Money(monthEdit.DefaultProjected)@(monthEdit.DefaultDueDate is { } dd ? $", due {Fmt.Date(dd)}" : ", not due this month")</span>
             </div>
             <div class="month-body">
@@ -76,7 +77,7 @@ else
     <table class="grid">
         <thead>
             <tr>
-                <th>Bill</th>
+                <th>Budget line</th>
                 @if (Show("Category")) { <th>Category</th> }
                 @if (Show("Due")) { <th>Due</th> }
                 @if (Show("Paid via")) { <th>Paid via</th> }
@@ -88,22 +89,39 @@ else
             </tr>
         </thead>
         <tbody>
-        @foreach (var b in bills.Where(b => (showInactive || b.IsActive) && (categoryFilter is null || b.CategoryId == categoryFilter)))
+        @foreach (var b in lines.Where(b => (showInactive || b.IsActive) && (categoryFilter is null || b.CategoryId == categoryFilter)))
         {
-            var h = history.FirstOrDefault(x => x.BillId == b.Id);
+            var h = history.FirstOrDefault(x => x.BudgetLineId == b.Id);
             <tr class="@(b.IsActive ? "" : "muted")">
                 <td>
                     <span class="tip">@b.Name
                         <span class="tip-box">
-                            <b>@b.Name</b>
-                            @if (!string.IsNullOrWhiteSpace(b.AccountNumber)) { <span>Account #: @b.AccountNumber</span> }
-                            <span>Category: @(categories.FirstOrDefault(c => c.Id == b.CategoryId)?.Name ?? "—")</span>
-                            <span>Due: @DueText(b)</span>
-                            <span>Paid via: @PaidVia(b)</span>
-                            <span>Funded from: @(accounts.FirstOrDefault(a => a.Id == b.FundingAccountId)?.Name ?? "—")</span>
-                            <span>@(b.IsAutopay ? "Autopay" : "Paid manually")@(b.BankAutopayDiscount is { } d ? $" · bank-autopay discount {Fmt.Money(d)}/mo" : "")</span>
-                            @if (b.EndDate is { } end) { <span>Ends @Fmt.Date(end)</span> }
-                            @if (!string.IsNullOrWhiteSpace(b.Notes)) { <span class="muted">@b.Notes</span> }
+                            <span class="tip-head">
+                                <b>@b.Name</b>
+                                <span class="chip small">@(categories.FirstOrDefault(c => c.Id == b.CategoryId)?.Name ?? "Uncategorized")</span>
+                            </span>
+                            <span class="tip-grid">
+                                <span>Due</span><span>@DueText(b)</span>
+                                <span>Amount</span><span class="num">@Fmt.Money(b.ProjectedAmount)@(b.Frequency == BudgetFrequency.Variable ? " / mo planned" : "")</span>
+                                <span>Paid via</span><span>@PaidVia(b)@(b.IsAutopay ? ", autopay" : ", by hand")</span>
+                                <span>Funded from</span><span>@(accounts.FirstOrDefault(a => a.Id == b.FundingAccountId)?.Name ?? "—")</span>
+                                @if (!string.IsNullOrWhiteSpace(b.AccountNumber)) { <span>Account #</span><span>@b.AccountNumber</span> }
+                                @if (b.BankAutopayDiscount is { } d) { <span>Bank discount</span><span class="num">@Fmt.Money(d) / mo</span> }
+                                @if (b.EndDate is { } end) { <span>Ends</span><span>@Fmt.Date(end)</span> }
+                            </span>
+                            @if (PriorYear(b.Id) is { } py)
+                            {
+                                <span class="tip-hist">
+                                    <span class="h"></span><span class="h num">Total</span><span class="h num">Months</span><span class="h num">Avg</span>
+                                    <span>@(year - 1)</span><span class="num">@Fmt.Money(py.Total)</span><span class="num">@py.Months</span><span class="num">@Fmt.Money(py.Average)</span>
+                                    @if (ThisYearSoFar(b.Id) is { } ty)
+                                    {
+                                        <span>@year</span><span class="num">@Fmt.Money(ty.Total)</span><span class="num">@ty.Months</span><span class="num">@Fmt.Money(ty.Average)</span>
+                                        <span class="h">Change</span><span class="h num wide @(ty.Average > py.Average ? "neg" : ty.Average < py.Average ? "pos" : "")">@Delta(py.Average, ty.Average) / mo</span>
+                                    }
+                                </span>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(b.Notes)) { <span class="tip-note">@b.Notes</span> }
                         </span>
                     </span>
                 </td>
@@ -116,9 +134,9 @@ else
                 {
                     @foreach (var mo in h.Months)
                     {
-                        var isEditing = monthEdit is { } e && e.BillId == b.Id && e.Period == mo.Period;
+                        var isEditing = monthEdit is { } e && e.BudgetLineId == b.Id && e.Period == mo.Period;
                         <td class="cell @(mo.Projected == 0 && mo.Actual is null ? "dim" : "") @(mo.Variance > 0 ? "over" : "") @(isEditing ? "editing" : "") @(IsNow(mo.Period.Month) ? "now" : "")"
-                            @onclick="() => OpenMonth(b, mo)" title="@Title(mo)">
+                            @onclick="() => OpenMonth(b, mo)" title="@Title(mo, PriorMonth(b.Id, mo.Period.Month))">
                             @if (mo.Actual is { } a)
                             {
                                 <Money Value="a" />
@@ -136,7 +154,7 @@ else
                 {
                     <td colspan="@(12 + (Show("Avg actual") ? 1 : 0))"></td>
                 }
-                <td><button class="link" type="button" title="Edit bill" @onclick="() => Edit(b)">✎</button></td>
+                <td><button class="link" type="button" title="Edit line" @onclick="() => Edit(b)">✎</button></td>
             </tr>
         }
         </tbody>
@@ -166,28 +184,39 @@ else
     @if (editing is not null)
     {
         <section class="panel">
-            <h2>@(editing.Id == 0 ? "New bill" : editing.Name)</h2>
+            <h2>@(editing.Id == 0 ? "New line" : editing.Name)</h2>
             <EditForm Model="editing" OnValidSubmit="Save" class="form">
                 <DataAnnotationsValidator />
                 <fieldset class="group">
-                    <legend>Bill</legend>
+                    <legend>Budget line</legend>
                     <div class="field"><label>Name</label><InputText @bind-Value="editing.Name" /><ValidationMessage For="() => editing.Name" /></div>
                     <div class="field"><label>Category</label><InputSelect @bind-Value="editing.CategoryId">
                         <option value="">—</option>
                         @foreach (var c in categories.Where(c => c.IsActive)) { <option value="@c.Id">@c.Name</option> }
                     </InputSelect></div>
+                    <div class="field"><label>Label <span class="muted">(optional; budgets one merchant apart from its category)</span></label><InputSelect @bind-Value="editing.LabelId">
+                        <option value="">—</option>
+                        @foreach (var l in labels.Where(l => l.IsActive)) { <option value="@l.Id">@l.Name</option> }
+                    </InputSelect></div>
                     <div class="field"><label>Account / member #</label><InputText @bind-Value="editing.AccountNumber" /></div>
                 </fieldset>
                 <fieldset class="group">
                     <legend>Amount and timing</legend>
-                    <div class="field"><label>Usual amount</label><InputNumber @bind-Value="editing.ProjectedAmount" step="0.01" /></div>
+                    <div class="field"><label>@(editing.Frequency == BudgetFrequency.Variable ? "Planned per month" : "Usual amount")</label><InputNumber @bind-Value="editing.ProjectedAmount" step="0.01" /></div>
                     <div class="field"><label>Frequency</label><InputSelect @bind-Value="editing.Frequency">
-                        @foreach (var f in Enum.GetValues<BillFrequency>()) { <option value="@f">@Fmt.Words(f)</option> }
+                        @foreach (var f in Enum.GetValues<BudgetFrequency>()) { <option value="@f">@Fmt.Words(f)</option> }
                     </InputSelect></div>
-                    <div class="field"><label>Due day (31 = last)</label><InputNumber @bind-Value="editing.DueDay" /></div>
-                    @if (editing.Frequency != BillFrequency.Monthly)
+                    @if (editing.Frequency == BudgetFrequency.Variable)
                     {
-                        <div class="field"><label>@(editing.Frequency == BillFrequency.OneOff ? "Due date" : "A known due date")</label><InputDate @bind-Value="editing.AnchorDueDate" /></div>
+                        <p class="muted">Planned spend with no due date and no biller. The amount is what you expect to spend in a month.</p>
+                    }
+                    else
+                    {
+                        <div class="field"><label>Due day (31 = last)</label><InputNumber @bind-Value="editing.DueDay" /></div>
+                        @if (editing.Frequency != BudgetFrequency.Monthly)
+                        {
+                            <div class="field"><label>@(editing.Frequency == BudgetFrequency.OneOff ? "Due date" : "A known due date")</label><InputDate @bind-Value="editing.AnchorDueDate" /></div>
+                        }
                     }
                     <div class="field"><label>Starts</label><InputDate @bind-Value="editing.StartDate" /></div>
                     <div class="field"><label>Ends <span class="muted">(last month owed)</span></label><InputDate @bind-Value="editing.EndDate" /></div>
@@ -225,7 +254,7 @@ else
                 </fieldset>
                 <div class="field full"><label>Notes</label><InputTextArea @bind-Value="editing.Notes" rows="2" /></div>
                 <div class="actions-row">
-                    @if (editing.Id != 0) { <button class="link danger" type="button" @onclick="DeleteEditing">Delete bill</button> }
+                    @if (editing.Id != 0) { <button class="link danger" type="button" @onclick="DeleteEditing">Delete line</button> }
                     <button class="secondary" type="button" @onclick="() => editing = null">Cancel</button>
                     <button type="submit">Save</button>
                 </div>
@@ -238,15 +267,18 @@ else
 @code {
     private static readonly string[] OptionalColumns = ["Projected", "Category", "Due", "Paid via", "Funded from", "Avg actual"];
 
-    private List<BillDto>? bills;
+    private List<BudgetLineDto>? lines;
     private List<AccountDto>? accounts;
     private List<CardDto>? cards;
     private List<CategoryDto>? categories;
-    private List<BillHistoryDto>? history;
+    private List<LabelDto>? labels;
+    private List<BudgetHistoryDto>? history;
+    /// <summary>Last year's grid, for the "what did this cost me last year" comparison in the hovers.</summary>
+    private List<BudgetHistoryDto>? priorHistory;
     private int year = DateTime.Today.Year;
     private bool showInactive;
     private readonly HashSet<string> shown = [];
-    private BillDto? editing;
+    private BudgetLineDto? editing;
     private int? categoryFilter;
     private MonthEdit? monthEdit;
     private ElementReference actualInput;
@@ -254,7 +286,7 @@ else
 
     private sealed class MonthEdit
     {
-        public int BillId; public string BillName = ""; public DateOnly Period;
+        public int BudgetLineId; public string LineName = ""; public DateOnly Period;
         public decimal DefaultProjected; public DateOnly? DefaultDueDate;
         public decimal? ActualAmount; public decimal? ProjectedAmount; public DateOnly? DueDate; public DateOnly? PaidOn; public string? Notes;
     }
@@ -265,11 +297,13 @@ else
     {
         try
         {
-            bills = await Api.GetBillsAsync();
+            lines = await Api.GetBudgetLinesAsync();
             accounts = await Api.GetAccountsAsync();
             cards = await Api.GetCardsAsync();
             categories = await Api.GetCategoriesAsync();
-            history = await Api.GetBillHistoryAsync(year);
+            labels = await Api.GetLabelsAsync();
+            history = await Api.GetBudgetHistoryAsync(year);
+            priorHistory = await Api.GetBudgetHistoryAsync(year - 1);
         }
         catch (Exception ex) { error = ex.Message; }
     }
@@ -280,35 +314,64 @@ else
     private bool IsNow(int month) => year == DateTime.Today.Year && month == DateTime.Today.Month;
     private void Toggle(string col, ChangeEventArgs e) { if (e.Value is true) shown.Add(col); else shown.Remove(col); }
 
-    private decimal MonthSum(DateOnly period, Func<BillMonthDto, decimal> pick)
-        => history!.Where(h => bills!.Any(b => b.Id == h.BillId && (showInactive || b.IsActive) && (categoryFilter is null || b.CategoryId == categoryFilter)))
+    private decimal MonthSum(DateOnly period, Func<BudgetMonthDto, decimal> pick)
+        => history!.Where(h => lines!.Any(b => b.Id == h.BudgetLineId && (showInactive || b.IsActive) && (categoryFilter is null || b.CategoryId == categoryFilter)))
                    .SelectMany(h => h.Months).Where(m => m.Period == period).Sum(pick);
 
-    private string DueText(BillDto b) => b.Frequency switch
+    private string DueText(BudgetLineDto b) => b.Frequency switch
     {
-        BillFrequency.Monthly => $"{Ordinal(b.DueDay)} of the month",
-        BillFrequency.OneOff => Fmt.Date(b.AnchorDueDate),
+        BudgetFrequency.Monthly => $"{Ordinal(b.DueDay)} of the month",
+        BudgetFrequency.OneOff => Fmt.Date(b.AnchorDueDate),
         _ => $"{Fmt.Words(b.Frequency)} from {Fmt.Date(b.AnchorDueDate)}",
     };
 
     private static string Ordinal(int d) => d == 31 ? "last day" : d + (d % 100 is 11 or 12 or 13 ? "th" : (d % 10) switch { 1 => "st", 2 => "nd", 3 => "rd", _ => "th" });
 
-    private string PaidVia(BillDto b) => b.PaymentMethod == PaymentMethodKind.Card
+    private string PaidVia(BudgetLineDto b) => b.PaymentMethod == PaymentMethodKind.Card
         ? "💳 " + cards!.FirstOrDefault(c => c.Id == b.PaymentCardId)?.Name
         : accounts!.FirstOrDefault(a => a.Id == b.PaymentAccountId)?.Name ?? "—";
 
-    private static string Title(BillMonthDto m)
+    /// <summary>Native tooltips take no markup, so structure comes from one labelled fact per line.</summary>
+    private static string Title(BudgetMonthDto m, decimal? priorYearActual = null)
     {
-        var parts = new List<string>();
-        if (m.DueDate is { } d) parts.Add($"due {Fmt.Date(d)}{(m.DueDateIsOverride ? " (this month only)" : "")}");
-        parts.Add($"expected {Fmt.Money(m.Projected)}{(m.ProjectedIsOverride ? " (this month only)" : "")}");
-        if (m.Actual is { } a) parts.Add($"actual {Fmt.Money(a)} → {Fmt.Money(m.Variance)}");
-        if (m.PaidOn is { } p) parts.Add($"paid {Fmt.Date(p)}");
-        if (!string.IsNullOrWhiteSpace(m.Notes)) parts.Add(m.Notes);
-        return string.Join(" · ", parts);
+        var lines = new List<string> { m.Period.ToString("MMMM yyyy") };
+        if (m.DueDate is { } d) lines.Add($"Due          {Fmt.Date(d)}{(m.DueDateIsOverride ? "  (this month only)" : "")}");
+        lines.Add($"Expected     {Fmt.Money(m.Projected)}{(m.ProjectedIsOverride ? "  (this month only)" : "")}");
+        if (m.Actual is { } a)
+        {
+            lines.Add($"Actual       {Fmt.Money(a)}");
+            if (m.Variance is { } v && v != 0) lines.Add($"             {(v > 0 ? "over by" : "under by")} {Fmt.Money(Math.Abs(v))}");
+        }
+        if (m.PaidOn is { } p) lines.Add($"Paid         {Fmt.Date(p)}");
+        if (priorYearActual is { } prior) lines.Add($"{m.Period.Year - 1} actual  {Fmt.Money(prior)}");
+        if (!string.IsNullOrWhiteSpace(m.Notes)) lines.Add($"\n{m.Notes}");
+        return string.Join("\n", lines);
     }
 
-    private void Edit(BillDto b)
+    /// <summary>A signed change, for the year-on-year row.</summary>
+    private static string Delta(decimal from, decimal to)
+        => to == from ? "no change" : $"{(to > from ? "+" : "−")}{Fmt.Money(Math.Abs(to - from))}";
+
+    /// <summary>What this line actually cost last year: total, the months it was actually charged, and the average of those.</summary>
+    private (decimal Total, int Months, decimal Average)? PriorYear(int lineId)
+        => Totals(priorHistory, lineId);
+
+    private (decimal Total, int Months, decimal Average)? ThisYearSoFar(int lineId)
+        => Totals(history, lineId);
+
+    private static (decimal Total, int Months, decimal Average)? Totals(List<BudgetHistoryDto>? source, int lineId)
+    {
+        var months = source?.FirstOrDefault(x => x.BudgetLineId == lineId)?.Months.Where(m => m.Actual is not null).ToList();
+        if (months is null || months.Count == 0) return null;
+        var total = months.Sum(m => m.Actual!.Value);
+        return (total, months.Count, Math.Round(total / months.Count, 2));
+    }
+
+    /// <summary>The same month a year earlier, if it was recorded.</summary>
+    private decimal? PriorMonth(int lineId, int month)
+        => priorHistory?.FirstOrDefault(x => x.BudgetLineId == lineId)?.Months.FirstOrDefault(m => m.Period.Month == month)?.Actual;
+
+    private void Edit(BudgetLineDto b)
     {
         monthEdit = null;
         editing = new()
@@ -322,23 +385,23 @@ else
 
     private async Task Save()
     {
-        try { await Api.SaveBillAsync(editing!); editing = null; await Load(); }
+        try { await Api.SaveBudgetLineAsync(editing!); editing = null; await Load(); }
         catch (Exception ex) { error = ex.Message; }
     }
 
     private async Task DeleteEditing()
     {
-        try { await Api.DeleteBillAsync(editing!.Id); editing = null; await Load(); }
+        try { await Api.DeleteBudgetLineAsync(editing!.Id); editing = null; await Load(); }
         catch (Exception ex) { error = ex.Message; }
     }
 
-    private async Task OpenMonth(BillDto b, BillMonthDto m)
+    private async Task OpenMonth(BudgetLineDto b, BudgetMonthDto m)
     {
         editing = null;
         var defaultProjected = m.ProjectedIsOverride ? b.ProjectedAmount : m.Projected;
         monthEdit = new MonthEdit
         {
-            BillId = b.Id, BillName = b.Name, Period = m.Period,
+            BudgetLineId = b.Id, LineName = b.Name, Period = m.Period,
             DefaultProjected = defaultProjected, DefaultDueDate = m.DueDateIsOverride ? null : m.DueDate,
             ActualAmount = m.Actual, ProjectedAmount = m.ProjectedIsOverride ? m.Projected : null,
             DueDate = m.DueDateIsOverride ? m.DueDate : null, PaidOn = m.PaidOn, Notes = m.Notes,
@@ -358,13 +421,13 @@ else
         if (monthEdit is null) return;
         try
         {
-            await Api.SaveBillPeriodAsync(monthEdit.BillId, monthEdit.Period, new BillPeriodDto
+            await Api.SaveBudgetPeriodAsync(monthEdit.BudgetLineId, monthEdit.Period, new BudgetPeriodDto
             {
-                BillId = monthEdit.BillId, Period = monthEdit.Period, ActualAmount = monthEdit.ActualAmount,
+                BudgetLineId = monthEdit.BudgetLineId, Period = monthEdit.Period, ActualAmount = monthEdit.ActualAmount,
                 ProjectedAmount = monthEdit.ProjectedAmount, DueDate = monthEdit.DueDate, PaidOn = monthEdit.PaidOn, Notes = monthEdit.Notes,
             });
             monthEdit = null;
-            history = await Api.GetBillHistoryAsync(year);
+            history = await Api.GetBudgetHistoryAsync(year);
         }
         catch (Exception ex) { error = ex.Message; }
     }
@@ -374,9 +437,9 @@ else
         if (monthEdit is null) return;
         try
         {
-            await Api.SaveBillPeriodAsync(monthEdit.BillId, monthEdit.Period, new BillPeriodDto { BillId = monthEdit.BillId, Period = monthEdit.Period });
+            await Api.SaveBudgetPeriodAsync(monthEdit.BudgetLineId, monthEdit.Period, new BudgetPeriodDto { BudgetLineId = monthEdit.BudgetLineId, Period = monthEdit.Period });
             monthEdit = null;
-            history = await Api.GetBillHistoryAsync(year);
+            history = await Api.GetBudgetHistoryAsync(year);
         }
         catch (Exception ex) { error = ex.Message; }
     }

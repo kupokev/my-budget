@@ -4,7 +4,7 @@
 
 <ErrorBanner @bind-Message="error" />
 
-@if (categories is null || bills is null || labels is null)
+@if (categories is null || budgetLines is null || labels is null)
 {
     <p class="muted">Loading…</p>
 }
@@ -12,24 +12,24 @@ else
 {
     <section class="panel">
         <h2>Categories</h2>
-        <p class="muted">Spending buckets used by bills, imported transactions, rewards earn rules and planned spend. Retiring one keeps its history but hides it from pickers.</p>
-        <p class="muted"><strong>Planned variable spend</strong> is what you expect to put on cards each month beyond tracked bills: restaurants, groceries, gas. It is not derived from bills, and together with card-eligible bills it is the whole pool the <a href="rewards">rewards plan</a> has to allocate. Untick "can go on a card" for anything that can't take one.</p>
+        <p class="muted">Spending buckets used by budget lines, imported transactions and rewards earn rules. Retiring one keeps its history but hides it from pickers.</p>
+        <p class="muted">Planned spending isn't set here. Groceries, restaurants and the rest are <a href="budget">budget</a> lines like everything else you plan to spend money on, and the figures below are read back from them. Untick "can go on a card" for a bucket that can never take one, such as the mortgage.</p>
         <table class="compact">
-            <thead><tr><th>Name</th><th>Bills</th><th class="money">Planned variable spend / month</th><th>Can go on a card</th><th>Active</th><th></th></tr></thead>
+            <thead><tr><th>Name</th><th>Budget lines</th><th class="money">Planned / month</th><th class="center">Can go on a card</th><th class="center">Active</th><th></th></tr></thead>
             <tbody>
             @foreach (var c in categories.OrderBy(c => !c.IsActive).ThenBy(c => c.Name))
             {
                 <tr class="@(c.IsActive ? "" : "muted")">
                     <td><input type="text" @bind="c.Name" /></td>
-                    <td>@bills.Count(b => b.CategoryId == c.Id)</td>
-                    <td><input type="number" step="1" class="narrow-money" @bind="c.PlannedMonthly" /></td>
-                    <td><input type="checkbox" @bind="c.IsCardEligible" /></td>
-                    <td><input type="checkbox" @bind="c.IsActive" /></td>
+                    <td>@budgetLines.Count(b => b.CategoryId == c.Id)</td>
+                    <td class="money">@Fmt.Money(PlannedFor(c.Id))</td>
+                    <td class="center"><input type="checkbox" @bind="c.IsCardEligible" /></td>
+                    <td class="center"><input type="checkbox" @bind="c.IsActive" /></td>
                     <td><button class="secondary" type="button" @onclick="() => Save(c)">Save</button></td>
                 </tr>
             }
             </tbody>
-            <tfoot><tr><th>Card-eligible planned spend</th><th></th><th class="money"><Money Value="categories.Where(c => c.IsActive && c.IsCardEligible).Sum(c => c.PlannedMonthly ?? 0)" /></th><th colspan="3"></th></tr></tfoot>
+            <tfoot><tr><th>Card-eligible planned spend</th><th></th><th class="money"><Money Value="categories.Where(c => c.IsActive && c.IsCardEligible).Sum(c => PlannedFor(c.Id))" /></th><th colspan="3"></th></tr></tfoot>
         </table>
         <div class="row" style="margin-top:10px">
             <input type="text" placeholder="New category" @bind="newName" />
@@ -42,16 +42,16 @@ else
         <h2>Labels</h2>
         <p class="muted">Where a purchase happened, next to the category that says what kind it was: "General merchandise" at <em>Amazon</em> vs at <em>Costco</em>, or Travel at <em>IHG</em> vs <em>Hilton</em>. A card can pay a different rate per label, and a categorization rule can apply one automatically on import.</p>
         <table class="compact">
-            <thead><tr><th>Name</th><th>Usual category</th><th class="money">Planned / month</th><th>Transactions</th><th>Active</th><th></th></tr></thead>
+            <thead><tr><th>Name</th><th>Usual category</th><th class="money">Planned / month</th><th>Transactions</th><th class="center">Active</th><th></th></tr></thead>
             <tbody>
             @foreach (var l in labels.OrderBy(l => !l.IsActive).ThenBy(l => l.Name))
             {
                 <tr class="@(l.IsActive ? "" : "muted")">
                     <td><input type="text" @bind="l.Name" /></td>
                     <td><select @bind="l.CategoryId"><option value="">—</option>@foreach (var c in categories.Where(c => c.IsActive)) { <option value="@c.Id">@c.Name</option> }</select></td>
-                    <td><input type="number" step="1" class="narrow-money" @bind="l.PlannedMonthly" /></td>
+                    <td class="money">@Fmt.Money(PlannedForLabel(l.Id))</td>
                     <td class="muted">@(labelCounts.TryGetValue(l.Id, out var n) ? n.ToString() : "0")</td>
-                    <td><input type="checkbox" @bind="l.IsActive" /></td>
+                    <td class="center"><input type="checkbox" @bind="l.IsActive" /></td>
                     <td class="actions"><button class="secondary" type="button" @onclick="() => SaveLabel(l)">Save</button> <button class="link danger" type="button" title="Delete" @onclick="() => DeleteLabel(l)">✕</button></td>
                 </tr>
             }
@@ -61,23 +61,30 @@ else
             <input type="text" placeholder="New label" @bind="newLabel" @onkeydown="OnLabelKey" />
             <button type="button" @onclick="AddLabel" disabled="@string.IsNullOrWhiteSpace(newLabel)">Add</button>
         </div>
-        <p class="muted">A label's planned monthly spend is carved out of its category's, so the rewards plan can send the labelled part to one card and the rest of that category to another.</p>
+        <p class="muted">Give a label its own <a href="budget">budget</a> line to plan it apart from the rest of its category, so the rewards plan can send the labelled part to one card and the remainder to another.</p>
     </section>
 
 }
 
 @code {
     private List<CategoryDto>? categories;
-    private List<BillDto>? bills;
+    private List<BudgetLineDto>? budgetLines;
     private List<LabelDto>? labels;
     private string newLabel = "";
     private Dictionary<int, int> labelCounts = [];
     private string newName = "";
+
+    /// <summary>Planned monthly spend for a category, read back from its variable budget lines.</summary>
+    private decimal PlannedFor(int categoryId)
+        => budgetLines?.Where(b => b.IsActive && b.CategoryId == categoryId && b.Frequency == MyBudget.Domain.BudgetFrequency.Variable).Sum(b => b.ProjectedAmount) ?? 0m;
+
+    private decimal PlannedForLabel(int labelId)
+        => budgetLines?.Where(b => b.IsActive && b.LabelId == labelId).Sum(b => b.ProjectedAmount) ?? 0m;
     private string? saved, error;
 
     protected override async Task OnInitializedAsync()
     {
-        try { categories = await Api.GetCategoriesAsync(); bills = await Api.GetBillsAsync(); labels = await Api.GetLabelsAsync();
+        try { categories = await Api.GetCategoriesAsync(); budgetLines = await Api.GetBudgetLinesAsync(); labels = await Api.GetLabelsAsync();
             labelCounts = (await Api.GetTransactionsAsync()).Where(t => t.LabelId is not null).GroupBy(t => t.LabelId!.Value).ToDictionary(g => g.Key, g => g.Count());
         }
         catch (Exception ex) { error = ex.Message; }

@@ -6,7 +6,7 @@ using MyBudget.Engines.Import;
 
 namespace MyBudget.Api;
 
-/// <summary>Turns a parsed statement into transactions: suggests categories/bills/transfers, flags duplicates, commits, and syncs bill actuals and card spend.</summary>
+/// <summary>Turns a parsed statement into transactions: suggests categories/lines/transfers, flags duplicates, commits, and syncs line actuals and card spend.</summary>
 public sealed class ImportService(BudgetDbContext db)
 {
     public const int ReconcileWindowDays = 3;
@@ -27,9 +27,9 @@ public sealed class ImportService(BudgetDbContext db)
 
         var existing = await db.Transactions.Where(t => t.AccountId == accountId && t.CardId == cardId).Select(t => t.ExternalId).ToHashSetAsync();
         var manual = await db.Transactions.Where(t => t.AccountId == accountId && t.CardId == cardId && t.Origin == TransactionOrigin.Manual && t.ReconciledWithId == null).Select(t => new { t.Date, t.Amount, t.Description }).ToListAsync();
-        var rules = await db.CategoryRules.Include(r => r.Category).Include(r => r.Bill).Where(r => r.IsActive).OrderBy(r => r.Priority).ToListAsync();
+        var rules = await db.CategoryRules.Include(r => r.Category).Include(r => r.BudgetLine).Where(r => r.IsActive).OrderBy(r => r.Priority).ToListAsync();
         var categories = await db.Categories.Where(c => c.IsActive).ToListAsync();
-        var bills = await db.Bills.Where(b => b.IsActive).ToListAsync();
+        var lines = await db.BudgetLines.Where(b => b.IsActive).ToListAsync();
         var cardsByLast4 = (await db.Cards.Where(c => c.IsActive && c.AccountNumber != null && c.AccountNumber.Length >= 4).ToListAsync()).ToDictionary(c => c.AccountNumber![^4..], c => c.Name);
 
         var rows = new List<ImportRowDto>();
@@ -50,7 +50,7 @@ public sealed class ImportService(BudgetDbContext db)
                 Date = p.Date, PostedDate = p.PostedDate, Amount = p.Amount, Description = p.Description, Merchant = Merchants.Normalize(p.Description),
                 ExternalId = externalId, SourceCategory = p.SourceCategory, Memo = p.Memo, IsDuplicate = existing.Contains(externalId),
             };
-            Suggest(row, rules, categories, bills, cardsByLast4);
+            Suggest(row, rules, categories, lines, cardsByLast4);
             var match = manual.FirstOrDefault(m => m.Amount == row.Amount && Math.Abs(m.Date.DayNumber - row.Date.DayNumber) <= ReconcileWindowDays);
             if (!row.IsDuplicate && match is not null)
             {
@@ -63,7 +63,7 @@ public sealed class ImportService(BudgetDbContext db)
             rows.Count(r => !r.IsDuplicate), rows.Count(r => r.IsDuplicate), rows.MinBy(r => r.Date)?.Date, rows.MaxBy(r => r.Date)?.Date, parsed.Warnings);
     }
 
-    public static void Suggest(ImportRowDto row, List<CategoryRule> rules, List<Category> categories, List<Bill> bills, IReadOnlyDictionary<string, string>? cardsByLast4 = null)
+    public static void Suggest(ImportRowDto row, List<CategoryRule> rules, List<Category> categories, List<BudgetLine> lines, IReadOnlyDictionary<string, string>? cardsByLast4 = null)
     {
         var text = $"{row.Description} {row.Merchant} {row.Memo}";
         // "Payment to Chase card ending in 9039" → the card whose number ends in 9039: a card payment, i.e. a transfer.
@@ -85,9 +85,9 @@ public sealed class ImportService(BudgetDbContext db)
         var rule = rules.FirstOrDefault(r => Matches(r, text));
         if (rule is not null)
         {
-            row.CategoryId = rule.CategoryId ?? rule.Bill?.CategoryId;
+            row.CategoryId = rule.CategoryId ?? rule.BudgetLine?.CategoryId;
             row.LabelId = rule.LabelId;
-            row.BillId = rule.BillId;
+            row.BudgetLineId = rule.BudgetLineId;
             row.IsTransfer = rule.MarkAsTransfer;
             row.SuggestionSource = $"rule \"{rule.Pattern}\"";
             return;
@@ -98,13 +98,13 @@ public sealed class ImportService(BudgetDbContext db)
             row.SuggestionSource = "looks like a payment/transfer";
             return;
         }
-        // A bill whose name appears in the description (e.g. "HULU", "AT&T") — only for money out.
+        // A line whose name appears in the description (e.g. "HULU", "AT&T") — only for money out.
         if (row.Amount < 0)
         {
-            var bill = bills.FirstOrDefault(b => b.Name.Length >= 3 && row.Description.Contains(b.Name, StringComparison.OrdinalIgnoreCase));
-            if (bill is not null)
+            var line = lines.FirstOrDefault(b => b.Name.Length >= 3 && row.Description.Contains(b.Name, StringComparison.OrdinalIgnoreCase));
+            if (line is not null)
             {
-                row.BillId = bill.Id; row.CategoryId = bill.CategoryId; row.SuggestionSource = $"bill name \"{bill.Name}\"";
+                row.BudgetLineId = line.Id; row.CategoryId = line.CategoryId; row.SuggestionSource = $"budget line name \"{line.Name}\"";
                 return;
             }
         }
@@ -150,7 +150,7 @@ public sealed class ImportService(BudgetDbContext db)
             var t = new Transaction
             {
                 AccountId = req.AccountId, CardId = req.CardId, Date = r.Date, PostedDate = r.PostedDate, Amount = r.Amount, Description = r.Description.Trim(),
-                Merchant = r.Merchant, ExternalId = r.ExternalId, CategoryId = r.CategoryId, LabelId = r.LabelId, BillId = r.BillId, IsTransfer = r.IsTransfer, ImportBatch = batch,
+                Merchant = r.Merchant, ExternalId = r.ExternalId, CategoryId = r.CategoryId, LabelId = r.LabelId, BudgetLineId = r.BudgetLineId, IsTransfer = r.IsTransfer, ImportBatch = batch,
                 Notes = r.Memo, Origin = TransactionOrigin.Imported,
             };
             db.Transactions.Add(t);
@@ -161,8 +161,8 @@ public sealed class ImportService(BudgetDbContext db)
         batch.FirstDate = touched.MinBy(t => t.Date)?.Date; batch.LastDate = touched.MaxBy(t => t.Date)?.Date;
         await db.SaveChangesAsync();
         var reconciled = await AutoReconcileAsync(touched);
-        var (billMonths, cardMonths) = await SyncAsync(touched);
-        return new ImportResultDto(batch.Id, imported, dupes, skipped, billMonths, cardMonths, reconciled);
+        var (budgetMonths, cardMonths) = await SyncAsync(touched);
+        return new ImportResultDto(batch.Id, imported, dupes, skipped, budgetMonths, cardMonths, reconciled);
     }
 
     /// <summary>Links each new imported line to an unreconciled manual row on the same source with the same amount within the window.</summary>
@@ -181,7 +181,7 @@ public sealed class ImportService(BudgetDbContext db)
         return count;
     }
 
-    /// <summary>Pair an imported line with a manual row: the imported line inherits the manual row's transfer flag, counterparty, category and bill when it has none of its own.</summary>
+    /// <summary>Pair an imported line with a manual row: the imported line inherits the manual row's transfer flag, counterparty, category and line when it has none of its own.</summary>
     public static void Link(Transaction imported, Transaction manual)
     {
         imported.ReconciledWithId = manual.Id; manual.ReconciledWithId = imported.Id;
@@ -189,22 +189,22 @@ public sealed class ImportService(BudgetDbContext db)
         imported.CounterpartyAccountId ??= manual.CounterpartyAccountId;
         imported.CategoryId ??= manual.CategoryId;
         imported.LabelId ??= manual.LabelId;
-        imported.BillId ??= manual.BillId;
+        imported.BudgetLineId ??= manual.BudgetLineId;
         if (string.IsNullOrWhiteSpace(imported.Notes)) imported.Notes = manual.Notes;
     }
 
-    /// <summary>After transactions change: bill actuals (BIL-3) from matched lines, card spend (RWD-3) from card lines, for the affected months.</summary>
-    public async Task<(int BillMonths, int CardMonths)> SyncAsync(IReadOnlyCollection<Transaction> changed)
+    /// <summary>After transactions change: line actuals (BIL-3) from matched lines, card spend (RWD-3) from card lines, for the affected months.</summary>
+    public async Task<(int BudgetMonths, int CardMonths)> SyncAsync(IReadOnlyCollection<Transaction> changed)
     {
-        var billMonths = changed.Where(t => t.BillId is not null).Select(t => (t.BillId!.Value, Period: new DateOnly(t.Date.Year, t.Date.Month, 1))).Distinct().ToList();
-        foreach (var (billId, period) in billMonths)
+        var budgetMonths = changed.Where(t => t.BudgetLineId is not null).Select(t => (t.BudgetLineId!.Value, Period: new DateOnly(t.Date.Year, t.Date.Month, 1))).Distinct().ToList();
+        foreach (var (lineId, period) in budgetMonths)
         {
             var end = period.AddMonths(1);
-            var sum = await db.Transactions.Where(t => t.BillId == billId && t.Date >= period && t.Date < end && t.Amount < 0).SumAsync(t => -t.Amount);
-            var row = await db.BillPeriods.FirstOrDefaultAsync(p => p.BillId == billId && p.Period == period);
+            var sum = await db.Transactions.Where(t => t.BudgetLineId == lineId && t.Date >= period && t.Date < end && t.Amount < 0).SumAsync(t => -t.Amount);
+            var row = await db.BudgetPeriods.FirstOrDefaultAsync(p => p.BudgetLineId == lineId && p.Period == period);
             if (sum == 0 && row is not null && row.Notes == "from import") { row.ActualAmount = null; continue; }
             if (sum == 0) continue;
-            row ??= db.BillPeriods.Add(new BillPeriod { BillId = billId, Period = period }).Entity;
+            row ??= db.BudgetPeriods.Add(new BudgetPeriod { BudgetLineId = lineId, Period = period }).Entity;
             row.ActualAmount = sum;
             row.Notes ??= "from import";
         }
@@ -220,13 +220,13 @@ public sealed class ImportService(BudgetDbContext db)
             db.CardSpend.AddRange(sums.Select(s => new CardSpend { CardId = cardId, Period = period, CategoryId = s.CategoryId, LabelId = s.LabelId, Amount = Math.Round(s.Sum, 2), Notes = "from import" }));
         }
         await db.SaveChangesAsync();
-        return (billMonths.Count, cardMonths.Count);
+        return (budgetMonths.Count, cardMonths.Count);
     }
 
     /// <summary>Re-run the active rules over lines that weren't categorized by hand. Returns how many changed.</summary>
     public async Task<int> ApplyRulesAsync(CategoryRule? only = null)
     {
-        var rules = only is not null ? [only] : await db.CategoryRules.Include(r => r.Bill).Where(r => r.IsActive).OrderBy(r => r.Priority).ToListAsync();
+        var rules = only is not null ? [only] : await db.CategoryRules.Include(r => r.BudgetLine).Where(r => r.IsActive).OrderBy(r => r.Priority).ToListAsync();
         var candidates = await db.Transactions.Where(t => !t.IsManuallyCategorized).ToListAsync();
         var changed = new List<Transaction>();
         foreach (var t in candidates)
@@ -234,9 +234,9 @@ public sealed class ImportService(BudgetDbContext db)
             var text = $"{t.Description} {t.Merchant} {t.Notes}";
             var rule = rules.FirstOrDefault(r => Matches(r, text));
             if (rule is null) continue;
-            var cat = rule.CategoryId ?? rule.Bill?.CategoryId;
-            if (t.CategoryId == cat && t.LabelId == rule.LabelId && t.BillId == rule.BillId && t.IsTransfer == rule.MarkAsTransfer) continue;
-            t.CategoryId = cat; t.LabelId = rule.LabelId; t.BillId = rule.BillId; t.IsTransfer = rule.MarkAsTransfer;
+            var cat = rule.CategoryId ?? rule.BudgetLine?.CategoryId;
+            if (t.CategoryId == cat && t.LabelId == rule.LabelId && t.BudgetLineId == rule.BudgetLineId && t.IsTransfer == rule.MarkAsTransfer) continue;
+            t.CategoryId = cat; t.LabelId = rule.LabelId; t.BudgetLineId = rule.BudgetLineId; t.IsTransfer = rule.MarkAsTransfer;
             changed.Add(t);
         }
         await db.SaveChangesAsync();

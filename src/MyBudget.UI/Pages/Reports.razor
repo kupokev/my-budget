@@ -24,8 +24,8 @@
             <YoyTable Rows="yoy.Categories" ThisTotal="yoy.CategoriesThisYear" LastTotal="yoy.CategoriesLastYear" Year="yoy.Year" />
         </section>
         <section class="panel">
-            <h2>Bills (actuals) · @yoy.Year vs @yoy.PriorYear</h2>
-            <YoyTable Rows="yoy.Bills" ThisTotal="yoy.BillsThisYear" LastTotal="yoy.BillsLastYear" Year="yoy.Year" />
+            <h2>Budget lines (actuals) · @yoy.Year vs @yoy.PriorYear</h2>
+            <YoyTable Rows="yoy.BudgetLines" ThisTotal="yoy.BudgetThisYear" LastTotal="yoy.BudgetLastYear" Year="yoy.Year" />
         </section>
     }
 }
@@ -103,7 +103,7 @@ else
         <h2>Export to CSV</h2>
         <div class="toolbar">
             <button type="button" @onclick="@(() => Export("transactions", year))">Transactions @year</button>
-            <button type="button" @onclick="@(() => Export("bills", year))">Bills grid @year</button>
+            <button type="button" @onclick="@(() => Export("budget", year))">Budget grid @year</button>
             <button type="button" @onclick="@(() => Export("accounts", null))">Accounts</button>
         </div>
         @if (saved is not null) { <p class="pos">Saved to @saved</p> }

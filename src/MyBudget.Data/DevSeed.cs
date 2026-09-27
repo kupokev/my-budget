@@ -60,21 +60,21 @@ public static class DevSeed
         var subscriptions = new Category { Name = "Subscriptions" };
         var insurance = new Category { Name = "Insurance" };
         var memberships = new Category { Name = "Memberships" };
-        var restaurants = new Category { Name = "Restaurants", PlannedMonthly = 600m };
-        var groceries = new Category { Name = "Groceries", PlannedMonthly = 700m };
-        var gas = new Category { Name = "Gas", PlannedMonthly = 250m };
-        var travel = new Category { Name = "Travel", PlannedMonthly = 400m };
-        var other = new Category { Name = "Other spending", PlannedMonthly = 800m };
+        var restaurants = new Category { Name = "Restaurants" };
+        var groceries = new Category { Name = "Groceries" };
+        var gas = new Category { Name = "Gas" };
+        var travel = new Category { Name = "Travel" };
+        var other = new Category { Name = "Other spending" };
         var onlineRetail = new Category { Name = "Online retail" };
         var streaming = new Category { Name = "Streaming" };
         var drugstore = new Category { Name = "Drugstore" };
-        var merchandise = new Category { Name = "General merchandise", PlannedMonthly = 500m };
+        var merchandise = new Category { Name = "General merchandise" };
         db.Categories.AddRange(utilities, housing, subscriptions, insurance, memberships, restaurants, groceries, gas, travel, other,
             onlineRetail, streaming, drugstore, merchandise,
             new Category { Name = "Transportation" }, new Category { Name = "Entertainment" });
         // Labels: where a purchase happened. "General merchandise" at Amazon earns differently from the same
-        // category at Costco, so the label carries its own planned spend and its own earn rule.
-        var amazon = new Label { Name = "Amazon", Category = merchandise, PlannedMonthly = 300m };
+        // category at Costco, so a budget line can name the label and carry its own earn rule.
+        var amazon = new Label { Name = "Amazon", Category = merchandise };
         var costco = new Label { Name = "Costco", Category = merchandise };
         var ihgLabel = new Label { Name = "IHG", Category = travel };
         var hiltonLabel = new Label { Name = "Hilton", Category = travel };
@@ -198,16 +198,29 @@ public static class DevSeed
                 new CardSpend { Card = hiltonSurpass, Period = period, Category = restaurants, Amount = 550m },
                 new CardSpend { Card = hiltonSurpass, Period = period, Category = travel, Amount = 300m });
         }
-        db.Bills.AddRange(
-            new Bill { Name = "Mortgage", Category = housing, DueDay = 1, ProjectedAmount = 2_100m, IsAutopay = true, PaymentMethod = PaymentMethodKind.Account, PaymentAccount = chaseMain, FundingAccount = chaseMain, IsCardEligible = false },
-            new Bill { Name = "Water", Category = utilities, DueDay = 20, ProjectedAmount = 60m, IsAutopay = true, PaymentAccount = automatedBills, FundingAccount = automatedBills },
-            new Bill { Name = "Sewer", Category = utilities, DueDay = 20, ProjectedAmount = 45m, IsAutopay = true, PaymentAccount = automatedBills, FundingAccount = automatedBills },
-            new Bill { Name = "Electric", Category = utilities, DueDay = 18, ProjectedAmount = 140m, IsAutopay = true, PaymentAccount = automatedBills, FundingAccount = automatedBills },
-            new Bill { Name = "AT&T", Category = utilities, DueDay = 6, ProjectedAmount = 85m, IsAutopay = true, PaymentAccount = automatedBills, FundingAccount = automatedBills, BankAutopayDiscount = 5m, Notes = "$5/mo discount for bank autopay vs. card" },
-            new Bill { Name = "Hulu", Category = subscriptions, DueDay = 11, ProjectedAmount = 18.99m, IsAutopay = true, PaymentMethod = PaymentMethodKind.Card, PaymentCard = chaseIhg, FundingAccount = automatedBills },
-            new Bill { Name = "Car insurance", Category = insurance, Frequency = BillFrequency.SemiAnnual, DueDay = 15, AnchorDueDate = new(2026, 3, 15), ProjectedAmount = 612m, PaymentMethod = PaymentMethodKind.Card, PaymentCard = hiltonSurpass, FundingAccount = premierSavings },
-            new Bill { Name = "AAA", Category = memberships, Frequency = BillFrequency.Annual, DueDay = 1, AnchorDueDate = new(2026, 5, 1), ProjectedAmount = 120m, PaymentMethod = PaymentMethodKind.Card, PaymentCard = chaseIhg, FundingAccount = premierSavings },
-            new Bill { Name = "Costco", Category = memberships, Frequency = BillFrequency.Annual, DueDay = 1, AnchorDueDate = new(2026, 11, 1), ProjectedAmount = 65m, PaymentMethod = PaymentMethodKind.Card, PaymentCard = chaseIhg, FundingAccount = premierSavings });
+        BudgetLine V(string name, Category category, decimal monthly, Label? label = null) => new()
+        {
+            Name = name, Category = category, Label = label, Frequency = BudgetFrequency.Variable,
+            ProjectedAmount = monthly, PaymentMethod = PaymentMethodKind.Card, PaymentCard = chaseIhg, FundingAccount = chaseMain,
+        };
+
+        db.BudgetLines.AddRange(
+            new BudgetLine { Name = "Mortgage", Category = housing, DueDay = 1, ProjectedAmount = 2_100m, IsAutopay = true, PaymentMethod = PaymentMethodKind.Account, PaymentAccount = chaseMain, FundingAccount = chaseMain, IsCardEligible = false },
+            new BudgetLine { Name = "Water", Category = utilities, DueDay = 20, ProjectedAmount = 60m, IsAutopay = true, PaymentAccount = automatedBills, FundingAccount = automatedBills },
+            new BudgetLine { Name = "Sewer", Category = utilities, DueDay = 20, ProjectedAmount = 45m, IsAutopay = true, PaymentAccount = automatedBills, FundingAccount = automatedBills },
+            new BudgetLine { Name = "Electric", Category = utilities, DueDay = 18, ProjectedAmount = 140m, IsAutopay = true, PaymentAccount = automatedBills, FundingAccount = automatedBills },
+            new BudgetLine { Name = "AT&T", Category = utilities, DueDay = 6, ProjectedAmount = 85m, IsAutopay = true, PaymentAccount = automatedBills, FundingAccount = automatedBills, BankAutopayDiscount = 5m, Notes = "$5/mo discount for bank autopay vs. card" },
+            new BudgetLine { Name = "Hulu", Category = subscriptions, DueDay = 11, ProjectedAmount = 18.99m, IsAutopay = true, PaymentMethod = PaymentMethodKind.Card, PaymentCard = chaseIhg, FundingAccount = automatedBills },
+            new BudgetLine { Name = "Car insurance", Category = insurance, Frequency = BudgetFrequency.SemiAnnual, DueDay = 15, AnchorDueDate = new(2026, 3, 15), ProjectedAmount = 612m, PaymentMethod = PaymentMethodKind.Card, PaymentCard = hiltonSurpass, FundingAccount = premierSavings },
+            new BudgetLine { Name = "AAA", Category = memberships, Frequency = BudgetFrequency.Annual, DueDay = 1, AnchorDueDate = new(2026, 5, 1), ProjectedAmount = 120m, PaymentMethod = PaymentMethodKind.Card, PaymentCard = chaseIhg, FundingAccount = premierSavings },
+            new BudgetLine { Name = "Costco", Category = memberships, Frequency = BudgetFrequency.Annual, DueDay = 1, AnchorDueDate = new(2026, 11, 1), ProjectedAmount = 65m, PaymentMethod = PaymentMethodKind.Card, PaymentCard = chaseIhg, FundingAccount = premierSavings },
+
+            // Variable lines: money you plan to spend that has no due date and no biller. Same record as a
+            // bill, so the rewards plan draws the whole pool from one place.
+            V("Groceries", groceries, 700m), V("Restaurants", restaurants, 600m), V("Gas", gas, 250m),
+            V("Travel", travel, 400m), V("Other spending", other, 800m),
+            // Amazon is carved out of General merchandise so it can chase its own earn rate.
+            V("Amazon", merchandise, 300m, amazon), V("General merchandise", merchandise, 200m));
 
         db.HsaYears.Add(new HsaYear
         {
@@ -250,13 +263,13 @@ public static class DevSeed
         });
         db.Assets.Add(new Asset { Name = "House", Kind = AssetKind.Home, Values = [new AssetValue { AsOf = new(2026, 9, 1), Value = 385_000m }] });
         db.Assets.Add(new Asset { Name = "Car", Kind = AssetKind.Vehicle, Values = [new AssetValue { AsOf = new(2026, 9, 1), Value = 18_500m }] });
-        var amexLoanBill = new Bill { Name = "Amex loan", Category = housing, DueDay = 5, ProjectedAmount = 250m, IsAutopay = true, PaymentAccount = chaseMain, FundingAccount = chaseMain, IsCardEligible = false, Notes = "Sam repays 100% each month" };
-        db.Bills.Add(amexLoanBill);
+        var amexLoanLine = new BudgetLine { Name = "Amex loan", Category = housing, DueDay = 5, ProjectedAmount = 250m, IsAutopay = true, PaymentAccount = chaseMain, FundingAccount = chaseMain, IsCardEligible = false, Notes = "Sam repays 100% each month" };
+        db.BudgetLines.Add(amexLoanLine);
         db.People.AddRange(
             new Person
             {
                 Name = "Sam",
-                Obligations = [new Obligation { Description = "Amex loan payment", Bill = amexLoanBill, ShareOfBill = 1.0m, StartPeriod = new(2026, 1, 1) }],
+                Obligations = [new Obligation { Description = "Amex loan payment", BudgetLine = amexLoanLine, ShareOfLine = 1.0m, StartPeriod = new(2026, 1, 1) }],
                 Payments = Enumerable.Range(1, 8).Select(m => new ReceivablePayment { Date = new(2026, m, 6), Amount = 250m, Allocations = [new PaymentAllocation { Period = new(2026, m, 1), Amount = 250m }] }).ToList(),
             },
             new Person
@@ -294,18 +307,18 @@ public static class DevSeed
         await SeedTransactionsAsync(db, chaseMain, automatedBills, ct);
     }
 
-    /// <summary>August and September bank activity: paychecks, bills, a few purchases, and the monthly transfer to the bills account entered by hand and reconciled with the bank's line.</summary>
+    /// <summary>August and September bank activity: paychecks, lines, a few purchases, and the monthly transfer to the lines account entered by hand and reconciled with the bank's line.</summary>
     private static async Task SeedTransactionsAsync(BudgetDbContext db, Account chaseMain, Account automatedBills, CancellationToken ct)
     {
         var cats = await db.Categories.ToDictionaryAsync(c => c.Name, ct);
-        var bills = await db.Bills.ToDictionaryAsync(b => b.Name, ct);
+        var budgetLines = await db.BudgetLines.ToDictionaryAsync(b => b.Name, ct);
         var batch = new ImportBatch { FileName = "seed-chase.csv", Format = ImportFormat.Csv, Profile = "chase-checking", ImportedAt = DateTime.Now, Account = chaseMain, RowCount = 0 };
         db.ImportBatches.Add(batch);
 
-        Transaction Imported(Account acct, DateOnly date, decimal amount, string desc, string merchant, string? category = null, string? bill = null, bool transfer = false) => new()
+        Transaction Imported(Account acct, DateOnly date, decimal amount, string desc, string merchant, string? category = null, string? budgetLine = null, bool transfer = false) => new()
         {
             Account = acct, Date = date, Amount = amount, Description = desc, Merchant = merchant, Origin = TransactionOrigin.Imported, ImportBatch = batch,
-            CategoryId = category is not null ? cats[category].Id : bill is not null ? bills[bill].CategoryId : null, BillId = bill is not null ? bills[bill].Id : null,
+            CategoryId = category is not null ? cats[category].Id : budgetLine is not null ? budgetLines[budgetLine].CategoryId : null, BudgetLineId = budgetLine is not null ? budgetLines[budgetLine].Id : null,
             IsTransfer = transfer, ExternalId = $"seed:{acct.Name}:{date:yyyyMMdd}:{amount}:{desc}",
         };
 
@@ -315,30 +328,47 @@ public static class DevSeed
             var actual = m == 8 ? (Electric: 149.50m, Water: 61.00m) : (Electric: 151.20m, Water: 58.40m);
             lines.AddRange(
             [
-                Imported(chaseMain, new(y, m, 1), -2_100m, "MORTGAGE PMT PLACEHOLDER BANK", "Placeholder Bank", bill: "Mortgage"),
+                Imported(chaseMain, new(y, m, 1), -2_100m, "MORTGAGE PMT PLACEHOLDER BANK", "Placeholder Bank", budgetLine: "Mortgage"),
                 Imported(chaseMain, new(y, m, 4), 4_222.07m, "RIDGELINE PARTNERS PAYROLL", "Ridgeline Partners Payroll"),
                 Imported(chaseMain, new(y, m, 18), 4_222.07m, "RIDGELINE PARTNERS PAYROLL", "Ridgeline Partners Payroll"),
-                Imported(chaseMain, new(y, m, 5), -250m, "AMEX LOAN PAYMENT", "Amex Loan", bill: "Amex loan"),
+                Imported(chaseMain, new(y, m, 5), -250m, "AMEX LOAN PAYMENT", "Amex Loan", budgetLine: "Amex loan"),
                 Imported(chaseMain, new(y, m, 9), -84.12m, "KROGER #0456", "Kroger", "Groceries"),
                 Imported(chaseMain, new(y, m, 13), -32.10m, "TST* PAPPYS SMOKEHOUSE ST LOUIS MO", "Pappys Smokehouse", "Restaurants"),
                 Imported(chaseMain, new(y, m, 21), -46.75m, "SHELL OIL 57444 ST LOUIS MO", "Shell Oil", "Gas"),
                 Imported(chaseMain, new(y, m, 2), -330m, "Online Transfer to CHK ...4412", "Online Transfer", transfer: true),
                 Imported(automatedBills, new(y, m, 2), 330m, "Online Transfer from CHK ...9901", "Online Transfer", transfer: true),
-                Imported(automatedBills, new(y, m, 6), -85m, "ATT PAYMENT", "Att Payment", bill: "AT&T"),
-                Imported(automatedBills, new(y, m, 18), -actual.Electric, "AMEREN MISSOURI", "Ameren Missouri", bill: "Electric"),
-                Imported(automatedBills, new(y, m, 20), -actual.Water, "CITY WATER UTILITY", "City Water Utility", bill: "Water"),
-                Imported(automatedBills, new(y, m, 20), -45m, "MSD SEWER", "Msd Sewer", bill: "Sewer"),
+                Imported(automatedBills, new(y, m, 6), -85m, "ATT PAYMENT", "Att Payment", budgetLine: "AT&T"),
+                Imported(automatedBills, new(y, m, 18), -actual.Electric, "AMEREN MISSOURI", "Ameren Missouri", budgetLine: "Electric"),
+                Imported(automatedBills, new(y, m, 20), -actual.Water, "CITY WATER UTILITY", "City Water Utility", budgetLine: "Water"),
+                Imported(automatedBills, new(y, m, 20), -45m, "MSD SEWER", "Msd Sewer", budgetLine: "Sewer"),
             ]);
             // The same transfer, entered by hand on the 1st (two-sided) and reconciled with the bank's lines on the 2nd.
-            var outRow = new Transaction { Account = chaseMain, Date = new(y, m, 1), Amount = -330m, Description = "Transfer out to Chase Automated Bills", Merchant = "Transfer out to Chase Automated Bills", Origin = TransactionOrigin.Manual, IsTransfer = true, IsManuallyCategorized = true, ExternalId = $"manual:seed:{y}{m}:out", CounterpartyAccount = automatedBills, Notes = "monthly bills" };
-            var inRow = new Transaction { Account = automatedBills, Date = new(y, m, 1), Amount = 330m, Description = "Transfer in from Chase Main", Merchant = "Transfer in from Chase Main", Origin = TransactionOrigin.Manual, IsTransfer = true, IsManuallyCategorized = true, ExternalId = $"manual:seed:{y}{m}:in", CounterpartyAccount = chaseMain, Notes = "monthly bills" };
+            var outRow = new Transaction { Account = chaseMain, Date = new(y, m, 1), Amount = -330m, Description = "Transfer out to Chase Automated Bills", Merchant = "Transfer out to Chase Automated Bills", Origin = TransactionOrigin.Manual, IsTransfer = true, IsManuallyCategorized = true, ExternalId = $"manual:seed:{y}{m}:out", CounterpartyAccount = automatedBills, Notes = "monthly budget lines" };
+            var inRow = new Transaction { Account = automatedBills, Date = new(y, m, 1), Amount = 330m, Description = "Transfer in from Chase Main", Merchant = "Transfer in from Chase Main", Origin = TransactionOrigin.Manual, IsTransfer = true, IsManuallyCategorized = true, ExternalId = $"manual:seed:{y}{m}:in", CounterpartyAccount = chaseMain, Notes = "monthly budget lines" };
             lines.AddRange([outRow, inRow]);
-            // Bill actuals those lines represent.
+            // Budget-line actuals those transactions represent.
             foreach (var (name, amt) in new[] { ("Mortgage", 2_100m), ("Amex loan", 250m), ("AT&T", 85m), ("Electric", actual.Electric), ("Water", actual.Water), ("Sewer", 45m) })
-                db.BillPeriods.Add(new BillPeriod { BillId = bills[name].Id, Period = new(y, m, 1), ActualAmount = amt, Notes = "from import" });
+                db.BudgetPeriods.Add(new BudgetPeriod { BudgetLineId = budgetLines[name].Id, Period = new(y, m, 1), ActualAmount = amt, Notes = "from import" });
         }
         db.Transactions.AddRange(lines);
         batch.RowCount = lines.Count(l => l.Origin == TransactionOrigin.Imported); batch.ImportedCount = batch.RowCount;
+
+        // A full prior year of actuals, so the Budget hovers have something to compare against.
+        // Utilities wander with the season; the fixed ones don't.
+        var seasonal = new[] { 1.28m, 1.24m, 1.05m, 0.88m, 0.82m, 0.95m, 1.18m, 1.22m, 1.06m, 0.86m, 0.90m, 1.14m };
+        foreach (var m in Enumerable.Range(1, 12))
+        {
+            void Prior(string name, decimal amount) =>
+                db.BudgetPeriods.Add(new BudgetPeriod { BudgetLineId = budgetLines[name].Id, Period = new(2025, m, 1), ActualAmount = Math.Round(amount, 2), Notes = "2025 actual" });
+
+            Prior("Mortgage", 2_050m);                        // escrow stepped up for 2026
+            Prior("Amex loan", 250m);
+            Prior("AT&T", m >= 7 ? 85m : 80m);                // mid-year price rise
+            Prior("Electric", 138m * seasonal[m - 1]);
+            Prior("Water", 57m * (1 + (seasonal[m - 1] - 1) / 3));
+            Prior("Sewer", 44m);
+            Prior("Hulu", m >= 10 ? 18.99m : 15.99m);
+        }
         await db.SaveChangesAsync(ct);
 
         // Link the manual pairs to each other and reconcile each with the bank's line.

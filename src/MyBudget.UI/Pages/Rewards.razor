@@ -16,7 +16,7 @@ else
         </span>
         <span class="muted">@(year > DateTime.Today.Year ? $"Plan for {year} from January 1 with zero year-to-date spend." : $"As of {Fmt.Date(report.AsOf)} · {report.Plan.MonthsLeft} months left.")</span>
         <span class="tabs">
-            @foreach (var t in new[] { "Progress", "Plan", "Bills", "Earnings", "Card spend" })
+            @foreach (var t in new[] { "Progress", "Plan", "Budget lines", "Earnings", "Card spend" })
             {
                 <button type="button" class="@(tab == t ? "" : "secondary")" @onclick="() => tab = t">@t</button>
             }
@@ -113,17 +113,17 @@ else
             <Steps Items="report.Plan.Steps" />
         </section>
     }
-    else if (tab == "Bills")
+    else if (tab == "Budget lines")
     {
         <section class="panel">
-            <h2>Which card for each bill</h2>
-            <p class="muted">Card-eligible bills only. A bank-autopay discount wins unless the card is a status goal that is short.</p>
+            <h2>Which card for each line</h2>
+            <p class="muted">Card-eligible lines only. A bank-autopay discount wins unless the card is a status goal that is short.</p>
             <table>
-                <thead><tr><th>Bill</th><th class="money">Monthly</th><th>Recommendation</th><th class="money">Card value</th><th class="money">Bank discount</th></tr></thead>
+                <thead><tr><th>Budget line</th><th class="money">Monthly</th><th>Recommendation</th><th class="money">Card value</th><th class="money">Bank discount</th></tr></thead>
                 <tbody>
-                @foreach (var b in report.Bills)
+                @foreach (var b in report.BudgetLines)
                 {
-                    <tr title="@b.Formula"><td>@b.BillName</td><td><Money Value="b.Monthly" /></td><td>@b.Recommendation</td><td><Money Value="b.CardValue" /></td><td class="money">@(b.BankDiscount > 0 ? Fmt.Money(b.BankDiscount) : "")</td></tr>
+                    <tr title="@b.Formula"><td>@b.LineName</td><td><Money Value="b.Monthly" /></td><td>@b.Recommendation</td><td><Money Value="b.CardValue" /></td><td class="money">@(b.BankDiscount > 0 ? Fmt.Money(b.BankDiscount) : "")</td></tr>
                 }
                 </tbody>
             </table>

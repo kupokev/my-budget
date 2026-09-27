@@ -14,8 +14,8 @@ public sealed class BudgetDbContext(DbContextOptions<BudgetDbContext> options) :
     public DbSet<CardBalance> CardBalances => Set<CardBalance>();
     public DbSet<Category> Categories => Set<Category>();
     public DbSet<Label> Labels => Set<Label>();
-    public DbSet<Bill> Bills => Set<Bill>();
-    public DbSet<BillPeriod> BillPeriods => Set<BillPeriod>();
+    public DbSet<BudgetLine> BudgetLines => Set<BudgetLine>();
+    public DbSet<BudgetPeriod> BudgetPeriods => Set<BudgetPeriod>();
     public DbSet<DeductionElection> DeductionElections => Set<DeductionElection>();
     public DbSet<WithholdingElection> WithholdingElections => Set<WithholdingElection>();
     public DbSet<Paycheck> Paychecks => Set<Paycheck>();
@@ -105,7 +105,7 @@ public sealed class BudgetDbContext(DbContextOptions<BudgetDbContext> options) :
             e.Property(x => x.Name).HasMaxLength(100);
             e.Property(x => x.AccountNumber).HasMaxLength(60);
             e.Property(x => x.AnnualRate).HasPrecision(8, 5);
-            e.HasOne(x => x.Bill).WithMany().HasForeignKey(x => x.BillId).OnDelete(DeleteBehavior.SetNull);
+            e.HasOne(x => x.BudgetLine).WithMany().HasForeignKey(x => x.BudgetLineId).OnDelete(DeleteBehavior.SetNull);
             e.HasMany(x => x.Balances).WithOne(x => x.Loan).HasForeignKey(x => x.LoanId).OnDelete(DeleteBehavior.Cascade);
         });
         mb.Entity<LoanBalance>().HasIndex(x => new { x.LoanId, x.AsOf }).IsUnique();
@@ -181,7 +181,7 @@ public sealed class BudgetDbContext(DbContextOptions<BudgetDbContext> options) :
             e.Ignore(x => x.Counts);
             e.HasOne(x => x.Category).WithMany().HasForeignKey(x => x.CategoryId).OnDelete(DeleteBehavior.SetNull);
             e.HasOne(x => x.Label).WithMany().HasForeignKey(x => x.LabelId).OnDelete(DeleteBehavior.SetNull);
-            e.HasOne(x => x.Bill).WithMany().HasForeignKey(x => x.BillId).OnDelete(DeleteBehavior.SetNull);
+            e.HasOne(x => x.BudgetLine).WithMany().HasForeignKey(x => x.BudgetLineId).OnDelete(DeleteBehavior.SetNull);
             e.HasOne(x => x.ImportBatch).WithMany().HasForeignKey(x => x.ImportBatchId).OnDelete(DeleteBehavior.SetNull);
             e.HasIndex(x => new { x.AccountId, x.CardId, x.ExternalId }).IsUnique();
             e.HasIndex(x => x.Date);
@@ -191,7 +191,7 @@ public sealed class BudgetDbContext(DbContextOptions<BudgetDbContext> options) :
             e.Property(x => x.Pattern).HasMaxLength(200);
             e.HasOne(x => x.Category).WithMany().HasForeignKey(x => x.CategoryId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(x => x.Label).WithMany().HasForeignKey(x => x.LabelId).OnDelete(DeleteBehavior.SetNull);
-            e.HasOne(x => x.Bill).WithMany().HasForeignKey(x => x.BillId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.BudgetLine).WithMany().HasForeignKey(x => x.BudgetLineId).OnDelete(DeleteBehavior.Cascade);
         });
         mb.Entity<Goal>(e =>
         {
@@ -242,8 +242,8 @@ public sealed class BudgetDbContext(DbContextOptions<BudgetDbContext> options) :
         mb.Entity<Obligation>(e =>
         {
             e.Property(x => x.Description).HasMaxLength(200);
-            e.Property(x => x.ShareOfBill).HasPrecision(6, 4);
-            e.HasOne(x => x.Bill).WithMany().HasForeignKey(x => x.BillId).OnDelete(DeleteBehavior.SetNull);
+            e.Property(x => x.ShareOfLine).HasPrecision(6, 4);
+            e.HasOne(x => x.BudgetLine).WithMany().HasForeignKey(x => x.BudgetLineId).OnDelete(DeleteBehavior.SetNull);
         });
         mb.Entity<ReceivableCharge>().Property(x => x.Description).HasMaxLength(200);
         mb.Entity<ReceivablePayment>().HasMany(x => x.Allocations).WithOne(x => x.Payment).HasForeignKey(x => x.PaymentId).OnDelete(DeleteBehavior.Cascade);
@@ -262,16 +262,17 @@ public sealed class BudgetDbContext(DbContextOptions<BudgetDbContext> options) :
             e.HasOne(x => x.Category).WithMany().HasForeignKey(x => x.CategoryId).OnDelete(DeleteBehavior.SetNull);
         });
 
-        mb.Entity<Bill>(e =>
+        mb.Entity<BudgetLine>(e =>
         {
+            e.HasOne(x => x.Label).WithMany().HasForeignKey(x => x.LabelId).OnDelete(DeleteBehavior.SetNull);
             e.Property(x => x.Name).HasMaxLength(100);
             e.Property(x => x.AccountNumber).HasMaxLength(60);
             e.HasOne(x => x.Category).WithMany().HasForeignKey(x => x.CategoryId).OnDelete(DeleteBehavior.SetNull);
             e.HasOne(x => x.PaymentAccount).WithMany().HasForeignKey(x => x.PaymentAccountId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(x => x.PaymentCard).WithMany().HasForeignKey(x => x.PaymentCardId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(x => x.FundingAccount).WithMany().HasForeignKey(x => x.FundingAccountId).OnDelete(DeleteBehavior.Restrict);
-            e.HasMany(x => x.Periods).WithOne(x => x.Bill).HasForeignKey(x => x.BillId).OnDelete(DeleteBehavior.Cascade);
+            e.HasMany(x => x.Periods).WithOne(x => x.BudgetLine).HasForeignKey(x => x.BudgetLineId).OnDelete(DeleteBehavior.Cascade);
         });
-        mb.Entity<BillPeriod>().HasIndex(x => new { x.BillId, x.Period }).IsUnique();
+        mb.Entity<BudgetPeriod>().HasIndex(x => new { x.BudgetLineId, x.Period }).IsUnique();
     }
 }

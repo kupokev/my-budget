@@ -56,8 +56,8 @@ non-manual lines.
 
 ### Spending, goals, reports
 
-- Spending = money out, non-transfer. Summary: this month vs last per category, YTD, average,
-  uncategorized count; matrix: category × month; drill-down: merchants and lines.
+- Spending = money out, non-transfer. The `spending/*` endpoints remain, because the AI tool
+  `spend_by_category` and the dashboard tile read them, but **there is no Spending page** (see below).
 - Goal metrics: net worth (accounts − cards − loans from latest balances), selected account
   balances, contributions into an account type (HSA reads its own contribution records; every other
   type sums money into accounts of that type between the dates), 401(k) deferrals estimated from
@@ -78,8 +78,7 @@ non-manual lines.
 `reports/year-over-year`, `reports/net-worth`; `export/*.csv`.
 
 Pages: Import (source, layout, file, preview grid, previous imports with undo), Transactions
-(month/year, filters, inline edit with "always", rules panel), Spending (tiles, category table
-with drill-down, month-over-month matrix), Goals (progress bars with elapsed tick, editor),
+(month/year, filters, inline edit with "always", rules panel), Goals (progress bars with elapsed tick, editor),
 Reports (year over year, net worth with history, export).
 
 ## Open Questions
@@ -97,3 +96,25 @@ Built 2026-09-26: engine (8 tests), API (4 tests), five pages, file saver on the
 ## References
 
 - DD-0002 (bill actuals), DD-0004 (card spend), requirements BIL-7–9, GOL-1–3, RPT-0–2, ACC-4
+
+
+## The Spending page was removed (2026-09-27)
+
+It showed a category table for this month versus last, a category-by-month matrix, tiles for
+month/year-to-date/income, and a drill-down to merchants and transactions. Every analytical part of
+that turned out to live somewhere better:
+
+- The category-by-month matrix is Reports' year-over-year grid, which draws the same thing with the
+  prior year beside it.
+- Budget versus actual per category is the Budget page with its category filter applied: the totals
+  row already respects the filter, so it gives projected and actual per month for that category.
+- The uncategorized count is already a Home alert and already on the Home spending tile.
+- The transaction detail is the Transactions page.
+
+What replaced it is smaller and sits where the question gets asked. The Budget page's hovers now
+carry last year's actuals: the line-name tooltip shows last year's total, the months it was charged
+and the average, with this year so far beneath it; each month cell shows the same month a year
+earlier. The page therefore loads both this year's and last year's history.
+
+The `spending/*` API endpoints stayed. The AI's `spend_by_category` tool calls
+`SpendingEndpoints.Summary` directly, and the dashboard tile uses the summary figures.

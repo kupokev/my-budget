@@ -17,7 +17,7 @@ public static class ViewEndpoints
         api.MapGet("/home", async (BudgetDbContext db, TimeProvider clock) =>
         {
             var today = DateOnly.FromDateTime(clock.GetLocalNow().DateTime);
-            var upcoming = await BillEndpoints.Upcoming(db, today, 14);
+            var upcoming = await BudgetEndpoints.Upcoming(db, today, 14);
             var calendar = await IncomeEndpoints.PayCalendar(db, today.Year);
             var next = calendar.PayDates.FirstOrDefault(d => d.Date >= today);
             var needs = await Needs(db, today);
@@ -30,7 +30,7 @@ public static class ViewEndpoints
     internal static async Task<TransferNeedsDto> Needs(BudgetDbContext db, DateOnly asOf)
     {
         var (perYear, source) = await IncomeEndpoints.PaychecksPerYear(db, asOf);
-        var bills = await db.Bills.Include(b => b.Periods).ToListAsync();
+        var lines = await db.BudgetLines.Include(b => b.Periods).ToListAsync();
         var accounts = await db.Accounts.ToDictionaryAsync(a => a.Id);
         var monthStart = new DateOnly(asOf.Year, asOf.Month, 1);
         var monthEnd = monthStart.AddMonths(1).AddDays(-1);
@@ -40,7 +40,7 @@ public static class ViewEndpoints
             .Select(g => new { AccountId = g.Key, Sum = g.Sum(t => t.Amount) })
             .ToDictionaryAsync(x => x.AccountId, x => x.Sum);
 
-        var needs = TransferNeeds.Compute(bills, perYear, asOf, BillEndpoints.ProjectedOverrides(bills, asOf));
+        var needs = TransferNeeds.Compute(lines, perYear, asOf, BudgetEndpoints.ProjectedOverrides(lines, asOf));
         var dtos = needs.Select(n =>
         {
             var acct = accounts.GetValueOrDefault(n.AccountId);
@@ -48,7 +48,7 @@ public static class ViewEndpoints
             return new AccountNeedDto(
                 n.AccountId, acct?.Name ?? $"Account {n.AccountId}", acct?.TransferCadence ?? Domain.TransferCadence.Monthly,
                 n.Monthly, n.PerPaycheck, n.PerPaycheckFormula, moved, Math.Round(moved - n.Monthly, 2),
-                n.Lines.Select(l => new NeedLineDto(l.BillId, l.BillName, l.Frequency, l.ProjectedAmount, l.MonthlyAccrual, l.Formula, l.PaidByCard)).ToList());
+                n.Lines.Select(l => new NeedLineDto(l.BudgetLineId, l.LineName, l.Frequency, l.ProjectedAmount, l.MonthlyAccrual, l.Formula, l.PaidByCard)).ToList());
         }).OrderBy(d => d.AccountName).ToList();
 
         return new TransferNeedsDto(asOf, perYear, source, dtos);
