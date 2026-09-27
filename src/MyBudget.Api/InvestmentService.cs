@@ -85,10 +85,14 @@ public sealed class InvestmentService(BudgetDbContext db, IMarketDataProvider ma
         foreach (var h in holdings)
         {
             var r = Portfolio.Analyze(h.Trades, asOf);
-            var price = await db.Prices.Where(p => p.Ticker == h.Ticker && p.Date <= asOf).OrderByDescending(p => p.Date).FirstOrDefaultAsync(ct);
+            var recent = await db.Prices.Where(p => p.Ticker == h.Ticker && p.Date <= asOf).OrderByDescending(p => p.Date).Take(2).ToListAsync(ct);
+            var price = recent.FirstOrDefault();
+            var previous = recent.Skip(1).FirstOrDefault();
             var s = Portfolio.Summarize(r, price?.Price, price?.Date);
             if (price is null && s.Shares > 0) warnings.Add($"{h.Ticker}: no price yet; run Refresh or enter one.");
             var divYtd = h.Dividends.Where(d => d.ExDate.Year == year).Sum(d => d.Amount);
+            var day = DayMove(s.Shares, price?.Price, previous?.Price);
+            var est = EstimateDividends(h, s.Shares, s.MarketValue, asOf, year);
             var realizedYear = r.Realized.Where(g => g.SellDate.Year == year).ToList();
             var taxAdvantaged = h.Account is not null && AccountTypes.IsTaxAdvantaged(h.Account.Type);
             if (!taxAdvantaged)
@@ -101,7 +105,10 @@ public sealed class InvestmentService(BudgetDbContext db, IMarketDataProvider ma
                 h.Trades.OrderByDescending(t => t.Date).Select(ToDto).ToList(),
                 h.Dividends.OrderByDescending(d => d.ExDate).Select(ToDto).ToList(),
                 r.Realized.Select(g => new RealizedGainDto(g.SellTradeId, g.SellDate, g.Acquired, g.Shares, g.Proceeds, g.CostBasis, g.Gain, g.Term.ToString(), g.DaysHeld, g.WashSale, g.DisallowedLoss, g.Formula)).ToList(),
-                r.WashSales.Select(w => new WashSaleDto(w.SellTradeId, w.SellDate, w.Loss, w.WindowOpens, w.WindowCloses, w.EarliestSafeRepurchase, w.DisallowedLoss, w.WindowStillOpen, w.Message)).ToList()));
+                r.WashSales.Select(w => new WashSaleDto(w.SellTradeId, w.SellDate, w.Loss, w.WindowOpens, w.WindowCloses, w.EarliestSafeRepurchase, w.DisallowedLoss, w.WindowStillOpen, w.Message)).ToList(),
+                previous?.Price, previous?.Date, day.Change, day.Percent,
+                s.CostBasis == 0 || s.UnrealizedGain is not { } ug ? null : Round(ug / s.CostBasis * 100m),
+                est.Amount, est.Yield, est.Formula));
         }
 
         GainsTaxDto? tax = null;
@@ -179,10 +186,105 @@ public sealed class InvestmentService(BudgetDbContext db, IMarketDataProvider ma
             }
         }
         await db.SaveChangesAsync(ct);
-        return new LotImportResultDto(account.Name, created, imported, present, prices, parsed.Lots.Select(l => l.Ticker).Distinct().OrderBy(t => t).ToList(), parsed.Skipped, parsed.Warnings);
+
+        // A tax-lot export carries no prices beyond the one on the row and no dividend history at all,
+        // so fetch both now rather than leaving the screen to be filled by a second click. Best effort:
+        // a ticker the provider doesn't know shouldn't fail an import that already succeeded.
+        int pricesFetched = 0, dividendsFetched = 0;
+        var fetchErrors = new List<string>();
+        foreach (var h in holdings.Where(x => parsed.Lots.Any(l => l.Ticker == x.Ticker)))
+        {
+            try
+            {
+                var r = await SyncAsync(h.Id, ct);
+                if (r.Error is { } err) fetchErrors.Add($"{h.Ticker}: {err}");
+                else { pricesFetched += r.PricesAdded; dividendsFetched += r.DividendsAdded; }
+            }
+            catch (Exception ex) { fetchErrors.Add($"{h.Ticker}: {ex.Message}"); }
+        }
+
+        return new LotImportResultDto(account.Name, created, imported, present, prices,
+            parsed.Lots.Select(l => l.Ticker).Distinct().OrderBy(t => t).ToList(), parsed.Skipped, parsed.Warnings,
+            pricesFetched, dividendsFetched, fetchErrors);
     }
 
     public static HoldingDto ToDto(Holding h) => new() { Id = h.Id, Ticker = h.Ticker, Name = h.Name, AccountId = h.AccountId, AccountName = h.Account?.Name, Drip = h.Drip, IsActive = h.IsActive, Notes = h.Notes };
     public static TradeDto ToDto(Trade t) => new() { Id = t.Id, HoldingId = t.HoldingId, Date = t.Date, Kind = t.Kind, Shares = t.Shares, Price = t.Price, Fees = t.Fees, Notes = t.Notes, DividendPaymentId = t.DividendPaymentId };
     public static DividendDto ToDto(DividendPayment d) => new() { Id = d.Id, HoldingId = d.HoldingId, ExDate = d.ExDate, PayDate = d.PayDate, PerShare = d.PerShare, SharesHeld = d.SharesHeld, Amount = d.Amount, Reinvested = d.Reinvested, Source = d.Source };
+
+    private static decimal Round(decimal v) => Math.Round(v, 2, MidpointRounding.AwayFromZero);
+
+    /// <summary>
+    /// The move between the two most recent closes, in dollars against the shares held and as a percent.
+    /// Null until a ticker has two prices; a single imported price has nothing to compare against.
+    /// </summary>
+    private static (decimal? Change, decimal? Percent) DayMove(decimal shares, decimal? price, decimal? previous)
+    {
+        if (price is not { } now || previous is not { } then || then == 0 || shares <= 0) return (null, null);
+        return (Round((now - then) * shares), Round((now - then) / then * 100m));
+    }
+
+
+    /// <summary>
+    /// The calendar year's dividends: what has already been paid, plus the payments still to come at
+    /// the latest per-share rate against the shares held now. The cadence is read from the gaps between
+    /// recorded ex-dates rather than assumed, and a finished year is simply its actual total.
+    ///
+    /// Using the latest per-share rate and today's share count (rather than annualizing the year so far)
+    /// matters when the position grew during the year: the early payments were on fewer shares and would
+    /// drag the projection down.
+    /// </summary>
+    public static (decimal? Amount, decimal? Yield, string? Formula) EstimateDividends(Holding h, decimal shares, decimal? marketValue, DateOnly asOf, int year)
+    {
+        decimal? Yield(decimal amount) => marketValue is > 0 ? Round(amount / marketValue.Value * 100m) : null;
+
+        var paid = h.Dividends.Where(d => d.ExDate.Year == year).OrderBy(d => d.ExDate).ToList();
+        var paidTotal = Round(paid.Sum(d => d.Amount));
+
+        if (year < asOf.Year)
+            return paid.Count == 0 ? (null, null, $"Nothing paid in {year}.")
+                                   : (paidTotal, Yield(paidTotal), $"{year} is complete: {paid.Count} payment{(paid.Count == 1 ? "" : "s")} totalling {paidTotal:C}.");
+
+        if (shares <= 0) return (null, null, null);
+        if (paid.Count == 0) return (null, null, $"No dividends recorded in {year} yet.");
+
+        var months = PaymentIntervalMonths(h.Dividends.OrderBy(d => d.ExDate).Select(d => d.ExDate).ToList());
+        if (months is not { } every)
+            return (paidTotal, Yield(paidTotal), $"{paid.Count} payment{(paid.Count == 1 ? "" : "s")} totalling {paidTotal:C}; not enough history to tell how often it pays, so nothing is projected.");
+
+        var last = paid[^1];
+        var perPayment = Round(last.PerShare * shares);
+
+        var next = last.ExDate.AddMonths(every);
+        var remaining = 0;
+        while (next.Year == year) { remaining++; next = next.AddMonths(every); }
+
+        var amount = Round(paidTotal + remaining * perPayment);
+        var cadence = every switch { 1 => "monthly", 3 => "quarterly", 6 => "twice a year", 12 => "yearly", _ => $"every {every} months" };
+        var formula = remaining == 0
+            ? $"{paid.Count} paid in {year} totalling {paidTotal:C}; none left this year ({cadence})."
+            : $"{paid.Count} paid in {year} totalling {paidTotal:C}, plus {remaining} more {cadence} at {last.PerShare:N4}/share × {shares:0.####} shares ({perPayment:C} each) = {amount:C}";
+        return (amount, Yield(amount), formula);
+    }
+
+    /// <summary>
+    /// How many months apart the payments fall, from the median gap between ex-dates. Returns null when
+    /// there are fewer than two payments or the spacing doesn't match a normal schedule.
+    /// </summary>
+    public static int? PaymentIntervalMonths(IReadOnlyList<DateOnly> exDates)
+    {
+        if (exDates.Count < 2) return null;
+        var gaps = new List<int>();
+        for (var i = 1; i < exDates.Count; i++) gaps.Add(exDates[i].DayNumber - exDates[i - 1].DayNumber);
+        gaps.Sort();
+        var median = gaps[gaps.Count / 2];
+        return median switch
+        {
+            >= 24 and <= 38 => 1,
+            >= 80 and <= 100 => 3,
+            >= 165 and <= 195 => 6,
+            >= 350 and <= 380 => 12,
+            _ => null,
+        };
+    }
 }

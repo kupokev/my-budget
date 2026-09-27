@@ -19,6 +19,27 @@ public sealed class YahooMarketDataProvider(HttpClient http) : IMarketDataProvid
 {
     public async Task<MarketData> FetchAsync(string ticker, DateOnly from, CancellationToken ct = default)
     {
+        try { return await FetchOneAsync(ticker, from, ct); }
+        catch (InvalidOperationException) when (ClassShareVariant(ticker) is { } alt)
+        {
+            // Brokerages write class shares as BRKB; Yahoo wants BRK-B. Only tried after a failure,
+            // so a ticker that already works is never second-guessed.
+            return await FetchOneAsync(alt, from, ct);
+        }
+    }
+
+    /// <summary>BRKB → BRK-B, BRKA → BRK-A. Null when the ticker doesn't look like a class share.</summary>
+    public static string? ClassShareVariant(string ticker)
+    {
+        var t = ticker.Trim().ToUpperInvariant();
+        if (t.Contains('-') || t.Contains('.')) return null;
+        if (t.Length is < 4 or > 5) return null;
+        if (t[^1] is not ('A' or 'B' or 'C')) return null;
+        return $"{t[..^1]}-{t[^1]}";
+    }
+
+    private async Task<MarketData> FetchOneAsync(string ticker, DateOnly from, CancellationToken ct = default)
+    {
         var range = from <= DateOnly.FromDateTime(DateTime.Today).AddYears(-2) ? "5y" : from <= DateOnly.FromDateTime(DateTime.Today).AddYears(-1) ? "2y" : "1y";
         var url = $"https://query2.finance.yahoo.com/v8/finance/chart/{Uri.EscapeDataString(ticker.Trim().ToUpperInvariant())}?range={range}&interval=1d&events=div";
         using var req = new HttpRequestMessage(HttpMethod.Get, url);

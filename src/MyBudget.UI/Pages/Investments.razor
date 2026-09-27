@@ -25,6 +25,8 @@ else
         @if (lotResult is { } lr)
         {
             <p>@lr.HoldingsCreated new holdings, @lr.LotsImported lots imported, @lr.LotsAlreadyPresent already there, @lr.PricesRecorded prices recorded into @lr.AccountName: @string.Join(", ", lr.Tickers).</p>
+            <p class="muted">Then fetched @lr.PricesFetched more prices and @lr.DividendsFetched dividends, so the figures are populated without a second click.</p>
+            @if (lr.FetchErrors is { Count: > 0 } fe) { <ul class="warnings">@foreach (var e in fe) { <li>@e</li> }</ul> }
             @if (lr.Skipped.Count > 0) { <p class="muted">Skipped: @string.Join("; ", lr.Skipped)</p> }
             <Warnings Items="lr.Warnings" />
         }
@@ -48,20 +50,83 @@ else
 
     <section class="panel">
         <table>
-            <thead><tr><th>Ticker</th><th>Account</th><th class="money">Shares</th><th class="money">Price</th><th class="money">Value</th><th class="money">Cost</th><th class="money">Unrealized</th><th class="money">Dividends @year</th><th>DRIP</th><th></th></tr></thead>
+            <thead><tr><th>Account / holding</th><th class="money">Shares</th><th class="money">Price</th><th class="money" title="Move between the two most recent closes">Day</th><th class="money">Value</th><th class="money">Cost</th><th class="money">Unrealized</th><th class="money" title="Paid so far in the selected year">Dividends</th><th class="money" title="A year at the current run rate: trailing-twelve-month dividends per share × shares held now">Est. / yr</th><th>DRIP</th><th></th></tr></thead>
             <tbody>
-            @foreach (var p in portfolio.Positions)
+            @foreach (var acct in portfolio.Positions.GroupBy(x => x.Holding.AccountName).OrderBy(g => g.Key))
             {
-                <tr class="@(open == p.Holding.Id ? "editing" : "")">
-                    <td><strong>@p.Holding.Ticker</strong> <span class="muted">@p.Holding.Name</span></td><td>@p.Holding.AccountName @(p.TaxAdvantaged ? "🛡" : "")</td>
-                    <td class="money">@p.Shares.ToString("0.####")</td><td class="money" title="@Fmt.Date(p.PriceDate)">@Fmt.Money(p.Price)</td>
-                    <td class="money">@Fmt.Money(p.MarketValue)</td><td><Money Value="p.CostBasis" /></td><td>@if (p.UnrealizedGain is { } u) { <Money Value="u" Signed="true" /> }</td><td><Money Value="p.DividendsThisYear" /></td>
-                    <td>@(p.Holding.Drip ? "on" : "")</td>
-                    <td class="actions"><button class="secondary" type="button" @onclick="() => open = open == p.Holding.Id ? null : p.Holding.Id">Details</button> <button class="secondary" type="button" @onclick="() => Edit(p.Holding)">Edit</button></td>
+                var accountOpen = openAccounts.Contains(acct.Key);
+                var acctValue = acct.Sum(x => x.MarketValue ?? 0);
+                var acctCost = acct.Sum(x => x.CostBasis);
+                <tr class="account-row @(accountOpen ? "open" : "")">
+                    <td>
+                        <button class="link tree" type="button" @onclick="() => ToggleAccount(acct.Key)">
+                            <span class="caret">@(accountOpen ? "▾" : "▸")</span><strong>@acct.Key</strong>
+                            @if (acct.Any(x => x.TaxAdvantaged)) { <span title="Tax-advantaged: gains aren't taxed as they happen">🛡</span> }
+                            <span class="muted">@acct.Count() holding@(acct.Count() == 1 ? "" : "s")</span>
+                        </button>
+                    </td>
+                    <td></td><td></td>
+                    <td class="money @Sign(acct.Sum(x => x.DayChange ?? 0))">@AmountPct(acct.Sum(x => x.DayChange ?? 0), DayPct(acct))</td>
+                    <td class="money"><strong>@Fmt.Money(acctValue)</strong></td>
+                    <td class="money">@Fmt.Money(acctCost)</td>
+                    <td class="money @Sign(acctValue - acctCost)">@AmountPct(acctValue - acctCost, acctCost == 0 ? null : (acctValue - acctCost) / acctCost * 100m)</td>
+                    <td><Money Value="acct.Sum(x => x.DividendsThisYear)" /></td>
+                    <td class="money">@Fmt.Money(acct.Sum(x => x.EstimatedDividends ?? 0))</td>
+                    <td colspan="2"></td>
                 </tr>
+
+                @if (!accountOpen) { continue; }
+
+                foreach (var p in acct.OrderByDescending(x => x.MarketValue ?? 0))
+                {
+                    var lotsOpen = openLots.Contains(p.Holding.Id);
+                    <tr class="holding-row @(open == p.Holding.Id ? "editing" : "")">
+                        <td class="indent">
+                            <button class="link tree" type="button" title="@($"{p.Holding.Name}\nTax lots")" @onclick="() => ToggleLots(p.Holding.Id)">
+                                <span class="caret">@(lotsOpen ? "▾" : "▸")</span><strong>@p.Holding.Ticker</strong>
+                            </button>
+                        </td>
+                        <td class="money">@p.Shares.ToString("0.####")</td><td class="money" title="@Fmt.Date(p.PriceDate)">@Fmt.Money(p.Price)</td>
+                        <td class="money @Sign(p.DayChange)" title="@DayTitle(p)">@AmountPct(p.DayChange, p.DayChangePercent)</td>
+                        <td class="money">@Fmt.Money(p.MarketValue)</td><td><Money Value="p.CostBasis" /></td>
+                        <td class="money @Sign(p.UnrealizedGain)">@AmountPct(p.UnrealizedGain, p.UnrealizedPercent)</td>
+                        <td><Money Value="p.DividendsThisYear" /></td>
+                        <td class="money" title="@p.EstimatedDividendsFormula">@(p.EstimatedDividends is { } ed ? $"{Fmt.Money(ed)}{(p.EstimatedYieldPercent is { } yp ? $" ({yp:0.##}%)" : "")}" : "")</td>
+                        <td>@(p.Holding.Drip ? "on" : "")</td>
+                        <td class="actions icons">
+                            <button class="link" type="button" title="Trades, dividends and realized gains" @onclick="() => open = open == p.Holding.Id ? null : p.Holding.Id">☰</button>
+                            <button class="link" type="button" title="Edit holding" @onclick="() => Edit(p.Holding)">✎</button>
+                        </td>
+                    </tr>
+
+                    @if (lotsOpen)
+                    {
+                        <tr class="lots-row"><td colspan="11">
+                            <div class="lots">
+                                <h4>Open tax lots <span class="muted">@p.Lots.Count lot@(p.Lots.Count == 1 ? "" : "s") · @p.Lots.Sum(l => l.RemainingShares).ToString("0.####") shares</span></h4>
+                                <table class="compact">
+                                    <thead><tr><th>Acquired</th><th>Held</th><th class="money">Shares left</th><th class="money">Cost / share</th><th class="money">Basis</th><th></th></tr></thead>
+                                    <tbody>
+                                    @foreach (var l in p.Lots.OrderByDescending(l => l.Acquired))
+                                    {
+                                        <tr>
+                                            <td>@Fmt.Date(l.Acquired)</td>
+                                            <td class="muted">@((DateTime.Today - l.Acquired.ToDateTime(TimeOnly.MinValue)).Days > 365 ? "long" : "short")</td>
+                                            <td class="money">@l.RemainingShares.ToString("0.######")</td>
+                                            <td class="money">@l.CostPerShare.ToString("N4")</td>
+                                            <td class="money">@Fmt.Money(l.RemainingShares * l.CostPerShare)</td>
+                                            <td class="muted">@(l.FromReinvest ? "DRIP" : "")@(l.DisallowedLossAdded > 0 ? $" +{Fmt.Money(l.DisallowedLossAdded)} wash-sale basis" : "")</td>
+                                        </tr>
+                                    }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </td></tr>
+                    }
+
                 @if (open == p.Holding.Id)
                 {
-                    <tr><td colspan="10">
+                    <tr><td colspan="11">
                         @if (p.WashSales.Count > 0) { <ul class="warnings">@foreach (var w in p.WashSales) { <li>@w.Message</li> }</ul> }
                         <div class="row">
                             <div class="grow">
@@ -110,6 +175,7 @@ else
                         </div>
                     </td></tr>
                 }
+                }
             }
             </tbody>
         </table>
@@ -142,6 +208,10 @@ else
     private List<AccountDto>? accounts;
     private HoldingDto? editing;
     private int? open;
+    /// <summary>Accounts expanded to show their holdings. Everything starts collapsed.</summary>
+    private readonly HashSet<string> openAccounts = [];
+    /// <summary>Holdings expanded to show their tax lots.</summary>
+    private readonly HashSet<int> openLots = [];
     private TradeDto newTrade = new() { Date = DateOnly.FromDateTime(DateTime.Today) };
     private DividendDto newDividend = new() { ExDate = DateOnly.FromDateTime(DateTime.Today) };
     private decimal manualPrice;
@@ -152,6 +222,37 @@ else
     private string? error;
 
     protected override Task OnInitializedAsync() => Load();
+
+    /// <summary>"$123 (2%)" — the amount with its percentage, blank when there's nothing to show.</summary>
+    private static string AmountPct(decimal? amount, decimal? percent)
+        => amount is not { } a ? "" : percent is { } p ? $"{Signed(a)} ({p:0.##}%)" : Signed(a);
+
+    private static string Signed(decimal v) => (v > 0 ? "+" : v < 0 ? "−" : "") + Fmt.Money(Math.Abs(v));
+    private static string Sign(decimal? v) => v is null or 0 ? "" : v > 0 ? "pos" : "neg";
+
+    /// <summary>The account's day move as a percent of what it was worth yesterday.</summary>
+    private static decimal? DayPct(IEnumerable<PositionDto> positions)
+    {
+        var rows = positions.Where(x => x.DayChange is not null && x.PreviousPrice is not null).ToList();
+        if (rows.Count == 0) return null;
+        var yesterday = rows.Sum(x => x.PreviousPrice!.Value * x.Shares);
+        return yesterday == 0 ? null : Math.Round(rows.Sum(x => x.DayChange!.Value) / yesterday * 100m, 2);
+    }
+
+    private static string DayTitle(PositionDto p)
+        => p.PreviousPrice is { } prev && p.PriceDate is { } d
+            ? $"{Fmt.Money(prev)} on {Fmt.Date(p.PreviousPriceDate)} → {Fmt.Money(p.Price)} on {Fmt.Date(d)}"
+            : "Needs two prices; run Refresh.";
+
+    private void ToggleAccount(string name)
+    {
+        if (!openAccounts.Remove(name)) openAccounts.Add(name);
+    }
+
+    private void ToggleLots(int holdingId)
+    {
+        if (!openLots.Remove(holdingId)) openLots.Add(holdingId);
+    }
 
     private async Task Load()
     {

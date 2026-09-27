@@ -397,3 +397,16 @@ tr.selected > td { border-bottom-color: transparent; }
 
 /* Charts scale to their panel; belt-and-braces so an SVG can never widen the layout. */
 .panel svg { max-width: 100%; }
+
+/* Investments tree: account > holding > tax lots. */
+.tree { display: inline-flex; align-items: baseline; gap: 6px; padding: 0; background: none; border: 0;
+  color: inherit; font: inherit; text-align: left; cursor: pointer; box-shadow: none; max-width: 100%; }
+.tree:hover { background: none; filter: none; color: var(--accent); text-decoration: none; }
+.tree .caret { width: 10px; font-size: 10px; opacity: .8; }
+.tree .ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 280px; }
+tr.account-row > td { background: color-mix(in srgb, var(--accent) 7%, transparent); }
+tr.account-row.open > td { border-bottom-color: transparent; }
+tr.holding-row > td.indent { padding-left: 26px; }
+tr.lots-row > td { background: color-mix(in srgb, var(--fg) 4%, transparent); padding: 6px 10px 10px 40px; }
+.lots h4 { margin: 4px 0 6px; font-size: 12px; font-weight: 600; }
+.lots table { max-width: 720px; }

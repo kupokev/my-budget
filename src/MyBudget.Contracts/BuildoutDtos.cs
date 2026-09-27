@@ -48,7 +48,13 @@ public sealed record RealizedGainDto(int SellTradeId, DateOnly SellDate, DateOnl
 public sealed record WashSaleDto(int SellTradeId, DateOnly SellDate, decimal Loss, DateOnly WindowOpens, DateOnly WindowCloses, DateOnly EarliestSafeRepurchase, decimal DisallowedLoss, bool WindowStillOpen, string Message);
 
 public sealed record PositionDto(HoldingDto Holding, bool TaxAdvantaged, decimal Shares, decimal CostBasis, decimal? Price, DateOnly? PriceDate, decimal? MarketValue, decimal? UnrealizedGain, decimal DividendsThisYear,
-    IReadOnlyList<LotDto> Lots, IReadOnlyList<TradeDto> Trades, IReadOnlyList<DividendDto> Dividends, IReadOnlyList<RealizedGainDto> Realized, IReadOnlyList<WashSaleDto> WashSales);
+    IReadOnlyList<LotDto> Lots, IReadOnlyList<TradeDto> Trades, IReadOnlyList<DividendDto> Dividends, IReadOnlyList<RealizedGainDto> Realized, IReadOnlyList<WashSaleDto> WashSales,
+    /// <summary>The close before the latest one, and the move between them. Null until there are two prices.</summary>
+    decimal? PreviousPrice = null, DateOnly? PreviousPriceDate = null, decimal? DayChange = null, decimal? DayChangePercent = null,
+    /// <summary>Unrealized gain as a share of cost basis.</summary>
+    decimal? UnrealizedPercent = null,
+    /// <summary>What a full year at the current run rate would pay: trailing-twelve-month dividends per share × shares held now.</summary>
+    decimal? EstimatedDividends = null, decimal? EstimatedYieldPercent = null, string? EstimatedDividendsFormula = null);
 
 public sealed record GainsTaxDto(decimal ShortTermGain, decimal LongTermGain, decimal ShortTermTax, decimal LongTermTax, decimal MissouriTax, decimal Total, decimal OrdinaryMarginalRate, IReadOnlyList<string> Steps);
 
@@ -57,7 +63,9 @@ public sealed record PortfolioDto(DateOnly AsOf, int Year, IReadOnlyList<Positio
 
 public sealed record MarketSyncResultDto(string Ticker, int PricesAdded, int DividendsAdded, int ReinvestsCreated, decimal? LastPrice, string? Error);
 
-public sealed record LotImportResultDto(string AccountName, int HoldingsCreated, int LotsImported, int LotsAlreadyPresent, int PricesRecorded, IReadOnlyList<string> Tickers, IReadOnlyList<string> Skipped, IReadOnlyList<string> Warnings);
+public sealed record LotImportResultDto(string AccountName, int HoldingsCreated, int LotsImported, int LotsAlreadyPresent, int PricesRecorded, IReadOnlyList<string> Tickers, IReadOnlyList<string> Skipped, IReadOnlyList<string> Warnings,
+    /// <summary>Prices and dividends fetched straight after the import, so the figures are populated without a second click.</summary>
+    int PricesFetched = 0, int DividendsFetched = 0, IReadOnlyList<string>? FetchErrors = null);
 
 // ---- Assets (ACC-4a) --------------------------------------------------------------------------
 
