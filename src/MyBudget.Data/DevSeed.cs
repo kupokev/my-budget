@@ -268,11 +268,39 @@ public static class DevSeed
 
         var brokerage = new Account { Name = "Fidelity Brokerage", Institution = "Fidelity", Type = AccountType.Brokerage };
         db.Accounts.Add(brokerage);
-        db.Holdings.Add(new Holding
+        var vti = new Holding
         {
             Ticker = "VTI", Name = "Vanguard Total Stock Market ETF", Account = brokerage, Drip = true,
-            Trades = [new Trade { Date = new(2025, 3, 3), Kind = TradeKind.Buy, Shares = 10, Price = 280.00m, Fees = 0, Notes = "placeholder lot" }],
-        });
+            Trades = [new Trade { Date = new(2025, 3, 3), Kind = TradeKind.Buy, Shares = 10, Price = 280.00m, Fees = 0, Notes = "opening lot" }],
+        };
+        db.Holdings.Add(vti);
+
+        // A price history, so the holding can actually be valued instead of warning that it can't.
+        // Month-end closes drifting up from the opening lot, with a dip in the autumn.
+        var vtiCloses = new[] { 280.00m, 283.40m, 279.10m, 286.70m, 291.20m, 288.90m, 295.30m, 301.10m,
+                                298.40m, 292.60m, 299.80m, 305.20m, 309.70m, 306.10m, 312.40m, 318.90m,
+                                315.20m, 321.60m, 327.40m };
+        for (var i = 0; i < vtiCloses.Length; i++)
+        {
+            var month = new DateOnly(2025, 3, 1).AddMonths(i);
+            db.Prices.Add(new PriceSnapshot
+            {
+                Ticker = "VTI", Date = month.AddMonths(1).AddDays(-1), Price = vtiCloses[i], Source = DataSource.Manual,
+            });
+        }
+
+        // Quarterly dividends, reinvested because DRIP is on.
+        foreach (var (ex, perShare) in new[] { (new DateOnly(2025, 3, 24), 0.92m), (new DateOnly(2025, 6, 23), 0.95m),
+                                               (new DateOnly(2025, 9, 22), 0.97m), (new DateOnly(2025, 12, 22), 1.03m),
+                                               (new DateOnly(2026, 3, 23), 0.99m), (new DateOnly(2026, 6, 22), 1.04m),
+                                               (new DateOnly(2026, 9, 21), 1.07m) })
+        {
+            vti.Dividends.Add(new DividendPayment
+            {
+                ExDate = ex, PayDate = ex.AddDays(4), PerShare = perShare, SharesHeld = 10m,
+                Amount = Math.Round(perShare * 10m, 2), Reinvested = true, Source = DataSource.Manual,
+            });
+        }
         // Monthly valuations, because a house moves with the market and the point is to see that.
         // Roughly 4% annual drift with a soft patch in the spring.
         var houseMoves = new[] { 0m, 900m, 1_400m, 600m, -700m, -1_100m, 400m, 1_500m, 1_800m, 1_200m, 900m, 700m,
