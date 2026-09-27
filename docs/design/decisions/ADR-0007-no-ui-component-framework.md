@@ -14,7 +14,8 @@ be better. His rule for this project: whichever option is lighter and lower main
 
 - **No third-party component or CSS framework.**
 - Styling is one hand-written stylesheet in `MyBudget.UI` using CSS custom properties, with light
-  and dark themes via `prefers-color-scheme`.
+  and dark themes via `prefers-color-scheme`. Palette: black/charcoal and gray base with hunter
+  green accents (Kevin's favourite colour), brighter green in dark mode for legibility.
 - Tables use the first-party **Microsoft.AspNetCore.Components.QuickGrid** (ships with ASP.NET
   Core, same release cadence as the rest of the stack).
 - Forms use built-in `EditForm` and input components. Small reusable pieces (money input, date
