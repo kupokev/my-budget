@@ -38,7 +38,7 @@ public sealed class BackupService(BudgetDbContext db, DatabaseOptions options)
         var temp = Path.Combine(Path.GetTempPath(), $"mybudget-export-{Guid.NewGuid():N}.db");
         try
         {
-            await db.Database.ExecuteSqlRawAsync($"VACUUM INTO '{temp.Replace("'", "''")}'", ct);
+            await db.Database.ExecuteSqlAsync($"VACUUM INTO {temp}", ct);
             return await File.ReadAllBytesAsync(temp, ct);
         }
         finally
@@ -66,7 +66,7 @@ public sealed class BackupService(BudgetDbContext db, DatabaseOptions options)
             var safety = Path.Combine(
                 Path.GetDirectoryName(DatabasePath)!,
                 $"mybudget-replaced-{DateTime.Now:yyyy-MM-dd-HHmm}.mybudget");
-            await db.Database.ExecuteSqlRawAsync($"VACUUM INTO '{safety.Replace("'", "''")}'", ct);
+            await db.Database.ExecuteSqlAsync($"VACUUM INTO {safety}", ct);
 
             File.Move(staged, DatabasePath + PendingSuffix, overwrite: true);
             return new BackupImportResult(true, null, safety, counts);

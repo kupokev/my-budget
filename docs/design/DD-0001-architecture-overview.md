@@ -19,11 +19,11 @@ wherever a free or manual alternative exists.
 | Layer | Choice | Why |
 | --- | --- | --- |
 | UI | Razor class library `MyBudget.UI`; Photino.Blazor desktop host on Linux; MAUI Android host later | One shared Razor UI, host-agnostic. MAUI has no Linux desktop target and Kevin only uses Linux, so Photino hosts the desktop (ADR-0004). |
-| API | ASP.NET Core minimal APIs | Straightforward, matches the .NET background. |
+| API | ASP.NET Core minimal APIs, as a library hosted in-process (ADR-0011) | Straightforward, matches the .NET background; no service to operate. |
 | Calculation engines | Separate libraries (PaycheckEngine, HsaPlanner, RewardsOptimizer, Amortization) | No UI or DB dependencies; unit-tested against real pay stubs and real HSA/rewards numbers so a wrong number is caught as a failing test, not discovered live. |
-| Data | EF Core; in-memory provider in Development, PostgreSQL (existing network server) in Production, chosen by config (ADR-0005) | Dev model can churn without migrations; reference tables for tax brackets and contribution limits are keyed by year so rule changes don't need code changes. |
+| Data | EF Core; SQLite file for real data, in-memory provider in tests, chosen by config (ADR-0010, superseding the data half of ADR-0005) | Dev model can churn without migrations; reference tables for tax brackets and contribution limits are keyed by year so rule changes don't need code changes. |
 | Charts | FactFoundry.Blazor.Charts | Existing library, avoid pulling in a second charting dependency. |
-| Styling | Hand-written CSS + QuickGrid, no component framework | Lighter and lower maintenance than MudBlazor/Bootstrap (ADR-0007). |
+| Styling | Hand-written CSS, no component framework | Lighter and lower maintenance than MudBlazor/Bootstrap (ADR-0007). |
 | Auth | LAN-only, single shared API key, HTTPS, no MFA | Single user on a home network; tunnel (cloudflared) if ever used remotely (ADR-0006). Full account numbers are stored (ADR-0008). |
 | Import | CSV/OFX per institution | No paid aggregator (see ADR-0001). |
 | Local AI | Ollama + Open WebUI (an instance you already run), tool-calling model | Private, free, and avoids the accuracy problems of an LLM writing its own database queries (see ADR-0003). |
@@ -62,8 +62,7 @@ tables keyed by year so they update without a code change each January.
 
 ## Open Questions
 
-- Hostname/credentials of the existing PostgreSQL server and which Linux server hosts the API.
-- Whether the in-memory dev provider should move to SQLite once the model stabilizes (ADR-0005).
+- Whether a future phone sync server uses PostgreSQL or replicates the SQLite file (ADR-0010).
 
 ## Status
 

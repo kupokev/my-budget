@@ -99,6 +99,27 @@ jobs:
             The packages pull in WebKitGTK, which the window needs. The AppImage expects it to be
             installed already.
 
+            ### Open-source libraries
+
+            Built on these, each under its own licence:
+
+            | Library | Licence | Used for |
+            | --- | --- | --- |
+            | [ASP.NET Core and Blazor](https://asp.net/) | MIT | The UI and the API |
+            | [Entity Framework Core](https://docs.microsoft.com/ef/core/) | MIT | Data access and migrations |
+            | [SQLitePCLRaw](https://github.com/ericsink/SQLitePCL.raw) | Apache-2.0 | The bundled SQLite engine, itself public domain |
+            | [Photino](https://github.com/tryphotino) | Apache-2.0 | The desktop window |
+            | [FactFoundry.Blazor.Charts](https://github.com/Fact-Foundry/blazor-charts) | MIT | Charts, rendered as SVG |
+            | [Npgsql](https://github.com/npgsql/npgsql) | PostgreSQL | PostgreSQL support, for a future sync server |
+            | [.NET runtime](https://github.com/dotnet/runtime) | MIT | Bundled, so nothing needs installing first |
+
+            `THIRD-PARTY-NOTICES.md` in this release lists every package including transitive ones,
+            generated from the build's own dependency graph. The same file is installed to
+            `/usr/share/doc/mybudget/` alongside the licence.
+
+            WebKitGTK is not bundled; it comes from your distribution under the WebKit project's
+            LGPL and BSD licences.
+
             Your budget lives at `~/.local/share/MyBudget/mybudget.db` and is untouched by installing
             or upgrading. Back it up from **Admin → Settings → Export budget** before a version jump.
 

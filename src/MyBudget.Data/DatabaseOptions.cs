@@ -2,9 +2,13 @@ namespace MyBudget.Data;
 
 /// <summary>
 /// Where the data lives. <see cref="Sqlite"/> is the desktop default: one file on this machine, no
-/// server. <see cref="PostgreSQL"/> is for the shared API a phone would sync against later.
+/// server. <see cref="InMemory"/> is for tests.
+///
+/// A PostgreSQL provider was here for the sync server ADR-0010 anticipates. It was removed because
+/// nothing used it: the branch was dead, the driver shipped in every package, and re-adding it is a
+/// package reference and a case label on the day that server actually exists.
 /// </summary>
-public enum DatabaseProvider { InMemory, PostgreSQL, Sqlite }
+public enum DatabaseProvider { InMemory, Sqlite }
 
 /// <summary>Bound from the "Database" configuration section (ADR-0005).</summary>
 public sealed class DatabaseOptions

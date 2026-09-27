@@ -8,7 +8,7 @@ public static class ServiceCollectionExtensions
 {
     /// <summary>
     /// Registers <see cref="BudgetDbContext"/> using the provider named in configuration:
-    /// in-memory for development, PostgreSQL for production (ADR-0005).
+    /// in-memory for tests, SQLite for the desktop app (ADR-0010).
     /// </summary>
     public static IServiceCollection AddBudgetData(this IServiceCollection services, IConfiguration configuration)
     {
@@ -25,11 +25,6 @@ public static class ServiceCollectionExtensions
                     if (string.IsNullOrWhiteSpace(options.ConnectionString))
                         throw new InvalidOperationException("Database:ConnectionString is required when Database:Provider is Sqlite.");
                     db.UseSqlite(options.ConnectionString);
-                    break;
-                case DatabaseProvider.PostgreSQL:
-                    if (string.IsNullOrWhiteSpace(options.ConnectionString))
-                        throw new InvalidOperationException("Database:ConnectionString is required when Database:Provider is PostgreSQL.");
-                    db.UseNpgsql(options.ConnectionString);
                     break;
                 default:
                     throw new InvalidOperationException($"Unknown database provider '{options.Provider}'.");

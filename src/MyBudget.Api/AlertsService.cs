@@ -8,7 +8,7 @@ using MyBudget.Engines.Ledger;
 namespace MyBudget.Api;
 
 /// <summary>ALT-1..6 plus housekeeping, computed on request from the same data the pages show. No push; the Home page is the inbox.</summary>
-public sealed class AlertsService(BudgetDbContext db, InvestmentService investments, PaycheckService paychecks)
+public sealed class AlertsService(BudgetDbContext db, InvestmentService investments)
 {
     public async Task<List<AlertDto>> ComputeAsync(DateOnly today, TransferNeedsDto needs, IReadOnlyList<UpcomingLineDto> upcoming, RewardsReportDto rewards, HsaPlanDto? hsa)
     {

@@ -12,6 +12,13 @@ PUBLISH=${2:?path to the published app}
 OUT=${3:-dist}
 HERE="$(cd "$(dirname "$0")" && pwd)"
 
+# Regenerated from the restored dependency graph so it can't drift from the build.
+NOTICES="${OUT}/THIRD-PARTY-NOTICES.md"
+mkdir -p "$OUT"
+if command -v python3 >/dev/null; then
+  python3 "$HERE/third-party-notices.py" "$NOTICES" || echo "could not generate notices; carrying on" >&2
+fi
+
 mkdir -p "$OUT"
 STAGE=$(mktemp -d)
 trap 'rm -rf "$STAGE"' EXIT
@@ -47,6 +54,11 @@ LAUNCH
   chmod +x "$root/usr/bin/mybudget"
 
   cp "$HERE/mybudget.desktop" "$root/usr/share/applications/mybudget.desktop"
+
+  # Licence and third-party notices travel with the package, not just the repository.
+  mkdir -p "$root/usr/share/doc/mybudget"
+  [ -f "$HERE/../LICENSE" ] && cp "$HERE/../LICENSE" "$root/usr/share/doc/mybudget/"
+  [ -f "$NOTICES" ] && cp "$NOTICES" "$root/usr/share/doc/mybudget/THIRD-PARTY-NOTICES.md"
   for size in 32 48 64 128 256; do
     icon_png "$size" "$root/usr/share/icons/hicolor/${size}x${size}/apps/mybudget.png"
   done

@@ -124,3 +124,8 @@ Fork it freely — that's what the licence is for.
 ## Licence
 
 [MIT](LICENSE).
+
+Built on ASP.NET Core and Blazor, Entity Framework Core, SQLite via SQLitePCLRaw, Photino,
+FactFoundry.Blazor.Charts and Npgsql, each under its own licence. Every release carries a
+`THIRD-PARTY-NOTICES.md` listing all of them including transitive packages, generated from that
+build's own dependency graph; installed packages put a copy in `/usr/share/doc/mybudget/`.

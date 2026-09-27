@@ -1,32 +1,54 @@
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.TestHost;
 using MyBudget.Contracts;
 
 namespace MyBudget.Api.Tests;
 
-/// <summary>Boots the API in Development against the in-memory provider with the dev seed, one instance per test class.</summary>
-public sealed class ApiFixture : IDisposable
+/// <summary>
+/// Assembles the API exactly the way the desktop app does — <see cref="BudgetApiHost.CreateBuilder"/>,
+/// then <see cref="BudgetApiHost.MapBudgetApi"/> — but over an in-memory transport and the EF in-memory
+/// provider, with a fresh database per test class. There is no entry point or appsettings file to boot
+/// from: configuration is stated here so the test says what it depends on.
+/// </summary>
+public sealed class ApiFixture : IAsyncLifetime
 {
     public static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { Converters = { new JsonStringEnumConverter() } };
 
-    private readonly WebApplicationFactory<Program> _factory = new WebApplicationFactory<Program>()
-        .WithWebHostBuilder(b =>
-        {
-            b.UseEnvironment("Development");
-            b.UseSetting("Database:Name", "test-" + Guid.NewGuid());
-        });
+    private const string Key = "dev";
 
-    public HttpClient Client { get; }
-    public HttpClient Anonymous { get; }
+    private WebApplication _app = null!;
 
-    public ApiFixture()
+    public HttpClient Client { get; private set; } = null!;
+    public HttpClient Anonymous { get; private set; } = null!;
+
+    public async Task InitializeAsync()
     {
-        Client = _factory.CreateClient();
-        Client.DefaultRequestHeaders.Add(ApiKeyHeader.Name, "dev");
-        Anonymous = _factory.CreateClient();
+        var builder = BudgetApiHost.CreateBuilder([], new Dictionary<string, string?>
+        {
+            ["Database:Provider"] = "InMemory",
+            ["Database:Name"] = "test-" + Guid.NewGuid(),
+            ["Logging:LogLevel:Default"] = "Warning",
+        });
+        builder.WebHost.UseTestServer();
+
+        _app = builder.Build();
+        await BudgetApiHost.PrepareDatabaseAsync(_app);
+        _app.MapBudgetApi(Key);
+        await _app.StartAsync();
+
+        Client = _app.GetTestClient();
+        Client.DefaultRequestHeaders.Add(ApiKeyHeader.Name, Key);
+        Anonymous = _app.GetTestClient();
+    }
+
+    public async Task DisposeAsync()
+    {
+        Client?.Dispose();
+        Anonymous?.Dispose();
+        if (_app is not null) await _app.DisposeAsync();
     }
 
     public async Task<T> Get<T>(string url) => (await Client.GetFromJsonAsync<T>(url, Json))!;
@@ -48,6 +70,4 @@ public sealed class ApiFixture : IDisposable
         r.EnsureSuccessStatusCode();
         return (await r.Content.ReadFromJsonAsync<TOut>(Json))!;
     }
-
-    public void Dispose() => _factory.Dispose();
 }

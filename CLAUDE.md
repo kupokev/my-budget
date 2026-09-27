@@ -41,9 +41,10 @@ them as the design evolves, don't treat the original doc as authoritative once t
 - **Desktop first, Linux only** — one shared Razor class library (`MyBudget.UI`) hosted by
   Photino.Blazor on Linux. Android (MAUI Blazor Hybrid host) is a later phase using the same UI
   and API; don't build phone-only code paths ahead of that. No Windows/macOS builds.
-- **No Docker, no component framework** — the API runs under systemd on a Linux server; the UI is
-  hand-written CSS plus QuickGrid. Dev uses the EF Core in-memory provider, production uses
-  PostgreSQL (ADR-0005, ADR-0007).
+- **No Docker, no component framework** — there is nothing to deploy and no container; the app is
+  a `dotnet publish` output you run. The UI is hand-written CSS and plain `<table>` markup, no
+  component library (ADR-0007). Real data lives in SQLite; tests use the EF Core in-memory
+  provider (ADR-0010, superseding the hosting half of ADR-0005).
 
 ## Tech stack
 
@@ -51,13 +52,13 @@ them as the design evolves, don't treat the original doc as authoritative once t
 | --- | --- |
 | UI | Razor class library; Photino.Blazor host on Linux desktop now, MAUI Android host later (ADR-0004) |
 | API | ASP.NET Core minimal APIs |
-| Data | EF Core: SQLite file on the desktop, in-memory in tests, PostgreSQL reserved for a future sync server (ADR-0010) |
+| Data | EF Core: SQLite file on the desktop, in-memory provider in tests (ADR-0010). No PostgreSQL provider is wired up today — a future sync server would add the package and one `case` back. |
 | Charts | FactFoundry.Blazor.Charts |
-| Styling | Hand-written CSS + QuickGrid, no component framework (ADR-0007) |
-| Auth | LAN-only, single API key, TLS in transit, no MFA (ADR-0006); full account numbers stored (ADR-0008) |
+| Styling | Hand-written CSS, no component framework (ADR-0007) |
+| Auth | Loopback only, per-launch random API key, no MFA (ADR-0006 as narrowed by ADR-0010); full account numbers stored (ADR-0008) |
 | Import | CSV/OFX per institution |
 | Local AI | Ollama + Open WebUI (an instance you already run), tool-calling model |
-| Hosting | None. The desktop app hosts the API in-process on a loopback port (ADR-0010); `MyBudget.Api` stays runnable on its own for a future phone-sync server |
+| Hosting | None. `MyBudget.Api` is a library the desktop app hosts in-process on a loopback port (ADR-0010, ADR-0011). No entry point, no appsettings, no port to configure. |
 
 ## Working on the code
 
@@ -66,7 +67,6 @@ dotnet build                                   # whole solution (MyBudget.slnx)
 dotnet test                                    # engine + API tests, no database needed
 ./run.sh                                       # stop, build, launch the desktop app (use this; it guards against a stale UI assembly)
 dotnet run --project src/MyBudget.Desktop      # the app: hosts the API in-process against ~/.local/share/MyBudget/mybudget.db
-dotnet run --project src/MyBudget.Api --launch-profile http   # the API alone, in-memory + dev seed, key "dev" (for a future sync server)
 dotnet ef migrations add <Name> --project src/MyBudget.Data --startup-project src/MyBudget.Data   # after any model change
 ```
 

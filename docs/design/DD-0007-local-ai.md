@@ -32,8 +32,9 @@ API was a service you deployed and could edit a file for. Since ADR-0010 it runs
 app, so there is no file to edit and nowhere to put connection details but the database.
 
 They are now one row in `AppSettings`, edited on **Admin → Settings**. `AiOptionsProvider` resolves
-them per request, falling back to configuration when the row is absent — which is what the standalone
-API still does, where an appsettings file remains the natural place.
+them per request, falling back to the `AiOptions` defaults when the row is absent. Since ADR-0011
+removed the API's `appsettings.json` along with its standalone host, that row is the only place these
+values live.
 
 The settings page also has **Test connection**, which probes an address *without saving it* and
 returns the models Ollama actually has installed, so the model is chosen from a list rather than

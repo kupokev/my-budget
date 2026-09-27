@@ -43,7 +43,7 @@ public sealed class BudgetDbContext(DbContextOptions<BudgetDbContext> options) :
 
     protected override void OnModelCreating(ModelBuilder mb)
     {
-        // Money: 2 decimal places everywhere; ignored by the in-memory provider, applied by PostgreSQL.
+        // Money: 2 decimal places everywhere; ignored by the in-memory provider, applied by SQLite.
         foreach (var property in mb.Model.GetEntityTypes()
                      .SelectMany(t => t.GetProperties())
                      .Where(p => p.ClrType == typeof(decimal) || p.ClrType == typeof(decimal?)))

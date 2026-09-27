@@ -46,7 +46,10 @@ if [ "$ui" != "$desktop" ]; then
 fi
 echo "assemblies match ($(date -d @"$ui" +%H:%M:%S))"
 
-nohup dotnet run --project src/MyBudget.Desktop --no-build >/tmp/mybudget-desktop.log 2>&1 &
+# setsid, not just nohup: a new session survives its launcher's process group being torn
+# down, which is what killed the window when this was run from a non-interactive shell.
+setsid dotnet run --project src/MyBudget.Desktop --no-build \
+  >/tmp/mybudget-desktop.log 2>&1 </dev/null &
 for _ in $(seq 1 30); do
   grep -q "MyBudget: " /tmp/mybudget-desktop.log 2>/dev/null && break
   sleep 1

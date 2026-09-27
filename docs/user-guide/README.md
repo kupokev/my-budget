@@ -5,17 +5,14 @@ account as rainy-day fund, reading the rewards progress view, etc. Written for t
 this app (not a general audience), so it can assume familiarity with the domain (HSA, DRIP,
 IHG/Hilton status) and focus on *this app's* specific workflow for each.
 
-## Starting empty instead of with sample data
+## Starting empty
 
-In Development the API seeds sample accounts, bills, cards and so on so every page has something to
-show. To start from nothing, run the API with the seed switched off:
+The app always starts empty. Sample data is only ever written to the in-memory database the tests
+use, never to your SQLite file, so a fresh install has no invented accounts or bills in it. Reference
+tables for tax rules and contribution limits are loaded, because those are facts rather than data.
 
-```
-Database__SkipDevSeed=true dotnet run --project src/MyBudget.Api --launch-profile http
-```
-
-(Reference tables for tax rules and limits are still loaded; only the sample data is skipped. The
-in-memory database resets on every restart either way.)
+To start over, close the app and delete `~/.local/share/MyBudget/mybudget.db`. Export a backup first
+if you might want it back (**Admin → Backup**).
 
 ## Phase 1 basics
 

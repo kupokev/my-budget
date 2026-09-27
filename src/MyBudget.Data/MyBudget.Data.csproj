@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <Description>EF Core DbContext, provider switch (in-memory in dev, PostgreSQL in prod), seed data.</Description>
+    <Description>EF Core DbContext, provider switch (SQLite for real data, in-memory for tests), migrations and seed data.</Description>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../MyBudget.Domain/MyBudget.Domain.csproj" />
@@ -12,7 +12,11 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
     <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" />
-    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+    <!-- Design-time only: this is the `dotnet ef` tooling. Without PrivateAssets it flows into every
+         consumer's output and drags Roslyn and MSBuild into the shipped app. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
   </ItemGroup>
 </Project>
