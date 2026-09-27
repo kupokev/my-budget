@@ -11,13 +11,18 @@ namespace MyBudget.Api;
 public sealed class PaycheckService(BudgetDbContext db)
 {
     public sealed record Context(IncomeSource Source, DateOnly Date, SalaryRate Salary, PaySchedule Schedule, int PeriodsPerYear,
-        List<DeductionElection> Deductions, WithholdingElection W4, TaxYear TaxYear, List<string> Warnings);
+        List<DeductionElection> Deductions, WithholdingElection W4, TaxYear TaxYear, List<string> Warnings, PaycheckOverride? Override = null);
 
     public async Task<Context> LoadAsync(int sourceId, DateOnly date)
     {
-        var source = await db.IncomeSources.Include(s => s.SalaryRates).Include(s => s.PaySchedules).Include(s => s.Deductions).Include(s => s.Withholdings)
+        var source = await db.IncomeSources.Include(s => s.SalaryRates).Include(s => s.PaySchedules).Include(s => s.Deductions).Include(s => s.Withholdings).Include(s => s.Overrides)
             .FirstOrDefaultAsync(s => s.Id == sourceId) ?? throw new KeyNotFoundException($"Income source {sourceId} not found.");
+        if (source.EndDate is { } ended && date > ended) throw new InvalidOperationException($"{source.Name} employment ended {ended:yyyy-MM-dd}; no check on {date:yyyy-MM-dd}.");
         var warnings = new List<string>();
+        var ovr = source.Overrides.FirstOrDefault(o => o.PayDate == date);
+        if (ovr is not null)
+            warnings.Add(ovr.GrossAmount is { } ga ? $"This check is overridden to {ga:C} gross{(ovr.Notes is null ? "" : $" ({ovr.Notes})")}."
+                : $"This check is {ovr.GrossFraction:P0} of a normal period{(ovr.ProrateFixedDeductions ? ", fixed deductions prorated too" : ", fixed deductions in full")}{(ovr.Notes is null ? "" : $" ({ovr.Notes})")}.");
 
         var salary = source.SalaryRates.Where(r => r.EffectiveDate <= date).OrderByDescending(r => r.EffectiveDate).FirstOrDefault()
             ?? throw new InvalidOperationException($"{source.Name} has no salary rate in effect on {date:yyyy-MM-dd}.");
@@ -40,16 +45,23 @@ public sealed class PaycheckService(BudgetDbContext db)
         if (!taxYear.Verified) warnings.Add($"{taxYear.Year} tax tables are not marked verified against the published tables.");
         if (!string.IsNullOrWhiteSpace(taxYear.Notes)) warnings.Add(taxYear.Notes);
 
-        return new Context(source, date, salary, schedule, PayDates.PaychecksPerYear(schedule.Frequency), deductions, w4, taxYear, warnings);
+        return new Context(source, date, salary, schedule, PayDates.PaychecksPerYear(schedule.Frequency), deductions, w4, taxYear, warnings, ovr);
     }
 
     public static PaycheckInput BuildInput(Context c, WhatIfRequest? whatIf = null)
     {
         var annual = whatIf?.AnnualSalary ?? c.Salary.AnnualAmount;
         var gross = Math.Round(annual / c.PeriodsPerYear, 2);
+        var fraction = 1m;
+        if (c.Override is { } o)
+        {
+            if (o.GrossAmount is { } ga) { fraction = gross == 0 ? 1 : ga / gross; gross = ga; }
+            else if (o.GrossFraction is { } gf) { fraction = gf; gross = Math.Round(gross * gf, 2); }
+        }
         var deductions = c.Deductions.Select(d =>
         {
             var amount = d.AmountPerCheck;
+            if (amount is { } fixedAmt && c.Override is { ProrateFixedDeductions: true }) amount = Math.Round(fixedAmt * fraction, 2);
             var pct = d.PercentOfGross;
             if (whatIf is not null && whatIf.BenefitAmounts.TryGetValue(d.Name, out var o)) { amount = o; pct = null; }
             if (whatIf?.Retirement401kPercent is { } k && d.Kind == DeductionKind.Retirement401k) { pct = k / 100m; amount = null; }
@@ -66,6 +78,7 @@ public sealed class PaycheckService(BudgetDbContext db)
     public async Task<List<(DateOnly Date, Context Context, PaycheckResult Result)>> YearToDateAsync(int sourceId, int year, DateOnly through, WhatIfRequest? whatIf = null)
     {
         var source = await db.IncomeSources.Include(s => s.PaySchedules).FirstAsync(s => s.Id == sourceId);
+        if (source.EndDate is { } ended && ended < through) through = ended;
         var dates = PayDates.Generate(source.PaySchedules, new DateOnly(year, 1, 1), through);
         var contexts = new List<(DateOnly, Context)>();
         foreach (var d in dates) contexts.Add((d, await LoadAsync(sourceId, d)));

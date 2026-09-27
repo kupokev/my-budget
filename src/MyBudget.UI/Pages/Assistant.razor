@@ -1,0 +1,77 @@
+@page "/assistant"
+@inject ApiClient Api
+
+<h1>Assistant</h1>
+<ErrorBanner @bind-Message="error" />
+
+@if (status is null)
+{
+    <p class="muted">Checking the local model…</p>
+}
+else
+{
+    <section class="panel">
+        @if (!status.Enabled)
+        {
+            <p><strong>Local AI is off.</strong> It runs against your own Ollama instance and only ever calls fixed query functions, never the database. Turn it on in the API's appsettings: <code>Ai:Enabled</code>, <code>Ai:BaseUrl</code> (e.g. http://localhost:11434), <code>Ai:Model</code> (a tool-calling model such as llama3.1 or qwen2.5).</p>
+        }
+        else
+        {
+            <p class="@(status.Reachable ? "pos" : "neg")">@(status.Reachable ? "Connected" : "Not reachable") · @status.BaseUrl · model @status.Model @(status.Error is not null ? $"· {status.Error}" : "")</p>
+        }
+        <p class="muted">Questions it can answer, through these functions: @string.Join(", ", status.Tools). Anything else gets "can't answer that yet".</p>
+    </section>
+
+    @if (status.Enabled)
+    {
+        <section class="panel chat">
+            @foreach (var m in thread)
+            {
+                <div class="msg @m.Role"><div class="bubble">@m.Content</div></div>
+            }
+            @if (lastCalls is { Count: > 0 })
+            {
+                <details class="steps"><summary>What it looked at (@lastCalls.Count tool calls)</summary>
+                    <ul>@foreach (var t in lastCalls) { <li><code>@(t.Name)(@(t.Arguments))</code> → <span class="muted">@(t.Result.Length > 300 ? t.Result[..300] + "…" : t.Result)</span></li> }</ul>
+                </details>
+            }
+            <div class="row">
+                <input class="grow" type="text" placeholder="e.g. How much did I spend on restaurants last month?" @bind="input" @onkeydown="OnKey" disabled="@busy" />
+                <button type="button" @onclick="Send" disabled="@(busy || string.IsNullOrWhiteSpace(input))">@(busy ? "Thinking…" : "Ask")</button>
+                <button class="secondary" type="button" @onclick="() => { thread.Clear(); lastCalls = null; }">Clear</button>
+            </div>
+        </section>
+    }
+}
+
+@code {
+    private AiStatusDto? status;
+    private readonly List<ChatMessageDto> thread = [];
+    private List<ToolCallDto>? lastCalls;
+    private string input = "";
+    private bool busy;
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try { status = await Api.GetAiStatusAsync(); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task OnKey(KeyboardEventArgs e) { if (e.Key == "Enter") await Send(); }
+
+    private async Task Send()
+    {
+        if (string.IsNullOrWhiteSpace(input) || busy) return;
+        thread.Add(new ChatMessageDto { Role = "user", Content = input.Trim() });
+        input = ""; busy = true;
+        try
+        {
+            var r = await Api.ChatAsync(new ChatRequest { Messages = thread.ToList() });
+            thread.Add(new ChatMessageDto { Role = "assistant", Content = r.Reply });
+            lastCalls = r.ToolCalls.ToList();
+        }
+        catch (Exception ex) { error = ex.Message; }
+        finally { busy = false; }
+    }
+}

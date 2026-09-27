@@ -11,7 +11,7 @@
 }
 else if (sources.Count == 0)
 {
-    <p>No W-2 income source yet. Add one under Income with a salary, a pay schedule, deductions, and a W-4.</p>
+    <p>No W-2 income source yet. Add one under <a href="income">Income</a> with a salary, a pay schedule, deductions, and a W-4.</p>
 }
 else
 {
@@ -20,8 +20,9 @@ else
             @foreach (var s in sources) { <option value="@s.Id" selected="@(s.Id == sourceId)">@s.Name</option> }
         </select></label>
         <label class="inline">Pay date <input type="date" value="@date.ToString("yyyy-MM-dd")" @onchange="OnDateChanged" /></label>
+        <a class="muted" href="income">Employers, salary, elections and odd checks are edited under Income</a>
         <span class="tabs">
-            @foreach (var t in new[] { "Estimate", "What-if", "Year", "Bonus", "Actual stubs" })
+            @foreach (var t in new[] { "Estimate", "What-if", "Year", "Bonus", "Actual stubs", "1099" })
             {
                 <button type="button" class="@(tab == t ? "" : "secondary")" @onclick="() => SwitchTab(t)">@t</button>
             }
@@ -157,6 +158,71 @@ else
             }
         </section>
     }
+    else if (tab == "1099")
+    {
+        @if (se is null) { <p class="muted">Calculating…</p> }
+        else
+        {
+            <Warnings Items="se.Warnings" />
+            <div class="row">
+                <section class="panel grow">
+                    <h2>1099 income @se.Year</h2>
+                    <table class="compact"><thead><tr><th>Source</th><th class="money">Received YTD</th></tr></thead>
+                        <tbody>@foreach (var s in se.Sources) { <tr><td>@s.Name</td><td><Money Value="s.YearToDate" /></td></tr> }</tbody>
+                        <tfoot><tr><th>Total</th><th><Money Value="se.NetProfitYtd" /></th></tr></tfoot></table>
+                    <div class="row">
+                        <div class="field"><label>Source</label><select @bind="newReceipt.IncomeSourceId">@foreach (var s in se.Sources) { <option value="@s.IncomeSourceId">@s.Name</option> }</select></div>
+                        <div class="field"><label>Date</label><input type="date" @bind="newReceipt.Date" /></div>
+                        <div class="field"><label>Amount</label><input type="number" step="0.01" class="narrow-money" @bind="newReceipt.Amount" /></div>
+                        <div class="field grow"><label>Notes</label><input type="text" @bind="newReceipt.Notes" /></div>
+                        <div class="field"><label>&nbsp;</label><button type="button" @onclick="AddReceipt">Add payment received</button></div>
+                    </div>
+                    @if (receipts is { Count: > 0 })
+                    {
+                        <table class="compact"><tbody>@foreach (var r in receipts) { <tr><td>@Fmt.Date(r.Date)</td><td>@se.Sources.FirstOrDefault(s => s.IncomeSourceId == r.IncomeSourceId)?.Name</td><td><Money Value="r.Amount" /></td><td class="muted">@r.Notes</td><td><button class="secondary" type="button" @onclick="() => RemoveReceipt(r)">✕</button></td></tr> }</tbody></table>
+                    }
+                    <h3>Estimated payments made</h3>
+                    <div class="row">
+                        <div class="field"><label>To</label><select @bind="newPayment.Jurisdiction"><option value="@MyBudget.Domain.Jurisdiction.Federal">IRS</option><option value="@MyBudget.Domain.Jurisdiction.Missouri">Missouri</option></select></div>
+                        <div class="field"><label>Date</label><input type="date" @bind="newPayment.Date" /></div>
+                        <div class="field"><label>Amount</label><input type="number" step="0.01" class="narrow-money" @bind="newPayment.Amount" /></div>
+                        <div class="field"><label>&nbsp;</label><button type="button" @onclick="AddPayment">Add</button></div>
+                    </div>
+                    @if (payments is { Count: > 0 })
+                    {
+                        <table class="compact"><tbody>@foreach (var p in payments) { <tr><td>@Fmt.Date(p.Date)</td><td>@p.Jurisdiction</td><td><Money Value="p.Amount" /></td><td><button class="secondary" type="button" @onclick="() => RemovePayment(p)">✕</button></td></tr> }</tbody></table>
+                    }
+                </section>
+                <section class="panel grow">
+                    <h2>Set aside @se.SetAsideFraction.ToString("P0") of every 1099 payment</h2>
+                    <div class="row">
+                        <div class="field"><label>Projected @se.Year net profit <span class="muted">(blank = @se.ProjectionMethod)</span></label><input type="number" step="1" @bind="projected" /></div>
+                        <div class="field"><label>&nbsp;</label><button class="secondary" type="button" @onclick="LoadSe">Recalculate</button></div>
+                    </div>
+                    <table class="estimate">
+                        <tbody>
+                            <tr><td>Projected net profit</td><td class="money"><Money Value="se.ProjectedAnnual" /></td></tr>
+                            <tr><td class="indent">SE earnings (92.35%)</td><td class="money"><Money Value="se.SeEarnings" /></td></tr>
+                            <tr><td class="indent">Social Security (12.4%, after W-2 wages @Fmt.Money(se.W2Wages))</td><td class="money"><Money Value="se.SocialSecurityTax" /></td></tr>
+                            <tr><td class="indent">Medicare (2.9%)</td><td class="money"><Money Value="se.MedicareTax" /></td></tr>
+                            <tr class="sub"><td>Self-employment tax</td><td class="money"><Money Value="se.SelfEmploymentTax" /></td></tr>
+                            <tr><td class="indent">Federal income tax at @se.FederalMarginalRate.ToString("P0") marginal</td><td class="money"><Money Value="se.FederalIncomeTax" /></td></tr>
+                            <tr><td class="indent">Missouri at @se.MissouriRate.ToString("P1")</td><td class="money"><Money Value="se.MissouriIncomeTax" /></td></tr>
+                            <tr class="total"><td>Total</td><td class="money"><Money Value="se.TotalTax" /></td></tr>
+                            <tr><td>Paid so far: federal / Missouri</td><td class="money">@Fmt.Money(se.FederalPaid) / @Fmt.Money(se.MissouriPaid)</td></tr>
+                            <tr class="total"><td>Remaining: federal / Missouri</td><td class="money">@Fmt.Money(se.FederalRemaining) / @Fmt.Money(se.MissouriRemaining)</td></tr>
+                        </tbody>
+                    </table>
+                    <h3>Quarterly schedule</h3>
+                    <table class="compact">
+                        <thead><tr><th>Q</th><th>Due</th><th class="money">IRS</th><th class="money">Missouri</th></tr></thead>
+                        <tbody>@foreach (var q in se.Schedule) { <tr class="@(q.Past ? "muted" : "")"><td>@q.Quarter</td><td>@Fmt.Date(q.DueDate)@(q.Past ? " (past)" : "")</td><td><Money Value="q.Federal" /></td><td><Money Value="q.Missouri" /></td></tr> }</tbody>
+                    </table>
+                    <Steps Items="se.Steps" />
+                </section>
+            </div>
+        }
+    }
     else if (tab == "Actual stubs")
     {
         <section class="panel">
@@ -244,6 +310,12 @@ else
     private SupplementalRequest bonus = new() { Amount = 5_000m };
     private PaycheckEstimateDto? bonusResult;
     private List<PaycheckDto>? stubs;
+    private SelfEmploymentDto? se;
+    private decimal? projected;
+    private List<IncomeReceiptDto>? receipts;
+    private List<EstimatedTaxPaymentDto>? payments;
+    private IncomeReceiptDto newReceipt = new() { Date = DateOnly.FromDateTime(DateTime.Today) };
+    private EstimatedTaxPaymentDto newPayment = new() { Date = DateOnly.FromDateTime(DateTime.Today), Year = DateTime.Today.Year };
     private PaycheckDto? stubEdit;
     private PaycheckCompareDto? compare;
     private string? error;
@@ -252,7 +324,7 @@ else
     {
         try
         {
-            sources = (await Api.GetIncomeSourcesAsync()).Where(s => s.IsActive && s.Type == IncomeSourceType.W2Salary && s.PaySchedules.Count > 0).ToList();
+            sources = (await Api.GetIncomeSourcesAsync()).Where(s => s.IsActive && s.Type == IncomeSourceType.W2Salary && s.PaySchedules.Count > 0 && (s.EndDate is null || s.EndDate >= today.AddYears(-1))).ToList();
             if (sources.Count > 0) { sourceId = sources[0].Id; await Recalc(); }
         }
         catch (Exception ex) { error = ex.Message; }
@@ -260,7 +332,25 @@ else
 
     private async Task OnSourceChanged(ChangeEventArgs e) { sourceId = int.Parse((string)e.Value!); await Recalc(); }
     private async Task OnDateChanged(ChangeEventArgs e) { if (DateOnly.TryParse((string?)e.Value, out var d)) { date = d; await Recalc(); } }
-    private async Task SwitchTab(string t) { tab = t; if (t == "Actual stubs" && stubs is null) await LoadStubs(); }
+    private async Task SwitchTab(string t) { tab = t; if (t == "Actual stubs" && stubs is null) await LoadStubs(); if (t == "1099" && se is null) await LoadSe(); }
+
+    private async Task LoadSe()
+    {
+        try
+        {
+            se = await Api.GetSelfEmploymentAsync(date.Year, projected);
+            receipts = await Api.GetReceiptsAsync(date.Year);
+            payments = await Api.GetEstimatedPaymentsAsync(date.Year);
+            if (newReceipt.IncomeSourceId == 0 && se.Sources.Count > 0) newReceipt.IncomeSourceId = se.Sources[0].IncomeSourceId;
+            newPayment.Year = date.Year;
+        }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task AddReceipt() { if (newReceipt.Amount <= 0) return; try { await Api.AddReceiptAsync(newReceipt); newReceipt = new() { Date = newReceipt.Date, IncomeSourceId = newReceipt.IncomeSourceId }; await LoadSe(); } catch (Exception ex) { error = ex.Message; } }
+    private async Task RemoveReceipt(IncomeReceiptDto r) { try { await Api.DeleteReceiptAsync(r.Id); await LoadSe(); } catch (Exception ex) { error = ex.Message; } }
+    private async Task AddPayment() { if (newPayment.Amount <= 0) return; try { await Api.AddEstimatedPaymentAsync(newPayment); newPayment = new() { Date = newPayment.Date, Year = date.Year, Jurisdiction = newPayment.Jurisdiction }; await LoadSe(); } catch (Exception ex) { error = ex.Message; } }
+    private async Task RemovePayment(EstimatedTaxPaymentDto p) { try { await Api.DeleteEstimatedPaymentAsync(p.Id); await LoadSe(); } catch (Exception ex) { error = ex.Message; } }
 
     private async Task Recalc()
     {

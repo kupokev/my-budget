@@ -83,7 +83,32 @@ public static class ReportEndpoints
 
         var lines = new List<NetWorthLineDto>();
         decimal assets = 0, cardDebt = 0, loanDebt = 0;
-        foreach (var a in accounts) { var (bal, d) = Latest(a.Balances, b => b.AsOf, b => b.Balance, asOf); assets += bal; lines.Add(new(a.Name, "account", bal, d)); }
+        // Brokerage accounts with holdings are valued from the holdings (shares × latest price) instead of a typed snapshot.
+        var holdings = await db.Holdings.Include(h => h.Trades).Where(h => h.IsActive).ToListAsync();
+        var valuedAccounts = new HashSet<int>();
+        foreach (var grp in holdings.GroupBy(h => h.AccountId))
+        {
+            decimal value = 0; DateOnly? priced = null; var any = false;
+            foreach (var h in grp)
+            {
+                var shares = MyBudget.Engines.Investments.Portfolio.SharesHeldOn(h.Trades, asOf);
+                if (shares <= 0) continue;
+                var price = await db.Prices.Where(p => p.Ticker == h.Ticker && p.Date <= asOf).OrderByDescending(p => p.Date).FirstOrDefaultAsync();
+                if (price is null) continue;
+                any = true; value += Math.Round(shares * price.Price, 2); priced = priced is null || price.Date > priced ? price.Date : priced;
+            }
+            if (!any) continue;
+            var acct = accounts.FirstOrDefault(a => a.Id == grp.Key);
+            if (acct is null) continue;
+            valuedAccounts.Add(acct.Id); assets += value; lines.Add(new(acct.Name + " (holdings)", "investments", value, priced));
+        }
+        foreach (var a in accounts.Where(a => !valuedAccounts.Contains(a.Id))) { var (bal, d) = Latest(a.Balances, b => b.AsOf, b => b.Balance, asOf); assets += bal; lines.Add(new(a.Name, "account", bal, d)); }
+        foreach (var asset in await db.Assets.Include(x => x.Values).Where(x => x.IsActive).ToListAsync())
+        {
+            var (val, d) = Latest(asset.Values, v => v.AsOf, v => v.Value, asOf);
+            if (d is null) continue;
+            assets += val; lines.Add(new(asset.Name, asset.Kind.ToString().ToLowerInvariant(), val, d));
+        }
         foreach (var c in cards) { var (bal, d) = Latest(c.Balances, b => b.AsOf, b => b.Balance, asOf); cardDebt += bal; if (d is not null) lines.Add(new(c.Name, "card", -bal, d)); }
         foreach (var l in loans)
         {
@@ -100,14 +125,16 @@ public static class ReportEndpoints
             {
                 var monthEnd = new DateOnly(asOf.Year, asOf.Month, 1).AddMonths(-i + 1).AddDays(-1);
                 if (monthEnd > asOf) monthEnd = asOf;
-                var a = accounts.Sum(x => Latest(x.Balances, b => b.AsOf, b => b.Balance, monthEnd).Item1);
+                var a = accounts.Where(x => !valuedAccounts.Contains(x.Id)).Sum(x => Latest(x.Balances, b => b.AsOf, b => b.Balance, monthEnd).Item1)
+                        + (await db.Assets.Include(x => x.Values).Where(x => x.IsActive).ToListAsync()).Sum(x => Latest(x.Values, v => v.AsOf, v => v.Value, monthEnd).Item1)
+                        + lines.Where(l => l.Kind == "investments").Sum(l => l.Balance); // holdings valued at the latest price for every point (no price history walk)
                 var c = cards.Sum(x => Latest(x.Balances, b => b.AsOf, b => b.Balance, monthEnd).Item1);
                 var l = loans.Sum(x => { var (bal, d) = Latest(x.Balances, b => b.AsOf, b => b.Balance, monthEnd); return d is null && x.StartDate <= monthEnd ? x.OriginalPrincipal : bal; });
                 points.Add(new(monthEnd, a, c, l, a - c - l));
             }
         }
         return new NetWorthDto(asOf, assets, cardDebt, loanDebt, total, lines.OrderByDescending(l => l.Balance).ToList(), points,
-            $"accounts {assets:N2} − cards {cardDebt:N2} − loans {loanDebt:N2} = {total:N2} (latest balance on or before {asOf:yyyy-MM-dd}; home/vehicle values not yet tracked)");
+            $"accounts {assets:N2} − cards {cardDebt:N2} − loans {loanDebt:N2} = {total:N2} (latest balance on or before {asOf:yyyy-MM-dd}; holdings at latest price; home/vehicle values from Assets)");
     }
 
     private static YoyRowDto Row(string name, List<decimal> thisMonths, List<decimal> lastMonths)

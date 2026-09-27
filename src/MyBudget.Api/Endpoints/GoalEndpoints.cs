@@ -38,19 +38,21 @@ public static class GoalEndpoints
 
         // GOL-1/2: current from the linked metric, prorated target by date, status.
         g.MapGet("/progress", async (BudgetDbContext db, PaycheckService paychecks, TimeProvider clock) =>
-        {
-            var today = DateOnly.FromDateTime(clock.GetLocalNow().DateTime);
-            var goals = await db.Goals.Where(x => x.IsActive).OrderBy(x => x.EndDate).ThenBy(x => x.Name).ToListAsync();
-            var list = new List<GoalProgressDto>();
-            foreach (var goal in goals)
-            {
-                var (current, source) = await Current(goal, db, paychecks, today);
-                list.Add(Progress(goal, current, source, today));
-            }
-            return list;
-        });
+            await AllProgress(db, paychecks, DateOnly.FromDateTime(clock.GetLocalNow().DateTime)));
 
         return api;
+    }
+
+    internal static async Task<List<GoalProgressDto>> AllProgress(BudgetDbContext db, PaycheckService paychecks, DateOnly today)
+    {
+        var goals = await db.Goals.Where(x => x.IsActive).OrderBy(x => x.EndDate).ThenBy(x => x.Name).ToListAsync();
+        var list = new List<GoalProgressDto>();
+        foreach (var goal in goals)
+        {
+            var (current, source) = await Current(goal, db, paychecks, today);
+            list.Add(Progress(goal, current, source, today));
+        }
+        return list;
     }
 
     internal static GoalProgressDto Progress(Goal goal, decimal current, string source, DateOnly today)

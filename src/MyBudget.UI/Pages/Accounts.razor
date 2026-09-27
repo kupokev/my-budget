@@ -114,6 +114,15 @@ else
         </section>
     }
 
+    @if (rainy is { } rd)
+    {
+        <section class="panel rainy @rd.Status.ToLowerInvariant()">
+            <h2>Rainy-day fund · @rd.MonthsCovered.ToString("0.#") months covered <span class="rainy-badge">@rd.Status</span></h2>
+            <p title="@rd.ExpensesFormula"><Money Value="rd.Balance" /> across @(rd.Accounts.Count == 0 ? "no marked accounts" : string.Join(", ", rd.Accounts)) against @Fmt.Money(rd.MonthlyExpenses)/month of expenses · 3–6 month range @Fmt.Money(rd.LowTarget)–@Fmt.Money(rd.HighTarget). <strong>@rd.Verdict</strong></p>
+            <p class="muted">Mark any account as part of the fund in its editor (a T-Bill account counts). Hover the sentence for how monthly expenses were computed.</p>
+        </section>
+    }
+
     <section class="panel">
         <h2>Transfer needs as of @Fmt.Date(needs.AsOf)</h2>
         <p class="muted">Per-paycheck uses @needs.PaychecksSource.</p>
@@ -142,6 +151,7 @@ else
 @code {
     private List<AccountDto>? accounts;
     private TransferNeedsDto? needs;
+    private RainyDayDto? rainy;
     private AccountDto? editing;
     private AccountDto? ledger;
     private List<AccountBalanceDto> balances = [];
@@ -159,6 +169,7 @@ else
         {
             accounts = await Api.GetAccountsAsync();
             needs = await Api.GetTransferNeedsAsync();
+            rainy = await Api.GetRainyDayAsync();
         }
         catch (Exception ex) { error = ex.Message; }
     }

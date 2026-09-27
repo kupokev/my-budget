@@ -43,6 +43,16 @@ else
         </tbody>
     </table>
 
+    @if (rewardAlerts is { Count: > 0 })
+    {
+        <details class="panel heads-up">
+            <summary><strong>Rewards heads-up</strong> <span class="muted">@rewardAlerts.Count items · status goals and thresholds behind pace</span></summary>
+            <ul class="alerts compact">
+                @foreach (var a in rewardAlerts) { <li class="alert @a.Severity.ToString().ToLowerInvariant()"><strong>@a.Title</strong> <span class="muted">@a.Detail</span> <a href="rewards">open</a></li> }
+            </ul>
+        </details>
+    }
+
     <section class="panel">
         <h2>Yearly cost vs value · @DateTime.Today.Year</h2>
         <p class="muted">Cost = annual fee + interest if the latest balance were carried all year at the card's APR (promo APR while it lasts). Value = points earned this year at your point value + reached threshold rewards. Worst first.</p>
@@ -184,6 +194,7 @@ else
     private string catalogKey = "";
     private CardRewardsDto? rewards;
     private RewardsReportDto? report;
+    private List<AlertDto>? rewardAlerts;
 
     private sealed record CostRow(string Name, decimal Fee, decimal Interest, decimal Cost, decimal Value, decimal Thresholds, decimal Net, string Verdict, string Formula);
 
@@ -222,6 +233,7 @@ else
             programs = await Api.GetLoyaltyProgramsAsync();
             categories = await Api.GetCategoriesAsync();
             report = await Api.GetRewardsReportAsync(DateTime.Today.Year);
+            rewardAlerts = await Api.GetAlertsAsync("rewards");
         }
         catch (Exception ex) { error = ex.Message; }
     }

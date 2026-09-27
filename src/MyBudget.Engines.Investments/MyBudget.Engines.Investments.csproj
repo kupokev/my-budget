@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>Pure investment math: shares held over time, FIFO lots, realized gains with short/long classification and tax estimate, wash-sale checks, DRIP reinvestment. No UI or DB.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../MyBudget.Domain/MyBudget.Domain.csproj" />
+  </ItemGroup>
+</Project>

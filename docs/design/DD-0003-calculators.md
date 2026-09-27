@@ -42,7 +42,10 @@ its formula plus an ordered list of steps.
 | Year | `ComputeYear` threads YTD FICA through every pay date; `FederalYearEnd` compares annual liability to withheld for the refund/owed figure |
 
 The API's `PaycheckService` picks the salary, schedule, elections, W-4 and tax year in effect on
-each pay date, so a mid-year raise or W-4 change shows up on the right checks. What-if requests
+each pay date, so a mid-year raise or W-4 change shows up on the right checks. An income source's
+`EndDate` stops pay dates and estimates; a `PaycheckOverride` on one pay date sets that check to a
+fraction of normal gross (or an exact gross), with fixed deductions prorated or left whole, for
+cases like a live-to-arrears payroll switch that pays one week of a two-week period. What-if requests
 override any of those inputs for both the single check and the whole year.
 
 ### HsaPlanner (`MyBudget.Engines.Hsa`)

@@ -10,7 +10,10 @@ IHG/Hilton status) and focus on *this app's* specific workflow for each.
 - **Income:** add each employer/source. Salary history is one row per rate with its effective date.
   Pay schedules are also effective-dated: to model the 2026 switch, keep the semi-monthly row and add
   a bi-weekly row effective the first day of the new cadence with one known pay date as the anchor.
-  The pay-date calendar on the right shows every check and highlights three-check months.
+  The pay-date calendar on the right shows every check and highlights three-check months. Set
+  "Employment ended" when you leave; nothing is generated after it. "Odd checks" handles a single
+  pay date that isn't a full period (a live-to-arrears switch paying one week): give it a percent of
+  normal gross or the exact gross, and say whether fixed deductions shrink with it.
 - **Accounts:** one row per place money sits. "Funded from" on bills drives the transfer-needs
   panel at the bottom: expand an account to see each bill's monthly accrual and its formula.
   Use "Balance / transfer" to record a balance snapshot or a transfer into the account; Long/Short
@@ -92,3 +95,22 @@ IHG/Hilton status) and focus on *this app's* specific workflow for each.
   Non-financial goals just carry a status.
 - **Reports.** Year over year by category and by bill, net worth with 24 months of history, and
   CSV export (transactions, bills grid, accounts) through a save dialog.
+
+## Phase 5: build-out
+
+- **Home** now leads with what needs attention (alerts with links), then spending, net worth, next
+  paycheck, rainy-day months covered, bills due, top categories, status goals, goals, transfer
+  needs, and, when local AI is on, a button that writes the month's summary from the same numbers.
+- **Investments.** Add a holding (ticker, brokerage account, DRIP on/off), enter buys and sells with
+  a note on why. "Refresh prices & dividends" pulls closes and dividend events; dividends post from
+  shares held on the ex-date and, with DRIP on, become reinvest trades. Details shows lots, realized
+  gains with short/long term, wash-sale warnings with the earliest safe repurchase date, and the
+  year's estimated tax on gains.
+- **Owed to me.** One panel per person: month-by-month expected vs paid with Paid / Partial /
+  Missed / Prepaid, one-off charges, payments applied to months (use Auto to fill the oldest first).
+- **Paycheck → 1099.** Log each 1099 payment received and each estimated payment made; the panel
+  shows the set-aside percent, the tax breakdown with steps, and the remaining quarterly amounts.
+- **Accounts → Rainy-day fund.** Months of expenses covered by the accounts you marked.
+- **Reports → Home & vehicles.** Record valuations by hand; they feed net worth.
+- **Assistant.** Off until Ai:Enabled is set with your Ollama address and a tool-calling model. It
+  only calls the listed functions and shows what it looked at under each answer.

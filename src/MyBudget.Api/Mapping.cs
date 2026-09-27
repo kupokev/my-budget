@@ -78,7 +78,8 @@ internal static class Mapping
 
     public static IncomeSourceDto ToDto(this IncomeSource s) => new()
     {
-        Id = s.Id, Name = s.Name, Type = s.Type, Notes = s.Notes, IsActive = s.IsActive,
+        Id = s.Id, Name = s.Name, Type = s.Type, Notes = s.Notes, IsActive = s.IsActive, EndDate = s.EndDate,
+        Overrides = s.Overrides.OrderBy(o => o.PayDate).Select(o => new PaycheckOverrideDto { Id = o.Id, PayDate = o.PayDate, GrossPercent = o.GrossFraction is { } f ? f * 100m : null, GrossAmount = o.GrossAmount, ProrateFixedDeductions = o.ProrateFixedDeductions, Notes = o.Notes }).ToList(),
         SalaryRates = s.SalaryRates.OrderBy(r => r.EffectiveDate).Select(r => new SalaryRateDto { Id = r.Id, IncomeSourceId = r.IncomeSourceId, AnnualAmount = r.AnnualAmount, EffectiveDate = r.EffectiveDate }).ToList(),
         PaySchedules = s.PaySchedules.OrderBy(p => p.EffectiveDate).Select(p => new PayScheduleDto
         {
@@ -100,7 +101,12 @@ internal static class Mapping
     /// <summary>Replaces the rates, schedules, deductions and W-4s wholesale; they are small lists edited as a unit.</summary>
     public static void Apply(this IncomeSource s, IncomeSourceDto d)
     {
-        s.Name = d.Name.Trim(); s.Type = d.Type; s.Notes = d.Notes; s.IsActive = d.IsActive;
+        s.Name = d.Name.Trim(); s.Type = d.Type; s.Notes = d.Notes; s.IsActive = d.IsActive; s.EndDate = d.EndDate;
+        s.Overrides.Clear();
+        s.Overrides.AddRange(d.Overrides.Where(o => o.GrossPercent is not null || o.GrossAmount is not null).GroupBy(o => o.PayDate).Select(g => g.First()).Select(o => new PaycheckOverride
+        {
+            PayDate = o.PayDate, GrossFraction = o.GrossAmount is null && o.GrossPercent is { } p ? p / 100m : null, GrossAmount = o.GrossAmount, ProrateFixedDeductions = o.ProrateFixedDeductions, Notes = o.Notes,
+        }));
         s.SalaryRates.Clear();
         s.SalaryRates.AddRange(d.SalaryRates.Select(r => new SalaryRate { AnnualAmount = r.AnnualAmount, EffectiveDate = r.EffectiveDate }));
         s.PaySchedules.Clear();

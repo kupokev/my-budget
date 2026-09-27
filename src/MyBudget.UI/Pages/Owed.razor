@@ -1,0 +1,174 @@
+@page "/owed"
+@inject ApiClient Api
+
+<h1>Owed to me</h1>
+<ErrorBanner @bind-Message="error" />
+
+@if (ledgers is null || bills is null)
+{
+    <p class="muted">Loading…</p>
+}
+else
+{
+    <div class="toolbar"><button type="button" @onclick="() => editing = new PersonDto()">New person</button></div>
+
+    @foreach (var l in ledgers)
+    {
+        <section class="panel">
+            <h2>@l.Person.Name · owes <Money Value="l.TotalOwed" Signed="true" /></h2>
+            <p class="muted">expected @Fmt.Money(l.TotalExpected) · paid @Fmt.Money(l.TotalPaid)@(l.Unallocated > 0 ? $" · {Fmt.Money(l.Unallocated)} received but not applied" : "") · one-offs: charged @Fmt.Money(l.OneOffCharged), paid @Fmt.Money(l.OneOffPaid)</p>
+            <div class="row">
+                <div class="grow">
+                    <table class="compact">
+                        <thead><tr><th>Month</th><th>Expected</th><th class="money">Amount</th><th class="money">Paid</th><th class="money">Running</th><th>Status</th></tr></thead>
+                        <tbody>
+                        @foreach (var r in l.Periods)
+                        {
+                            <tr class="@(r.Status is "Missed" ? "neg" : r.Status is "Paid" or "Prepaid" ? "pos" : "")"><td>@r.Period.ToString("MMM yyyy")</td><td class="muted">@r.Detail</td><td><Money Value="r.Expected" /></td><td><Money Value="r.Paid" /></td><td><Money Value="r.Balance" Signed="true" /></td><td>@r.Status</td></tr>
+                        }
+                        </tbody>
+                    </table>
+                </div>
+                <div>
+                    <h3>One-off charges</h3>
+                    <table class="compact"><tbody>@foreach (var c in l.Person.Charges) { <tr><td>@Fmt.Date(c.Date)</td><td>@c.Description</td><td><Money Value="c.Amount" /></td></tr> }</tbody></table>
+                    <h3>Payments</h3>
+                    <table class="compact"><tbody>@foreach (var p in l.Person.Payments) { <tr><td>@Fmt.Date(p.Date)</td><td><Money Value="p.Amount" /></td><td class="muted">@string.Join(", ", p.Allocations.Select(a => a.Period is { } pd ? $"{pd:MMM yy} {Fmt.Money(a.Amount)}" : $"one-off {Fmt.Money(a.Amount)}")) @p.Notes</td></tr> }</tbody></table>
+                </div>
+            </div>
+            <Steps Items="l.Steps" />
+            <button class="secondary" type="button" @onclick="() => editing = Clone(l.Person)">Edit @l.Person.Name</button>
+        </section>
+    }
+
+    @if (editing is { } e)
+    {
+        <section class="panel">
+            <h2>@(e.Id == 0 ? "New person" : e.Name)</h2>
+            <div class="row">
+                <div class="field"><label>Name</label><input type="text" @bind="e.Name" /></div>
+                <div class="field grow"><label>Notes</label><input type="text" @bind="e.Notes" /></div>
+                <div class="field"><label class="inline"><input type="checkbox" @bind="e.IsActive" /> Active</label></div>
+            </div>
+            <h3>Recurring obligations <span class="muted">(a fixed amount per month, or a share of a tracked bill)</span></h3>
+            <table class="compact">
+                <thead><tr><th>Description</th><th>Bill</th><th>Share</th><th class="money">or fixed / month</th><th>From</th><th>Until</th><th>Active</th><th></th></tr></thead>
+                <tbody>
+                @foreach (var o in e.Obligations)
+                {
+                    <tr>
+                        <td><input type="text" @bind="o.Description" /></td>
+                        <td><select @bind="o.BillId"><option value="">—</option>@foreach (var b in bills) { <option value="@b.Id">@b.Name (@Fmt.Money(b.ProjectedAmount))</option> }</select></td>
+                        <td><input type="number" step="0.05" class="narrow" @bind="o.ShareOfBill" /></td>
+                        <td><input type="number" step="0.01" class="narrow-money" @bind="o.MonthlyAmount" /></td>
+                        <td><input type="date" @bind="o.StartPeriod" /></td><td><input type="date" @bind="o.EndPeriod" /></td>
+                        <td><input type="checkbox" @bind="o.IsActive" /></td>
+                        <td><button class="secondary" type="button" @onclick="() => e.Obligations.Remove(o)">✕</button></td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+            <button class="secondary" type="button" @onclick="() => e.Obligations.Add(new ObligationDto { StartPeriod = new DateOnly(DateTime.Today.Year, DateTime.Today.Month, 1) })">Add obligation</button>
+
+            <h3>One-off charges</h3>
+            <table class="compact">
+                <thead><tr><th>Date</th><th>Description</th><th class="money">Amount</th><th></th></tr></thead>
+                <tbody>@foreach (var c in e.Charges) { <tr><td><input type="date" @bind="c.Date" /></td><td><input type="text" @bind="c.Description" /></td><td><input type="number" step="0.01" class="narrow-money" @bind="c.Amount" /></td><td><button class="secondary" type="button" @onclick="() => e.Charges.Remove(c)">✕</button></td></tr> }</tbody>
+            </table>
+            <button class="secondary" type="button" @onclick="() => e.Charges.Add(new ReceivableChargeDto { Date = DateOnly.FromDateTime(DateTime.Today) })">Add charge</button>
+
+            <h3>Payments received <span class="muted">(apply each to the months it covers; "Auto" fills the oldest unpaid months first, then one-offs)</span></h3>
+            @foreach (var p in e.Payments)
+            {
+                <div class="panel">
+                    <div class="row">
+                        <div class="field"><label>Date</label><input type="date" @bind="p.Date" /></div>
+                        <div class="field"><label>Amount</label><input type="number" step="0.01" class="narrow-money" @bind="p.Amount" /></div>
+                        <div class="field grow"><label>Notes</label><input type="text" @bind="p.Notes" /></div>
+                        <div class="field"><label>&nbsp;</label><button class="secondary" type="button" @onclick="() => AutoAllocate(e, p)">Auto</button> <button class="secondary" type="button" @onclick="() => e.Payments.Remove(p)">✕</button></div>
+                    </div>
+                    <div class="row">
+                        @foreach (var a in p.Allocations)
+                        {
+                            <span class="chip">
+                                <input type="month" value="@(a.Period?.ToString("yyyy-MM"))" @onchange="ev => SetPeriod(a, ev)" title="blank = one-off charges" />
+                                <input type="number" step="0.01" class="narrow-money" @bind="a.Amount" />
+                                <button class="link" type="button" @onclick="() => p.Allocations.Remove(a)">✕</button>
+                            </span>
+                        }
+                        <button class="secondary" type="button" @onclick="() => p.Allocations.Add(new PaymentAllocationDto { Period = new DateOnly(p.Date.Year, p.Date.Month, 1), Amount = p.Amount - p.Allocations.Sum(x => x.Amount) })">Add split</button>
+                        <span class="muted">applied @Fmt.Money(p.Allocations.Sum(x => x.Amount)) of @Fmt.Money(p.Amount)</span>
+                    </div>
+                </div>
+            }
+            <button class="secondary" type="button" @onclick="() => e.Payments.Add(new ReceivablePaymentDto { Date = DateOnly.FromDateTime(DateTime.Today) })">Add payment</button>
+            <div class="toolbar">
+                <button type="button" @onclick="Save">Save</button>
+                <button class="secondary" type="button" @onclick="() => editing = null">Cancel</button>
+                @if (e.Id != 0) { <button class="secondary danger" type="button" @onclick="Delete">Delete</button> }
+            </div>
+        </section>
+    }
+}
+
+@code {
+    private List<PersonLedgerDto>? ledgers;
+    private List<BillDto>? bills;
+    private PersonDto? editing;
+    private string? error;
+
+    protected override Task OnInitializedAsync() => Load();
+
+    private async Task Load()
+    {
+        try { bills ??= await Api.GetBillsAsync(); ledgers = await Api.GetLedgersAsync(); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private static PersonDto Clone(PersonDto p) => new()
+    {
+        Id = p.Id, Name = p.Name, Notes = p.Notes, IsActive = p.IsActive,
+        Obligations = p.Obligations.Select(o => new ObligationDto { Id = o.Id, Description = o.Description, MonthlyAmount = o.MonthlyAmount, BillId = o.BillId, ShareOfBill = o.ShareOfBill, StartPeriod = o.StartPeriod, EndPeriod = o.EndPeriod, IsActive = o.IsActive }).ToList(),
+        Charges = p.Charges.Select(c => new ReceivableChargeDto { Id = c.Id, Date = c.Date, Amount = c.Amount, Description = c.Description }).ToList(),
+        Payments = p.Payments.Select(x => new ReceivablePaymentDto { Id = x.Id, Date = x.Date, Amount = x.Amount, Notes = x.Notes, Allocations = x.Allocations.Select(a => new PaymentAllocationDto { Period = a.Period, Amount = a.Amount }).ToList() }).ToList(),
+    };
+
+    /// <summary>Oldest unpaid months first (using the current ledger's expected amounts minus other payments), then one-off charges.</summary>
+    private void AutoAllocate(PersonDto person, ReceivablePaymentDto payment)
+    {
+        var ledger = ledgers?.FirstOrDefault(l => l.Person.Id == person.Id);
+        payment.Allocations.Clear();
+        var left = payment.Amount;
+        if (ledger is not null)
+        {
+            var otherPaid = person.Payments.Where(x => x != payment).SelectMany(x => x.Allocations).ToList();
+            foreach (var r in ledger.Periods.OrderBy(r => r.Period))
+            {
+                if (left <= 0) break;
+                var owed = r.Expected - otherPaid.Where(a => a.Period == r.Period).Sum(a => a.Amount);
+                if (owed <= 0) continue;
+                var take = Math.Min(left, owed);
+                payment.Allocations.Add(new PaymentAllocationDto { Period = r.Period, Amount = take });
+                left -= take;
+            }
+            var oneOffOwed = person.Charges.Sum(c => c.Amount) - otherPaid.Where(a => a.Period is null).Sum(a => a.Amount);
+            if (left > 0 && oneOffOwed > 0) { var take = Math.Min(left, oneOffOwed); payment.Allocations.Add(new PaymentAllocationDto { Period = null, Amount = take }); left -= take; }
+        }
+        if (left > 0) payment.Allocations.Add(new PaymentAllocationDto { Period = new DateOnly(payment.Date.Year, payment.Date.Month, 1).AddMonths(1), Amount = left });
+    }
+
+    private static void SetPeriod(PaymentAllocationDto a, ChangeEventArgs ev)
+        => a.Period = DateOnly.TryParse(((string?)ev.Value) + "-01", out var d) ? d : null;
+
+    private async Task Save()
+    {
+        try { await Api.SavePersonAsync(editing!); editing = null; await Load(); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task Delete()
+    {
+        try { await Api.DeletePersonAsync(editing!.Id); editing = null; await Load(); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+}

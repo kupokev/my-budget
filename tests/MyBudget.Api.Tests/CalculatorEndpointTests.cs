@@ -139,6 +139,40 @@ public class CalculatorEndpointTests : IClassFixture<ApiFixture>
     }
 
     [Fact]
+    public async Task Odd_check_override_and_employment_end_date_are_honoured()
+    {
+        var id = await EmployerId();
+        var src = await _api.Get<IncomeSourceDto>($"api/income-sources/{id}");
+        var normal = await _api.Get<PaycheckEstimateDto>($"api/paycheck/estimate?sourceId={id}&date=2026-10-23");
+
+        // Live → arrears switch: the Oct 23 check carries one week of pay; medical etc. still come out in full.
+        src.Overrides.Add(new PaycheckOverrideDto { PayDate = new(2026, 10, 23), GrossPercent = 50, Notes = "live to arrears" });
+        await _api.Put($"api/income-sources/{id}", src);
+        var half = await _api.Get<PaycheckEstimateDto>($"api/paycheck/estimate?sourceId={id}&date=2026-10-23");
+        Assert.Equal(Math.Round(normal.Gross / 2, 2), half.Gross);
+        Assert.Equal(normal.PreTaxDeductions.Single(l => l.Name == "Medical").Amount, half.PreTaxDeductions.Single(l => l.Name == "Medical").Amount);
+        Assert.Equal(Math.Round(half.Gross * 0.06m, 2), half.PreTaxDeductions.Single(l => l.Name.StartsWith("401(k)")).Amount);
+        Assert.Contains(half.Warnings, w => w.Contains("50%") && w.Contains("live to arrears"));
+        var nextNormal = await _api.Get<PaycheckEstimateDto>($"api/paycheck/estimate?sourceId={id}&date=2026-11-06");
+        Assert.Equal(normal.Gross, nextNormal.Gross);
+
+        // Employment ends Nov 30: December checks disappear from the year and the estimate refuses a December date.
+        src = await _api.Get<IncomeSourceDto>($"api/income-sources/{id}");
+        src.EndDate = new(2026, 11, 30);
+        await _api.Put($"api/income-sources/{id}", src);
+        var year = await _api.Get<YearEstimateDto>($"api/paycheck/year?sourceId={id}&year=2026");
+        Assert.DoesNotContain(year.Checks, c => c.Date.Month == 12);
+        var refused = await _api.Client.GetAsync($"api/paycheck/estimate?sourceId={id}&date=2026-12-11");
+        Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
+        var calendar = await _api.Get<PayCalendarDto>("api/income-sources/pay-calendar?year=2026");
+        Assert.DoesNotContain(calendar.PayDates, d => d.IncomeSource == "Ridgeline Partners" && d.Date.Month == 12);
+
+        // Put things back for the other tests.
+        src.EndDate = null; src.Overrides.Clear();
+        await _api.Put($"api/income-sources/{id}", src);
+    }
+
+    [Fact]
     public async Task Estimate_for_a_source_without_salary_is_a_400_not_a_500()
     {
         var chroma = (await _api.Get<List<IncomeSourceDto>>("api/income-sources")).Single(s => s.Name == "Chroma");

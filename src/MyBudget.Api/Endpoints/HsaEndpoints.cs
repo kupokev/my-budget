@@ -46,8 +46,14 @@ public static class HsaEndpoints
         });
 
         g.MapGet("/{year:int}/plan", async (int year, DateOnly? asOf, BudgetDbContext db, TimeProvider clock) =>
+            await PlanAsync(db, year, asOf ?? DateOnly.FromDateTime(clock.GetLocalNow().DateTime)));
+
+        return api;
+    }
+
+    internal static async Task<HsaPlanDto> PlanAsync(BudgetDbContext db, int year, DateOnly today)
+    {
         {
-            var today = asOf ?? DateOnly.FromDateTime(clock.GetLocalNow().DateTime);
             var y = await Load(db, year) ?? new HsaYear { Year = year };
             var limits = await db.ContributionLimits.FirstOrDefaultAsync(l => l.Year == year);
             var (self, family, catchUp, source) = limits is null
@@ -66,9 +72,7 @@ public static class HsaEndpoints
             return new HsaPlanDto(year, today, self, family, catchUp, source, plan.EligibleMonths, plan.AnnualLimit, plan.LimitFormula,
                 plan.Employer, plan.Payroll, plan.Direct, plan.Contributed, plan.Room, plan.Target, plan.TargetSource, plan.RemainingToTarget,
                 plan.MonthsLeft, plan.RecommendedMonthly, plan.PaychecksLeft, plan.RecommendedPerPaycheck, paySource, plan.OverContributed, plan.OverBy, plan.Steps);
-        });
-
-        return api;
+        }
     }
 
     private static Task<HsaYear?> Load(BudgetDbContext db, int year)
@@ -77,7 +81,7 @@ public static class HsaEndpoints
     private static async Task<(int Count, string Source)> PaychecksBetween(BudgetDbContext db, DateOnly from, DateOnly to)
     {
         var w2 = await db.IncomeSources.Include(s => s.PaySchedules).Where(s => s.IsActive && s.Type == IncomeSourceType.W2Salary).ToListAsync();
-        var dates = w2.SelectMany(s => PayDates.Generate(s.PaySchedules, from, to)).Distinct().Count();
+        var dates = w2.SelectMany(s => PayDates.Generate(s.PaySchedules, from, s.EndDate is { } end && end < to ? end : to)).Distinct().Count();
         return dates > 0 ? (dates, $"{dates} W-2 pay dates between {from:MMM d} and {to:MMM d, yyyy}") : (0, "no W-2 pay dates in the window");
     }
 

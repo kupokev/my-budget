@@ -125,10 +125,24 @@ public sealed class IncomeSourceDto
     public IncomeSourceType Type { get; set; }
     public string? Notes { get; set; }
     public bool IsActive { get; set; } = true;
+    /// <summary>Employment ended on this date; nothing is generated after it.</summary>
+    public DateOnly? EndDate { get; set; }
     public List<SalaryRateDto> SalaryRates { get; set; } = [];
     public List<PayScheduleDto> PaySchedules { get; set; } = [];
     public List<DeductionElectionDto> Deductions { get; set; } = [];
     public List<WithholdingElectionDto> Withholdings { get; set; } = [];
+    public List<PaycheckOverrideDto> Overrides { get; set; } = [];
+}
+
+public sealed class PaycheckOverrideDto
+{
+    public int Id { get; set; }
+    public DateOnly PayDate { get; set; }
+    /// <summary>Percent of the normal gross as a whole number (50 = half). Ignored when GrossAmount is set.</summary>
+    [Range(0, 200)] public decimal? GrossPercent { get; set; }
+    [Range(0, 10_000_000)] public decimal? GrossAmount { get; set; }
+    public bool ProrateFixedDeductions { get; set; }
+    public string? Notes { get; set; }
 }
 
 public sealed class DeductionElectionDto

@@ -66,7 +66,7 @@ dotnet run --project src/MyBudget.Api --launch-profile http   # API on http://lo
 dotnet run --project src/MyBudget.Desktop      # Photino desktop app; MYBUDGET_API_URL / MYBUDGET_API_KEY override defaults
 ```
 
-Layout: `src/MyBudget.{Domain,Engines.Ledger,Engines.Paycheck,Engines.Hsa,Engines.Amortization,Engines.Rewards,Engines.Import,Contracts,Data,Api,UI,Desktop}`, `tests/MyBudget.{Engines,Api}.Tests`.
+Layout: `src/MyBudget.{Domain,Engines.Ledger,Engines.Paycheck,Engines.Hsa,Engines.Amortization,Engines.Rewards,Engines.Import,Engines.Investments,Contracts,Data,Api,UI,Desktop}`, `tests/MyBudget.{Engines,Api}.Tests`.
 Central package versions live in `Directory.Packages.props`. `AllowMissingPrunePackageData` in
 `Directory.Build.props` works around the Arch-packaged SDK (NETSDK1226). Engines never reference
 Data, Api, or UI. The UI never references Data or Api directly, only Contracts and its own `ApiClient`.

@@ -9,6 +9,13 @@ builder.Services.AddBudgetData(builder.Configuration);
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<PaycheckService>();
 builder.Services.AddScoped<ImportService>();
+builder.Services.AddScoped<InvestmentService>();
+builder.Services.AddScoped<AlertsService>();
+builder.Services.AddScoped<AiTools>();
+builder.Services.AddHttpClient<IMarketDataProvider, YahooMarketDataProvider>(c => c.Timeout = TimeSpan.FromSeconds(20));
+var aiOptions = builder.Configuration.GetSection(AiOptions.Section).Get<AiOptions>() ?? new AiOptions();
+builder.Services.AddSingleton(aiOptions);
+builder.Services.AddHttpClient<AiService>(c => c.Timeout = TimeSpan.FromMinutes(3));
 builder.Services.AddOpenApi();
 builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter()));
 
@@ -48,7 +55,11 @@ app.MapGroup("/api")
     .MapTransactions()
     .MapSpending()
     .MapGoals()
-    .MapReports();
+    .MapReports()
+    .MapInvestments()
+    .MapReceivables()
+    .MapSideIncome()
+    .MapBuildout();
 
 app.Run();
 

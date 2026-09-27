@@ -29,7 +29,7 @@ else
                         <td>@s.Name</td>
                         <td>@Fmt.Words(s.Type)</td>
                         <td>@Fmt.Money(rate?.AnnualAmount)</td>
-                        <td>@(sched is null ? "—" : $"{Fmt.Words(sched.Frequency)} since {Fmt.Date(sched.EffectiveDate)}")</td>
+                        <td>@(sched is null ? "—" : $"{Fmt.Words(sched.Frequency)} since {Fmt.Date(sched.EffectiveDate)}")@(s.EndDate is { } end ? $" · ended {Fmt.Date(end)}" : "")</td>
                         <td><button class="secondary" type="button" @onclick="() => Edit(s)">Edit</button></td>
                     </tr>
                 }
@@ -65,6 +65,7 @@ else
                     <div class="field"><label>Type</label><InputSelect @bind-Value="editing.Type">
                         @foreach (var t in Enum.GetValues<IncomeSourceType>()) { <option value="@t">@Fmt.Words(t)</option> }
                     </InputSelect></div>
+                    <div class="field"><label>Employment ended <span class="muted">(blank = still employed)</span></label><InputDate @bind-Value="editing.EndDate" /></div>
                     <div class="field"><label class="inline"><InputCheckbox @bind-Value="editing.IsActive" /> Active</label></div>
                 </div>
                 <div class="field"><label>Notes</label><InputTextArea @bind-Value="editing.Notes" rows="2" /></div>
@@ -159,6 +160,25 @@ else
                 </table>
                 <button class="secondary" type="button" @onclick="() => editing.Withholdings.Add(new WithholdingElectionDto { EffectiveDate = today })">Add W-4 row</button>
 
+                <h3>Odd checks <span class="muted">(a specific pay date that isn't a full period: a live-to-arrears switch, a partial first or last check)</span></h3>
+                <table>
+                    <thead><tr><th>Pay date</th><th>% of normal gross</th><th class="money">or exact gross</th><th>Prorate fixed deductions</th><th>Notes</th><th></th></tr></thead>
+                    <tbody>
+                    @foreach (var o in editing.Overrides)
+                    {
+                        <tr>
+                            <td><InputDate @bind-Value="o.PayDate" /></td>
+                            <td><InputNumber @bind-Value="o.GrossPercent" step="1" class="narrow" /></td>
+                            <td><InputNumber @bind-Value="o.GrossAmount" step="0.01" class="narrow-money" /></td>
+                            <td><InputCheckbox @bind-Value="o.ProrateFixedDeductions" /></td>
+                            <td><InputText @bind-Value="o.Notes" /></td>
+                            <td><button class="secondary" type="button" @onclick="() => editing.Overrides.Remove(o)">✕</button></td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+                <button class="secondary" type="button" @onclick="() => editing.Overrides.Add(new PaycheckOverrideDto { PayDate = today, GrossPercent = 50 })">Add odd check</button>
+
                 <div class="toolbar">
                     <button type="submit">Save</button>
                     <button class="secondary" type="button" @onclick="() => editing = null">Cancel</button>
@@ -193,7 +213,8 @@ else
 
     private void Edit(IncomeSourceDto s) => editing = new()
     {
-        Id = s.Id, Name = s.Name, Type = s.Type, Notes = s.Notes, IsActive = s.IsActive,
+        Id = s.Id, Name = s.Name, Type = s.Type, Notes = s.Notes, IsActive = s.IsActive, EndDate = s.EndDate,
+        Overrides = s.Overrides.Select(o => new PaycheckOverrideDto { Id = o.Id, PayDate = o.PayDate, GrossPercent = o.GrossPercent, GrossAmount = o.GrossAmount, ProrateFixedDeductions = o.ProrateFixedDeductions, Notes = o.Notes }).ToList(),
         SalaryRates = s.SalaryRates.Select(r => new SalaryRateDto { Id = r.Id, IncomeSourceId = r.IncomeSourceId, AnnualAmount = r.AnnualAmount, EffectiveDate = r.EffectiveDate }).ToList(),
         PaySchedules = s.PaySchedules.Select(p => new PayScheduleDto
         {

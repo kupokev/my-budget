@@ -15,26 +15,7 @@ public static class SpendingEndpoints
         g.MapGet("/summary", async (int? year, int? month, BudgetDbContext db, TimeProvider clock) =>
         {
             var today = clock.GetLocalNow();
-            var y = year ?? today.Year; var m = month ?? today.Month;
-            var thisStart = new DateOnly(y, m, 1); var thisEnd = thisStart.AddMonths(1);
-            var lastStart = thisStart.AddMonths(-1);
-            var yearStart = new DateOnly(y, 1, 1);
-            var lines = await db.Transactions.Include(t => t.Category).Where(t => !t.IsTransfer && t.Date >= yearStart.AddMonths(-1) && t.Date < thisEnd).ToListAsync();
-            var spend = lines.Where(t => t.Amount < 0).ToList();
-            var monthsElapsed = Math.Max(1, m);
-
-            var cats = spend.GroupBy(t => (t.CategoryId, Name: t.Category?.Name ?? "Uncategorized")).Select(g =>
-            {
-                var thisM = -g.Where(t => t.Date >= thisStart && t.Date < thisEnd).Sum(t => t.Amount);
-                var lastM = -g.Where(t => t.Date >= lastStart && t.Date < thisStart).Sum(t => t.Amount);
-                var ytd = -g.Where(t => t.Date >= yearStart && t.Date < thisEnd).Sum(t => t.Amount);
-                return new SpendingCategoryDto(g.Key.CategoryId, g.Key.Name, R(thisM), R(lastM), R(thisM - lastM), R(ytd), R(ytd / monthsElapsed), g.Count(t => t.Date >= thisStart && t.Date < thisEnd));
-            }).OrderByDescending(c => c.ThisMonth).ThenByDescending(c => c.YearToDate).ToList();
-
-            var thisTotal = cats.Sum(c => c.ThisMonth); var lastTotal = cats.Sum(c => c.LastMonth);
-            var uncategorized = spend.Where(t => t.CategoryId == null && t.Date >= thisStart && t.Date < thisEnd).ToList();
-            var income = lines.Where(t => t.Amount > 0 && t.Date >= thisStart && t.Date < thisEnd).Sum(t => t.Amount);
-            return new SpendingSummaryDto(y, m, R(thisTotal), R(lastTotal), R(thisTotal - lastTotal), R(cats.Sum(c => c.YearToDate)), cats, uncategorized.Count, R(-uncategorized.Sum(t => t.Amount)), R(income));
+            return await Summary(db, year ?? today.Year, month ?? today.Month);
         });
 
         g.MapGet("/matrix", async (int? year, BudgetDbContext db, TimeProvider clock) =>
@@ -64,6 +45,30 @@ public static class SpendingEndpoints
         });
 
         return api;
+    }
+
+
+    internal static async Task<SpendingSummaryDto> Summary(BudgetDbContext db, int y, int m)
+    {
+        var thisStart = new DateOnly(y, m, 1); var thisEnd = thisStart.AddMonths(1);
+        var lastStart = thisStart.AddMonths(-1);
+        var yearStart = new DateOnly(y, 1, 1);
+        var lines = await db.Transactions.Include(t => t.Category).Where(t => !t.IsTransfer && t.Date >= yearStart.AddMonths(-1) && t.Date < thisEnd).ToListAsync();
+        var spend = lines.Where(t => t.Amount < 0).ToList();
+        var monthsElapsed = Math.Max(1, m);
+
+        var cats = spend.GroupBy(t => (t.CategoryId, Name: t.Category?.Name ?? "Uncategorized")).Select(g =>
+        {
+            var thisM = -g.Where(t => t.Date >= thisStart && t.Date < thisEnd).Sum(t => t.Amount);
+            var lastM = -g.Where(t => t.Date >= lastStart && t.Date < thisStart).Sum(t => t.Amount);
+            var ytd = -g.Where(t => t.Date >= yearStart && t.Date < thisEnd).Sum(t => t.Amount);
+            return new SpendingCategoryDto(g.Key.CategoryId, g.Key.Name, R(thisM), R(lastM), R(thisM - lastM), R(ytd), R(ytd / monthsElapsed), g.Count(t => t.Date >= thisStart && t.Date < thisEnd));
+        }).OrderByDescending(c => c.ThisMonth).ThenByDescending(c => c.YearToDate).ToList();
+
+        var thisTotal = cats.Sum(c => c.ThisMonth); var lastTotal = cats.Sum(c => c.LastMonth);
+        var uncategorized = spend.Where(t => t.CategoryId == null && t.Date >= thisStart && t.Date < thisEnd).ToList();
+        var income = lines.Where(t => t.Amount > 0 && t.Date >= thisStart && t.Date < thisEnd).Sum(t => t.Amount);
+        return new SpendingSummaryDto(y, m, R(thisTotal), R(lastTotal), R(thisTotal - lastTotal), R(cats.Sum(c => c.YearToDate)), cats, uncategorized.Count, R(-uncategorized.Sum(t => t.Amount)), R(income));
     }
 
     private static decimal R(decimal d) => Math.Round(d, 2, MidpointRounding.AwayFromZero);

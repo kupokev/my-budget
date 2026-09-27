@@ -1,52 +1,85 @@
 @page "/"
 @inject ApiClient Api
+@using MyBudget.Domain
 
 <h1>Home</h1>
 <ErrorBanner @bind-Message="error" />
 
-@if (home is null)
+@if (d is null)
 {
     <p class="muted">Loading…</p>
 }
 else
 {
+    @if (d.Alerts.Count > 0)
+    {
+        <section class="panel">
+            <h2>Needs attention</h2>
+            <ul class="alerts">
+                @foreach (var a in d.Alerts)
+                {
+                    <li class="alert @a.Severity.ToString().ToLowerInvariant()">
+                        <strong>@a.Title</strong> <span class="muted">@a.Detail</span> @if (a.Link is not null) { <a href="@a.Link">open</a> }
+                    </li>
+                }
+            </ul>
+        </section>
+    }
+
+    <div class="row tiles">
+        <section class="panel tile"><h3>Spending this month</h3><p class="big"><Money Value="d.SpendingThisMonth" /></p><p class="muted">last month <Money Value="d.SpendingLastMonth" /> · <Money Value="d.SpendingThisMonth - d.SpendingLastMonth" Signed="true" />@(d.Uncategorized > 0 ? $" · {d.Uncategorized} uncategorized" : "")</p></section>
+        <section class="panel tile"><h3>Net worth</h3><p class="big"><Money Value="d.NetWorth" Signed="true" /></p><p class="muted">@(d.NetWorthChange is null ? "" : "vs last month ")@if (d.NetWorthChange is { } nwc) { <Money Value="nwc" Signed="true" /> }</p></section>
+        <section class="panel tile"><h3>Next paycheck</h3>@if (d.NextPayDate is { } np) { <p class="big">@Fmt.Date(np.Date)</p><p class="muted">@np.IncomeSource @(np.ThirdCheckOfMonth ? "· third check this month" : "")</p> } else { <p class="muted">No pay schedule.</p> }</section>
+        <section class="panel tile rainy @d.RainyDay.Status.ToLowerInvariant()"><h3>Rainy-day fund</h3><p class="big">@d.RainyDay.MonthsCovered.ToString("0.#") months</p><p class="muted" title="@d.RainyDay.ExpensesFormula"><Money Value="d.RainyDay.Balance" /> vs @Fmt.Money(d.RainyDay.LowTarget)–@Fmt.Money(d.RainyDay.HighTarget) · @d.RainyDay.Verdict</p></section>
+    </div>
+
     <div class="row">
         <section class="panel grow">
             <h2>Due in the next 14 days</h2>
-            @if (home.UpcomingBills.Count == 0)
-            {
-                <p class="muted">Nothing due.</p>
-            }
+            @if (d.UpcomingBills.Count == 0) { <p class="muted">Nothing due.</p> }
             else
             {
                 <table>
-                    <thead><tr><th>Due</th><th>Bill</th><th class="money">Amount</th><th>Paid via</th><th>Funded from</th><th></th></tr></thead>
-                    <tbody>
-                    @foreach (var b in home.UpcomingBills)
-                    {
-                        <tr>
-                            <td>@Fmt.Date(b.DueDate)</td><td>@b.BillName</td>
-                            <td><Money Value="b.Amount" /></td>
-                            <td>@b.PaidVia</td><td>@b.FundingAccount</td>
-                            <td class="muted">@(b.IsAutopay ? "auto" : "")</td>
-                        </tr>
-                    }
-                    </tbody>
-                    <tfoot><tr><th></th><th>Total</th><th><Money Value="home.UpcomingBills.Sum(b => b.Amount)" /></th><th colspan="3"></th></tr></tfoot>
+                    <thead><tr><th>Due</th><th>Bill</th><th class="money">Amount</th><th>Paid via</th><th>Funded from</th></tr></thead>
+                    <tbody>@foreach (var b in d.UpcomingBills) { <tr><td>@Fmt.Date(b.DueDate)</td><td>@b.BillName @(b.IsAutopay ? "" : "✍")</td><td><Money Value="b.Amount" /></td><td>@b.PaidVia</td><td>@b.FundingAccount</td></tr> }</tbody>
+                    <tfoot><tr><th></th><th>Total</th><th><Money Value="d.UpcomingBills.Sum(b => b.Amount)" /></th><th colspan="2"></th></tr></tfoot>
                 </table>
             }
         </section>
-        <section class="panel">
-            <h2>Next paycheck</h2>
-            @if (home.NextPayDate is { } p)
-            {
-                <p class="big">@Fmt.Date(p.Date)</p>
-                <p class="muted">@p.IncomeSource @(p.ThirdCheckOfMonth ? "· third check this month" : "")</p>
-            }
+        <section class="panel grow">
+            <h2>Where the money went</h2>
+            <table>
+                <thead><tr><th>Category</th><th class="money">This month</th><th class="money">Last month</th><th class="money">Change</th></tr></thead>
+                <tbody>@foreach (var c in d.TopCategories) { <tr><td>@c.Name</td><td><Money Value="c.ThisMonth" /></td><td><Money Value="c.LastMonth" /></td><td><span class="money @(c.Delta > 0 ? "neg" : c.Delta < 0 ? "pos" : "")">@(c.Delta > 0 ? "+" : "")@Fmt.Money(c.Delta)</span></td></tr> }</tbody>
+            </table>
+            <p class="muted"><a href="spending">Full spending view</a></p>
+        </section>
+    </div>
+
+    <div class="row">
+        <section class="panel grow">
+            <h2>Status goals</h2>
+            @if (d.Programs.Count == 0) { <p class="muted">No loyalty programs set up.</p> }
             else
             {
-                <p class="muted">No pay schedule set up. Add one under Income.</p>
+                <table>
+                    <thead><tr><th>Program</th><th>Now</th><th>Target</th><th>Plan</th></tr></thead>
+                    <tbody>@foreach (var p in d.Programs) { <tr><td>@p.Name</td><td>@(p.CurrentTier ?? "—")</td><td>@(p.TargetTier ?? "—")</td><td class="@(p.TargetReached ? "pos" : p.HowReached.StartsWith("short") ? "neg" : "")">@p.HowReached</td></tr> }</tbody>
+                </table>
             }
+            <p class="muted"><a href="rewards">Rewards</a></p>
+        </section>
+        <section class="panel grow">
+            <h2>Goals</h2>
+            @if (d.Goals.Count == 0) { <p class="muted">No goals yet.</p> }
+            else
+            {
+                <table>
+                    <thead><tr><th>Goal</th><th>Status</th><th>Progress</th></tr></thead>
+                    <tbody>@foreach (var g in d.Goals) { <tr title="@g.Formula"><td>@g.Goal.Name</td><td class="@(g.StatusText is "On Track" or "Exceeded" or "Done" ? "pos" : g.StatusText == "Not On Track" ? "neg" : "")">@g.StatusText</td><td><div class="bar"><div class="bar-fill @(g.StatusText == "Not On Track" ? "bad" : "")" style="width:@((int)(g.ProgressFraction * 100))%"></div><div class="bar-mark" style="left:@((int)(g.ElapsedFraction * 100))%"></div></div></td></tr> }</tbody>
+                </table>
+            }
+            <p class="muted"><a href="goals">Goals</a></p>
         </section>
     </div>
 
@@ -54,30 +87,42 @@ else
         <h2>Transfer needs</h2>
         <table>
             <thead><tr><th>Account</th><th class="money">Per month</th><th class="money">Per paycheck</th><th class="money">Moved this month</th><th class="money">Long / short</th></tr></thead>
-            <tbody>
-            @foreach (var n in home.NeedsThisPayPeriod)
-            {
-                <tr>
-                    <td>@n.AccountName <span class="muted">(@Fmt.Words(n.Cadence))</span></td>
-                    <td><Money Value="n.MonthlyNeed" /></td>
-                    <td><Money Value="n.PerPaycheckNeed" /></td>
-                    <td><Money Value="n.TransferredThisMonth" /></td>
-                    <td><Money Value="n.LongShort" Signed="true" /></td>
-                </tr>
-            }
-            </tbody>
+            <tbody>@foreach (var n in d.Needs) { <tr><td>@n.AccountName <span class="muted">(@Fmt.Words(n.Cadence))</span></td><td><Money Value="n.MonthlyNeed" /></td><td><Money Value="n.PerPaycheckNeed" /></td><td><Money Value="n.TransferredThisMonth" /></td><td><Money Value="n.LongShort" Signed="true" /></td></tr> }</tbody>
         </table>
-        <p class="muted">Full breakdown with formulas under Accounts.</p>
+    </section>
+
+    <section class="panel">
+        <h2>This month in plain English</h2>
+        @if (!d.AiEnabled) { <p class="muted">Local AI is off. Turn it on in the API's appsettings (Ai:Enabled, Ai:BaseUrl, Ai:Model) to get a narrative built from the same numbers above.</p> }
+        else
+        {
+            <div class="toolbar"><button type="button" @onclick="Summarize" disabled="@summarizing">@(summarizing ? "Asking the model…" : "Write this month's summary")</button></div>
+            @if (summary is { } s)
+            {
+                <p class="narrative">@s.Narrative</p>
+                <details><summary class="muted">What it looked at (@s.ToolCalls.Count tool calls, @s.Model)</summary><ul>@foreach (var t in s.ToolCalls) { <li><code>@(t.Name)(@(t.Arguments))</code></li> }</ul></details>
+            }
+        }
     </section>
 }
 
 @code {
-    private HomeDto? home;
+    private HomeDashboardDto? d;
+    private AiSummaryDto? summary;
+    private bool summarizing;
     private string? error;
 
     protected override async Task OnInitializedAsync()
     {
-        try { home = await Api.GetHomeAsync(); }
+        try { d = await Api.GetDashboardAsync(); }
         catch (Exception ex) { error = "Could not reach the API: " + ex.Message; }
+    }
+
+    private async Task Summarize()
+    {
+        summarizing = true;
+        try { summary = await Api.GetAiSummaryAsync(DateTime.Today.Year, DateTime.Today.Month); }
+        catch (Exception ex) { error = ex.Message; }
+        finally { summarizing = false; }
     }
 }

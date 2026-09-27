@@ -66,7 +66,7 @@ public static class IncomeEndpoints
         var tripleMonths = new SortedSet<string>();
         foreach (var s in sources)
         {
-            var dates = PayDates.Generate(s.PaySchedules, from, to);
+            var dates = PayDates.Generate(s.PaySchedules, from, s.EndDate is { } end && end < to ? end : to);
             var triples = PayDates.ThreePaycheckMonths(dates);
             var thirdChecks = triples.SelectMany(t => t.Dates.Skip(2)).ToHashSet();
             foreach (var t in triples) tripleMonths.Add($"{new DateOnly(t.Year, t.Month, 1):MMMM yyyy} ({s.Name})");
@@ -79,7 +79,7 @@ public static class IncomeEndpoints
     internal static async Task<(int PaychecksPerYear, string Source)> PaychecksPerYear(BudgetDbContext db, DateOnly asOf)
     {
         var w2 = await Query(db).Where(s => s.IsActive && s.Type == IncomeSourceType.W2Salary).ToListAsync();
-        var current = w2.SelectMany(s => s.PaySchedules.Select(p => (Source: s, Schedule: p)))
+        var current = w2.Where(s => s.EndDate is null || s.EndDate >= asOf).SelectMany(s => s.PaySchedules.Select(p => (Source: s, Schedule: p)))
             .Where(x => x.Schedule.EffectiveDate <= asOf)
             .OrderByDescending(x => x.Schedule.EffectiveDate)
             .FirstOrDefault();
@@ -88,7 +88,7 @@ public static class IncomeEndpoints
         return (n, $"{current.Source.Name}: {current.Schedule.Frequency} since {current.Schedule.EffectiveDate:yyyy-MM-dd} → {n} checks/year");
     }
 
-    private static IQueryable<IncomeSource> Query(BudgetDbContext db) => db.IncomeSources.Include(s => s.SalaryRates).Include(s => s.PaySchedules).Include(s => s.Deductions).Include(s => s.Withholdings);
+    private static IQueryable<IncomeSource> Query(BudgetDbContext db) => db.IncomeSources.Include(s => s.SalaryRates).Include(s => s.PaySchedules).Include(s => s.Deductions).Include(s => s.Withholdings).Include(s => s.Overrides);
 
     private static IResult? Validate(IncomeSourceDto d)
     {

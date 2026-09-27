@@ -10,6 +10,7 @@
     <ProjectReference Include="../../src/MyBudget.Engines.Amortization/MyBudget.Engines.Amortization.csproj" />
     <ProjectReference Include="../../src/MyBudget.Engines.Rewards/MyBudget.Engines.Rewards.csproj" />
     <ProjectReference Include="../../src/MyBudget.Engines.Import/MyBudget.Engines.Import.csproj" />
+    <ProjectReference Include="../../src/MyBudget.Engines.Investments/MyBudget.Engines.Investments.csproj" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" />

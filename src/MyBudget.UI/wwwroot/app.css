@@ -152,3 +152,30 @@ input[type=search] { min-width: 200px; }
 .chip.chip-on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
 .chip button.link { color: var(--fg); font-size: 13px; }
 .chip.chip-on button.link:first-child { color: var(--accent); font-weight: 600; }
+
+/* home + assistant */
+.tiles .tile { flex: 1 1 200px; }
+.alerts { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.alert { padding: 8px 12px; border-radius: var(--radius); border-left: 4px solid var(--fg-muted); background: color-mix(in srgb, var(--fg) 5%, transparent); }
+.alert.warning { border-left-color: #e8a317; }
+.alert.danger { border-left-color: var(--danger); }
+.alert a { margin-left: 8px; }
+.narrative { font-size: 15px; line-height: 1.6; max-width: 80ch; }
+.chat .msg { display: flex; margin: 6px 0; }
+.chat .msg.user { justify-content: flex-end; }
+.chat .bubble { max-width: 75%; padding: 8px 12px; border-radius: 12px; background: color-mix(in srgb, var(--fg) 8%, transparent); white-space: pre-wrap; }
+.chat .msg.user .bubble { background: var(--accent); color: var(--accent-fg); }
+.chat input.grow { flex: 1; }
+
+/* rainy-day status: red below the minimum, yellow within 25% above it, green beyond */
+.rainy.low { border-color: var(--danger); }
+.rainy.low .big, .rainy.low .rainy-badge { color: var(--danger); }
+.rainy.marginal { border-color: #e8a317; }
+.rainy.marginal .big, .rainy.marginal .rainy-badge { color: #e8a317; }
+.rainy.healthy { border-color: var(--ok); }
+.rainy.healthy .big, .rainy.healthy .rainy-badge { color: var(--ok); }
+.rainy-badge { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; margin-left: 8px; }
+
+details.heads-up > summary { cursor: pointer; }
+.alerts.compact { margin-top: 8px; }
+.alerts.compact .alert { padding: 4px 10px; font-size: 13px; }

@@ -40,6 +40,14 @@ public class TaxYear
     public decimal MissouriStandardDeductionHeadOfHousehold { get; set; }
     public decimal MissouriSupplementalRate { get; set; }
 
+    // Long-term capital gains: 0% up to the 15% threshold, 15% up to the 20% threshold, 20% above (by filing status).
+    public decimal LtcgThreshold15Single { get; set; }
+    public decimal LtcgThreshold15MarriedJointly { get; set; }
+    public decimal LtcgThreshold15HeadOfHousehold { get; set; }
+    public decimal LtcgThreshold20Single { get; set; }
+    public decimal LtcgThreshold20MarriedJointly { get; set; }
+    public decimal LtcgThreshold20HeadOfHousehold { get; set; }
+
     /// <summary>Where the numbers came from, and whether a human has checked them against the published tables.</summary>
     public string? Source { get; set; }
     public bool Verified { get; set; }

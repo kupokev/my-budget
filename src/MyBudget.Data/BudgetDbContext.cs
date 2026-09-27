@@ -31,6 +31,15 @@ public sealed class BudgetDbContext(DbContextOptions<BudgetDbContext> options) :
     public DbSet<Transaction> Transactions => Set<Transaction>();
     public DbSet<CategoryRule> CategoryRules => Set<CategoryRule>();
     public DbSet<Goal> Goals => Set<Goal>();
+    public DbSet<Holding> Holdings => Set<Holding>();
+    public DbSet<Trade> Trades => Set<Trade>();
+    public DbSet<DividendPayment> Dividends => Set<DividendPayment>();
+    public DbSet<PriceSnapshot> Prices => Set<PriceSnapshot>();
+    public DbSet<Asset> Assets => Set<Asset>();
+    public DbSet<Person> People => Set<Person>();
+    public DbSet<ReceivablePayment> ReceivablePayments => Set<ReceivablePayment>();
+    public DbSet<IncomeReceipt> IncomeReceipts => Set<IncomeReceipt>();
+    public DbSet<EstimatedTaxPayment> EstimatedTaxPayments => Set<EstimatedTaxPayment>();
 
     protected override void OnModelCreating(ModelBuilder mb)
     {
@@ -50,6 +59,12 @@ public sealed class BudgetDbContext(DbContextOptions<BudgetDbContext> options) :
             e.HasMany(x => x.PaySchedules).WithOne(x => x.IncomeSource).HasForeignKey(x => x.IncomeSourceId).OnDelete(DeleteBehavior.Cascade);
             e.HasMany(x => x.Deductions).WithOne(x => x.IncomeSource).HasForeignKey(x => x.IncomeSourceId).OnDelete(DeleteBehavior.Cascade);
             e.HasMany(x => x.Withholdings).WithOne(x => x.IncomeSource).HasForeignKey(x => x.IncomeSourceId).OnDelete(DeleteBehavior.Cascade);
+            e.HasMany(x => x.Overrides).WithOne(x => x.IncomeSource).HasForeignKey(x => x.IncomeSourceId).OnDelete(DeleteBehavior.Cascade);
+        });
+        mb.Entity<PaycheckOverride>(e =>
+        {
+            e.Property(x => x.GrossFraction).HasPrecision(6, 4);
+            e.HasIndex(x => new { x.IncomeSourceId, x.PayDate }).IsUnique();
         });
         mb.Entity<DeductionElection>(e =>
         {
@@ -173,6 +188,56 @@ public sealed class BudgetDbContext(DbContextOptions<BudgetDbContext> options) :
             e.Property(x => x.Name).HasMaxLength(120);
             e.Property(x => x.AccountIds).HasMaxLength(200);
         });
+
+        mb.Entity<Holding>(e =>
+        {
+            e.Property(x => x.Ticker).HasMaxLength(12);
+            e.HasOne(x => x.Account).WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Restrict);
+            e.HasMany(x => x.Trades).WithOne(x => x.Holding).HasForeignKey(x => x.HoldingId).OnDelete(DeleteBehavior.Cascade);
+            e.HasMany(x => x.Dividends).WithOne(x => x.Holding).HasForeignKey(x => x.HoldingId).OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(x => new { x.AccountId, x.Ticker }).IsUnique();
+        });
+        mb.Entity<Trade>(e =>
+        {
+            e.Property(x => x.Shares).HasPrecision(18, 6);
+            e.Property(x => x.Price).HasPrecision(18, 4);
+            e.HasOne(x => x.DividendPayment).WithMany().HasForeignKey(x => x.DividendPaymentId).OnDelete(DeleteBehavior.SetNull);
+        });
+        mb.Entity<DividendPayment>(e =>
+        {
+            e.Property(x => x.PerShare).HasPrecision(18, 6);
+            e.Property(x => x.SharesHeld).HasPrecision(18, 6);
+            e.HasIndex(x => new { x.HoldingId, x.ExDate }).IsUnique();
+        });
+        mb.Entity<PriceSnapshot>(e =>
+        {
+            e.Property(x => x.Ticker).HasMaxLength(12);
+            e.Property(x => x.Price).HasPrecision(18, 4);
+            e.HasIndex(x => new { x.Ticker, x.Date }).IsUnique();
+        });
+        mb.Entity<Asset>(e =>
+        {
+            e.Property(x => x.Name).HasMaxLength(100);
+            e.HasMany(x => x.Values).WithOne(x => x.Asset).HasForeignKey(x => x.AssetId).OnDelete(DeleteBehavior.Cascade);
+        });
+        mb.Entity<AssetValue>().HasIndex(x => new { x.AssetId, x.AsOf }).IsUnique();
+
+        mb.Entity<Person>(e =>
+        {
+            e.Property(x => x.Name).HasMaxLength(100);
+            e.HasMany(x => x.Obligations).WithOne(x => x.Person).HasForeignKey(x => x.PersonId).OnDelete(DeleteBehavior.Cascade);
+            e.HasMany(x => x.Charges).WithOne(x => x.Person).HasForeignKey(x => x.PersonId).OnDelete(DeleteBehavior.Cascade);
+            e.HasMany(x => x.Payments).WithOne(x => x.Person).HasForeignKey(x => x.PersonId).OnDelete(DeleteBehavior.Cascade);
+        });
+        mb.Entity<Obligation>(e =>
+        {
+            e.Property(x => x.Description).HasMaxLength(200);
+            e.Property(x => x.ShareOfBill).HasPrecision(6, 4);
+            e.HasOne(x => x.Bill).WithMany().HasForeignKey(x => x.BillId).OnDelete(DeleteBehavior.SetNull);
+        });
+        mb.Entity<ReceivableCharge>().Property(x => x.Description).HasMaxLength(200);
+        mb.Entity<ReceivablePayment>().HasMany(x => x.Allocations).WithOne(x => x.Payment).HasForeignKey(x => x.PaymentId).OnDelete(DeleteBehavior.Cascade);
+        mb.Entity<IncomeReceipt>().HasOne(x => x.IncomeSource).WithMany().HasForeignKey(x => x.IncomeSourceId).OnDelete(DeleteBehavior.Cascade);
         mb.Entity<CardBalance>().HasIndex(x => new { x.CardId, x.AsOf }).IsUnique();
 
         mb.Entity<Category>(e =>

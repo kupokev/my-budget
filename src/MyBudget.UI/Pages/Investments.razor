@@ -1,0 +1,203 @@
+@page "/investments"
+@inject ApiClient Api
+@using MyBudget.Domain
+
+<h1>Investments</h1>
+<ErrorBanner @bind-Message="error" />
+
+@if (portfolio is null || accounts is null)
+{
+    <p class="muted">Loading…</p>
+}
+else
+{
+    <div class="toolbar">
+        <button type="button" @onclick="() => Edit(new HoldingDto { AccountId = accounts.FirstOrDefault(a => a.Type == AccountType.Brokerage)?.Id ?? 0 })">New holding</button>
+        <button class="secondary" type="button" @onclick="SyncAll" disabled="@syncing">@(syncing ? "Fetching…" : "Refresh prices & dividends")</button>
+        <span class="year-nav"><button class="secondary" type="button" @onclick="() => ChangeYear(year - 1)">‹</button><strong>@year</strong><button class="secondary" type="button" @onclick="() => ChangeYear(year + 1)">›</button></span>
+        <span class="muted">Prices and dividends from Yahoo Finance's free chart data; anything it misses can be typed in.</span>
+    </div>
+    <Warnings Items="portfolio.Warnings" />
+    @if (syncResults is { Count: > 0 })
+    {
+        <ul class="muted">@foreach (var r in syncResults) { <li>@r.Ticker: @(r.Error ?? $"{r.PricesAdded} prices, {r.DividendsAdded} dividends, {r.ReinvestsCreated} DRIP trades; last {Fmt.Money(r.LastPrice)}")</li> }</ul>
+    }
+
+    <div class="row tiles">
+        <section class="panel tile"><h3>Market value</h3><p class="big"><Money Value="portfolio.TotalValue" /></p><p class="muted">cost <Money Value="portfolio.TotalCost" /></p></section>
+        <section class="panel tile"><h3>Unrealized</h3><p class="big"><Money Value="portfolio.TotalUnrealized" Signed="true" /></p></section>
+        <section class="panel tile"><h3>Dividends @year</h3><p class="big"><Money Value="portfolio.DividendsThisYear" /></p></section>
+        <section class="panel tile"><h3>Realized @year</h3><p class="big"><Money Value="portfolio.RealizedShortTerm + portfolio.RealizedLongTerm" Signed="true" /></p><p class="muted">short <Money Value="portfolio.RealizedShortTerm" Signed="true" /> · long <Money Value="portfolio.RealizedLongTerm" Signed="true" /></p></section>
+        @if (portfolio.Tax is { } tax)
+        {
+            <section class="panel tile"><h3>Tax on gains (est.)</h3><p class="big"><Money Value="tax.Total" /></p><p class="muted">federal ST <Money Value="tax.ShortTermTax" /> at @tax.OrdinaryMarginalRate.ToString("P0") · LT <Money Value="tax.LongTermTax" /> · MO <Money Value="tax.MissouriTax" /></p><Steps Items="tax.Steps" /></section>
+        }
+    </div>
+
+    <section class="panel">
+        <table>
+            <thead><tr><th>Ticker</th><th>Account</th><th class="money">Shares</th><th class="money">Price</th><th class="money">Value</th><th class="money">Cost</th><th class="money">Unrealized</th><th class="money">Dividends @year</th><th>DRIP</th><th></th></tr></thead>
+            <tbody>
+            @foreach (var p in portfolio.Positions)
+            {
+                <tr class="@(open == p.Holding.Id ? "editing" : "")">
+                    <td><strong>@p.Holding.Ticker</strong> <span class="muted">@p.Holding.Name</span></td><td>@p.Holding.AccountName</td>
+                    <td class="money">@p.Shares.ToString("0.####")</td><td class="money" title="@Fmt.Date(p.PriceDate)">@Fmt.Money(p.Price)</td>
+                    <td>@Fmt.Money(p.MarketValue)</td><td><Money Value="p.CostBasis" /></td><td>@if (p.UnrealizedGain is { } u) { <Money Value="u" Signed="true" /> }</td><td><Money Value="p.DividendsThisYear" /></td>
+                    <td>@(p.Holding.Drip ? "on" : "")</td>
+                    <td class="actions"><button class="secondary" type="button" @onclick="() => open = open == p.Holding.Id ? null : p.Holding.Id">Details</button> <button class="secondary" type="button" @onclick="() => Edit(p.Holding)">Edit</button></td>
+                </tr>
+                @if (open == p.Holding.Id)
+                {
+                    <tr><td colspan="10">
+                        @if (p.WashSales.Count > 0) { <ul class="warnings">@foreach (var w in p.WashSales) { <li>@w.Message</li> }</ul> }
+                        <div class="row">
+                            <div class="grow">
+                                <h3>Trades</h3>
+                                <table class="compact">
+                                    <thead><tr><th>Date</th><th>Kind</th><th class="money">Shares</th><th class="money">Price</th><th class="money">Fees</th><th>Notes</th><th></th></tr></thead>
+                                    <tbody>@foreach (var t in p.Trades) { <tr class="@(t.Kind == TradeKind.Reinvest ? "muted" : "")"><td>@Fmt.Date(t.Date)</td><td>@t.Kind</td><td class="money">@t.Shares.ToString("0.######")</td><td class="money">@t.Price.ToString("N4")</td><td class="money">@Fmt.Money(t.Fees)</td><td>@t.Notes</td><td><button class="secondary" type="button" @onclick="() => RemoveTrade(t)">✕</button></td></tr> }</tbody>
+                                </table>
+                                <div class="row">
+                                    <div class="field"><label>Date</label><input type="date" @bind="newTrade.Date" /></div>
+                                    <div class="field"><label>Kind</label><select @bind="newTrade.Kind"><option value="@TradeKind.Buy">Buy</option><option value="@TradeKind.Sell">Sell</option></select></div>
+                                    <div class="field"><label>Shares</label><input type="number" step="0.000001" class="narrow-money" @bind="newTrade.Shares" /></div>
+                                    <div class="field"><label>Price</label><input type="number" step="0.0001" class="narrow-money" @bind="newTrade.Price" /></div>
+                                    <div class="field"><label>Fees</label><input type="number" step="0.01" class="narrow" @bind="newTrade.Fees" /></div>
+                                    <div class="field grow"><label>Why (notes)</label><input type="text" @bind="newTrade.Notes" /></div>
+                                    <div class="field"><label>&nbsp;</label><button type="button" @onclick="() => AddTrade(p.Holding.Id)">Add trade</button></div>
+                                </div>
+                            </div>
+                            <div class="grow">
+                                <h3>Dividends</h3>
+                                <table class="compact">
+                                    <thead><tr><th>Ex-date</th><th class="money">Per share</th><th class="money">Shares held</th><th class="money">Amount</th><th>DRIP</th><th></th></tr></thead>
+                                    <tbody>@foreach (var dv in p.Dividends) { <tr><td>@Fmt.Date(dv.ExDate) <span class="muted">@(dv.Source == DataSource.Fetched ? "" : "manual")</span></td><td class="money">@dv.PerShare.ToString("N4")</td><td class="money">@dv.SharesHeld.ToString("0.####")</td><td><Money Value="dv.Amount" /></td><td>@(dv.Reinvested ? "reinvested" : "cash")</td><td><button class="secondary" type="button" @onclick="() => RemoveDividend(dv)">✕</button></td></tr> }</tbody>
+                                </table>
+                                <div class="row">
+                                    <div class="field"><label>Ex-date</label><input type="date" @bind="newDividend.ExDate" /></div>
+                                    <div class="field"><label>Per share</label><input type="number" step="0.0001" class="narrow-money" @bind="newDividend.PerShare" /></div>
+                                    <div class="field"><label>&nbsp;</label><button class="secondary" type="button" @onclick="() => AddDividend(p.Holding.Id)">Add dividend</button></div>
+                                    <div class="field"><label>Price today</label><input type="number" step="0.01" class="narrow-money" @bind="manualPrice" /></div>
+                                    <div class="field"><label>&nbsp;</label><button class="secondary" type="button" @onclick="() => SetPrice(p.Holding.Ticker)">Set price</button></div>
+                                </div>
+                                <h3>Open lots</h3>
+                                <table class="compact">
+                                    <thead><tr><th>Acquired</th><th class="money">Shares left</th><th class="money">Cost / share</th><th></th></tr></thead>
+                                    <tbody>@foreach (var l in p.Lots) { <tr><td>@Fmt.Date(l.Acquired)</td><td class="money">@l.RemainingShares.ToString("0.######")</td><td class="money">@l.CostPerShare.ToString("N4")</td><td class="muted">@(l.FromReinvest ? "DRIP" : "")@(l.DisallowedLossAdded > 0 ? $" +{Fmt.Money(l.DisallowedLossAdded)} wash-sale basis" : "")</td></tr> }</tbody>
+                                </table>
+                                @if (p.Realized.Count > 0)
+                                {
+                                    <h3>Realized</h3>
+                                    <table class="compact">
+                                        <thead><tr><th>Sold</th><th>Lot</th><th class="money">Shares</th><th class="money">Proceeds</th><th class="money">Basis</th><th class="money">Gain</th><th>Term</th></tr></thead>
+                                        <tbody>@foreach (var g in p.Realized) { <tr title="@g.Formula"><td>@Fmt.Date(g.SellDate)</td><td>@Fmt.Date(g.Acquired)</td><td class="money">@g.Shares.ToString("0.####")</td><td><Money Value="g.Proceeds" /></td><td><Money Value="g.CostBasis" /></td><td><Money Value="g.Gain" Signed="true" /></td><td>@g.Term@(g.WashSale ? " · wash" : "")</td></tr> }</tbody>
+                                    </table>
+                                }
+                            </div>
+                        </div>
+                    </td></tr>
+                }
+            }
+            </tbody>
+        </table>
+    </section>
+
+    @if (editing is { } h)
+    {
+        <section class="panel">
+            <h2>@(h.Id == 0 ? "New holding" : h.Ticker)</h2>
+            <div class="row">
+                <div class="field"><label>Ticker</label><input type="text" @bind="h.Ticker" /></div>
+                <div class="field grow"><label>Name</label><input type="text" @bind="h.Name" /></div>
+                <div class="field"><label>Account</label><select @bind="h.AccountId">@foreach (var a in accounts.Where(a => a.IsActive)) { <option value="@a.Id">@a.Name</option> }</select></div>
+                <div class="field"><label class="inline"><input type="checkbox" @bind="h.Drip" /> DRIP (reinvest dividends)</label></div>
+                <div class="field"><label class="inline"><input type="checkbox" @bind="h.IsActive" /> Active</label></div>
+            </div>
+            <div class="field"><label>Notes</label><input type="text" @bind="h.Notes" /></div>
+            <div class="toolbar">
+                <button type="button" @onclick="SaveHolding">Save</button>
+                <button class="secondary" type="button" @onclick="() => editing = null">Cancel</button>
+                @if (h.Id != 0) { <button class="secondary danger" type="button" @onclick="DeleteHolding">Delete</button> }
+            </div>
+        </section>
+    }
+}
+
+@code {
+    private int year = DateTime.Today.Year;
+    private PortfolioDto? portfolio;
+    private List<AccountDto>? accounts;
+    private HoldingDto? editing;
+    private int? open;
+    private TradeDto newTrade = new() { Date = DateOnly.FromDateTime(DateTime.Today) };
+    private DividendDto newDividend = new() { ExDate = DateOnly.FromDateTime(DateTime.Today) };
+    private decimal manualPrice;
+    private bool syncing;
+    private List<MarketSyncResultDto>? syncResults;
+    private string? error;
+
+    protected override Task OnInitializedAsync() => Load();
+
+    private async Task Load()
+    {
+        try { accounts ??= await Api.GetAccountsAsync(); portfolio = await Api.GetPortfolioAsync(year); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task ChangeYear(int y) { year = y; await Load(); }
+    private void Edit(HoldingDto h) => editing = new() { Id = h.Id, Ticker = h.Ticker, Name = h.Name, AccountId = h.AccountId, Drip = h.Drip, IsActive = h.IsActive, Notes = h.Notes };
+
+    private async Task SaveHolding()
+    {
+        try { await Api.SaveHoldingAsync(editing!); editing = null; await Load(); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task DeleteHolding()
+    {
+        try { await Api.DeleteHoldingAsync(editing!.Id); editing = null; await Load(); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task SyncAll()
+    {
+        syncing = true;
+        try { syncResults = await Api.SyncAllHoldingsAsync(); await Load(); }
+        catch (Exception ex) { error = ex.Message; }
+        finally { syncing = false; }
+    }
+
+    private async Task AddTrade(int holdingId)
+    {
+        if (newTrade.Shares <= 0) return;
+        try { newTrade.HoldingId = holdingId; await Api.SaveTradeAsync(newTrade); newTrade = new() { Date = newTrade.Date }; await Load(); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task RemoveTrade(TradeDto t)
+    {
+        try { await Api.DeleteTradeAsync(t.Id); await Load(); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task AddDividend(int holdingId)
+    {
+        if (newDividend.PerShare <= 0) return;
+        try { newDividend.HoldingId = holdingId; await Api.AddDividendAsync(newDividend); newDividend = new() { ExDate = newDividend.ExDate }; await Load(); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task RemoveDividend(DividendDto d)
+    {
+        try { await Api.DeleteDividendAsync(d.Id); await Load(); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task SetPrice(string ticker)
+    {
+        if (manualPrice <= 0) return;
+        try { await Api.SetPriceAsync(ticker, DateOnly.FromDateTime(DateTime.Today), manualPrice); await Load(); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+}

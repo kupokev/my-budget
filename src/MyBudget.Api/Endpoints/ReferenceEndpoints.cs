@@ -33,6 +33,8 @@ public static class ReferenceEndpoints
             ty.MissouriStandardDeductionSingle = dto.MissouriStandardDeductionSingle; ty.MissouriStandardDeductionMarriedSpouseWorks = dto.MissouriStandardDeductionMarriedSpouseWorks;
             ty.MissouriStandardDeductionMarriedOneIncome = dto.MissouriStandardDeductionMarriedOneIncome; ty.MissouriStandardDeductionHeadOfHousehold = dto.MissouriStandardDeductionHeadOfHousehold;
             ty.MissouriSupplementalRate = dto.MissouriSupplementalRatePercent / 100m;
+            ty.LtcgThreshold15Single = dto.LtcgThreshold15Single; ty.LtcgThreshold15MarriedJointly = dto.LtcgThreshold15MarriedJointly; ty.LtcgThreshold15HeadOfHousehold = dto.LtcgThreshold15HeadOfHousehold;
+            ty.LtcgThreshold20Single = dto.LtcgThreshold20Single; ty.LtcgThreshold20MarriedJointly = dto.LtcgThreshold20MarriedJointly; ty.LtcgThreshold20HeadOfHousehold = dto.LtcgThreshold20HeadOfHousehold;
             ty.Source = dto.Source; ty.Verified = dto.Verified; ty.Notes = dto.Notes;
             ty.Brackets.Clear();
             ty.Brackets.AddRange(dto.Brackets.Select(b => new TaxBracket { Jurisdiction = b.Jurisdiction, FilingStatus = b.Jurisdiction == Jurisdiction.Federal ? b.FilingStatus : null, Over = b.Over, Rate = b.RatePercent / 100m }));
@@ -90,6 +92,8 @@ public static class ReferenceEndpoints
         MissouriStandardDeductionSingle = t.MissouriStandardDeductionSingle, MissouriStandardDeductionMarriedSpouseWorks = t.MissouriStandardDeductionMarriedSpouseWorks,
         MissouriStandardDeductionMarriedOneIncome = t.MissouriStandardDeductionMarriedOneIncome, MissouriStandardDeductionHeadOfHousehold = t.MissouriStandardDeductionHeadOfHousehold,
         MissouriSupplementalRatePercent = t.MissouriSupplementalRate * 100m,
+        LtcgThreshold15Single = t.LtcgThreshold15Single, LtcgThreshold15MarriedJointly = t.LtcgThreshold15MarriedJointly, LtcgThreshold15HeadOfHousehold = t.LtcgThreshold15HeadOfHousehold,
+        LtcgThreshold20Single = t.LtcgThreshold20Single, LtcgThreshold20MarriedJointly = t.LtcgThreshold20MarriedJointly, LtcgThreshold20HeadOfHousehold = t.LtcgThreshold20HeadOfHousehold,
         Source = t.Source, Verified = t.Verified, Notes = t.Notes,
         Brackets = t.Brackets.OrderBy(b => b.Jurisdiction).ThenBy(b => b.FilingStatus).ThenBy(b => b.Over)
             .Select(b => new TaxBracketDto { Jurisdiction = b.Jurisdiction, FilingStatus = b.FilingStatus, Over = b.Over, RatePercent = b.Rate * 100m }).ToList(),

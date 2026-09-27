@@ -34,6 +34,12 @@ public sealed class TaxYearDto
     public decimal MissouriStandardDeductionMarriedOneIncome { get; set; }
     public decimal MissouriStandardDeductionHeadOfHousehold { get; set; }
     public decimal MissouriSupplementalRatePercent { get; set; }
+    public decimal LtcgThreshold15Single { get; set; }
+    public decimal LtcgThreshold15MarriedJointly { get; set; }
+    public decimal LtcgThreshold15HeadOfHousehold { get; set; }
+    public decimal LtcgThreshold20Single { get; set; }
+    public decimal LtcgThreshold20MarriedJointly { get; set; }
+    public decimal LtcgThreshold20HeadOfHousehold { get; set; }
     public string? Source { get; set; }
     public bool Verified { get; set; }
     public string? Notes { get; set; }

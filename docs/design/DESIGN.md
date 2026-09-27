@@ -10,6 +10,9 @@ works. Add a row and a DD when a new subsystem gets its own design.
 | [DD-0003](./DD-0003-calculators.md) | Calculators: paycheck estimator, HSA planner, amortization, reference tables (Phase 2) | Active |
 | [DD-0004](./DD-0004-rewards-optimizer.md) | Rewards and status optimizer: programs, paths, thresholds, spend plan, card catalog (Phase 3) | Active |
 | [DD-0005](./DD-0005-import-and-history.md) | Import and history: statement import, transactions, spending dashboard, goals, year-over-year, export (Phase 4) | Active |
+| [DD-0006](./DD-0006-investments.md) | Investments: lots, dividends + DRIP, gains and tax, wash sales, assets (Phase 5) | Active |
+| [DD-0007](./DD-0007-local-ai.md) | Local AI on Ollama, tool-calling only (Phase 5) | Active |
+| [DD-0008](./DD-0008-buildout.md) | Build-out: alerts, home dashboard, receivables, 1099 set-aside, rainy-day fund (Phase 5) | Active |
 
 ## Decision records
 
@@ -23,5 +26,6 @@ works. Add a row and a DD when a new subsystem gets its own design.
 | [ADR-0006](./decisions/ADR-0006-lan-only-api-key-tls-no-mfa.md) | LAN-only, single API key, TLS, no MFA |
 | [ADR-0007](./decisions/ADR-0007-no-ui-component-framework.md) | No UI component framework; hand CSS + QuickGrid |
 | [ADR-0008](./decisions/ADR-0008-store-full-account-numbers.md) | Store full account/member/loan numbers on bills, loans, cards, accounts |
+| [ADR-0009](./decisions/ADR-0009-market-data-from-yahoo-chart-endpoint.md) | Market data from Yahoo's free chart endpoint behind a provider interface |
 
 Files are named `DD-NNNN-name.md` and `ADR-NNNN-name.md` so the number in prose maps straight to a file.

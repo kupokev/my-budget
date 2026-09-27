@@ -145,6 +145,40 @@ public static class DevSeed
             new Goal { Name = "Restaurants under $6K", Kind = GoalKind.Financial, Metric = GoalMetric.CategoryOutflow, CategoryId = restaurants.Id, TargetAmount = 6_000m, LowerIsBetter = true, StartDate = new(2026, 1, 1), EndDate = new(2026, 12, 31) },
             new Goal { Name = "Read 12 books", Kind = GoalKind.NonFinancial, Status = GoalStatus.InProgress, StartDate = new(2026, 1, 1), EndDate = new(2026, 12, 31) });
 
+        var brokerage = new Account { Name = "Fidelity Brokerage", Institution = "Fidelity", Type = AccountType.Brokerage };
+        db.Accounts.Add(brokerage);
+        db.Holdings.Add(new Holding
+        {
+            Ticker = "VTI", Name = "Vanguard Total Stock Market ETF", Account = brokerage, Drip = true,
+            Trades = [new Trade { Date = new(2025, 3, 3), Kind = TradeKind.Buy, Shares = 10, Price = 280.00m, Fees = 0, Notes = "placeholder lot" }],
+        });
+        db.Assets.Add(new Asset { Name = "House", Kind = AssetKind.Home, Values = [new AssetValue { AsOf = new(2026, 9, 1), Value = 385_000m }] });
+        db.Assets.Add(new Asset { Name = "Car", Kind = AssetKind.Vehicle, Values = [new AssetValue { AsOf = new(2026, 9, 1), Value = 18_500m }] });
+        var amexLoanBill = new Bill { Name = "Amex loan", Category = housing, DueDay = 5, ProjectedAmount = 250m, IsAutopay = true, PaymentAccount = chaseMain, FundingAccount = chaseMain, IsCardEligible = false, Notes = "Sam repays 100% each month" };
+        db.Bills.Add(amexLoanBill);
+        db.People.AddRange(
+            new Person
+            {
+                Name = "Sam",
+                Obligations = [new Obligation { Description = "Amex loan payment", Bill = amexLoanBill, ShareOfBill = 1.0m, StartPeriod = new(2026, 1, 1) }],
+                Payments = Enumerable.Range(1, 8).Select(m => new ReceivablePayment { Date = new(2026, m, 6), Amount = 250m, Allocations = [new PaymentAllocation { Period = new(2026, m, 1), Amount = 250m }] }).ToList(),
+            },
+            new Person
+            {
+                Name = "Robin",
+                Obligations = [new Obligation { Description = "Phone line", MonthlyAmount = 45m, StartPeriod = new(2026, 1, 1) }],
+                Charges = [new ReceivableCharge { Date = new(2026, 7, 12), Amount = 120m, Description = "Concert tickets" }],
+                Payments =
+                [
+                    new ReceivablePayment { Date = new(2026, 1, 10), Amount = 135m, Notes = "prepaid Jan–Mar", Allocations = [new() { Period = new(2026, 1, 1), Amount = 45m }, new() { Period = new(2026, 2, 1), Amount = 45m }, new() { Period = new(2026, 3, 1), Amount = 45m }] },
+                    new ReceivablePayment { Date = new(2026, 4, 8), Amount = 45m, Allocations = [new() { Period = new(2026, 4, 1), Amount = 45m }] },
+                    new ReceivablePayment { Date = new(2026, 8, 1), Amount = 120m, Allocations = [new() { Period = null, Amount = 120m }] },
+                ],
+            });
+        db.IncomeReceipts.AddRange(
+            new IncomeReceipt { IncomeSource = db.IncomeSources.Local.First(s => s.Name == "Chroma"), Date = new(2026, 3, 15), Amount = 4_000m },
+            new IncomeReceipt { IncomeSource = db.IncomeSources.Local.First(s => s.Name == "Alphanomix"), Date = new(2026, 6, 30), Amount = 6_500m });
+
         db.AccountBalances.AddRange(
             new AccountBalance { Account = pnc, AsOf = new(2026, 9, 1), Balance = 2_450m },
             new AccountBalance { Account = automatedBills, AsOf = new(2026, 9, 1), Balance = 610m },

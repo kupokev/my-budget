@@ -10,6 +10,7 @@
     <span class="tabs">
         <button type="button" class="@(tab == "yoy" ? "" : "secondary")" @onclick="@(() => tab = "yoy")">Year over year</button>
         <button type="button" class="@(tab == "nw" ? "" : "secondary")" @onclick="@(() => tab = "nw")">Net worth</button>
+        <button type="button" class="@(tab == "assets" ? "" : "secondary")" @onclick="@(() => LoadAssets())">Home & vehicles</button>
         <button type="button" class="@(tab == "export" ? "" : "secondary")" @onclick="@(() => tab = "export")">Export</button>
     </span>
 </div>
@@ -61,6 +62,42 @@ else if (tab == "nw")
         </section>
     }
 }
+else if (tab == "assets")
+{
+    <section class="panel">
+        <h2>Home, vehicles and other assets</h2>
+        <p class="muted">Valued by hand (no free Zillow/KBB API). The latest value on or before a date feeds net worth.</p>
+        <table>
+            <thead><tr><th>Asset</th><th>Kind</th><th class="money">Latest value</th><th>As of</th><th></th></tr></thead>
+            <tbody>
+            @foreach (var a in assets ?? [])
+            {
+                <tr><td>@a.Name</td><td>@a.Kind</td><td>@Fmt.Money(a.LatestValue)</td><td>@Fmt.Date(a.LatestAsOf)</td>
+                    <td class="actions"><button class="secondary" type="button" @onclick="() => valueFor = a">Record value</button> <button class="secondary" type="button" @onclick="() => assetEdit = new AssetDto { Id = a.Id, Name = a.Name, Kind = a.Kind, Notes = a.Notes, IsActive = a.IsActive }">Edit</button></td></tr>
+            }
+            </tbody>
+        </table>
+        <div class="toolbar"><button type="button" @onclick="() => assetEdit = new AssetDto()">New asset</button></div>
+        @if (valueFor is { } vf)
+        {
+            <div class="row">
+                <div class="field"><label>@vf.Name value as of</label><input type="date" @bind="newValue.AsOf" /></div>
+                <div class="field"><label>Value</label><input type="number" step="1" @bind="newValue.Value" /></div>
+                <div class="field"><label>&nbsp;</label><button type="button" @onclick="SaveValue">Save</button> <button class="secondary" type="button" @onclick="() => valueFor = null">Close</button></div>
+            </div>
+        }
+        @if (assetEdit is { } ae)
+        {
+            <div class="row">
+                <div class="field"><label>Name</label><input type="text" @bind="ae.Name" /></div>
+                <div class="field"><label>Kind</label><select @bind="ae.Kind">@foreach (var k in Enum.GetValues<MyBudget.Domain.AssetKind>()) { <option value="@k">@k</option> }</select></div>
+                <div class="field grow"><label>Notes</label><input type="text" @bind="ae.Notes" /></div>
+                <div class="field"><label class="inline"><input type="checkbox" @bind="ae.IsActive" /> Active</label></div>
+                <div class="field"><label>&nbsp;</label><button type="button" @onclick="SaveAsset">Save</button> <button class="secondary" type="button" @onclick="() => assetEdit = null">Cancel</button> @if (ae.Id != 0) { <button class="secondary danger" type="button" @onclick="DeleteAsset">Delete</button> }</div>
+            </div>
+        }
+    </section>
+}
 else
 {
     <section class="panel">
@@ -80,6 +117,14 @@ else
     private YearOverYearDto? yoy;
     private NetWorthDto? nw;
     private string? saved, error;
+    private List<AssetDto>? assets;
+    private AssetDto? assetEdit, valueFor;
+    private AssetValueDto newValue = new() { AsOf = DateOnly.FromDateTime(DateTime.Today) };
+
+    private async Task LoadAssets() { tab = "assets"; try { assets = await Api.GetAssetsAsync(); } catch (Exception ex) { error = ex.Message; } }
+    private async Task SaveAsset() { try { await Api.SaveAssetAsync(assetEdit!); assetEdit = null; assets = await Api.GetAssetsAsync(); nw = await Api.GetNetWorthAsync(); } catch (Exception ex) { error = ex.Message; } }
+    private async Task DeleteAsset() { try { await Api.DeleteAssetAsync(assetEdit!.Id); assetEdit = null; assets = await Api.GetAssetsAsync(); nw = await Api.GetNetWorthAsync(); } catch (Exception ex) { error = ex.Message; } }
+    private async Task SaveValue() { try { await Api.SaveAssetValueAsync(valueFor!.Id, newValue); valueFor = null; assets = await Api.GetAssetsAsync(); nw = await Api.GetNetWorthAsync(); } catch (Exception ex) { error = ex.Message; } }
 
     protected override Task OnInitializedAsync() => Load();
 

@@ -132,6 +132,40 @@ public sealed class ApiClient(HttpClient http)
         return await r.Content.ReadAsStringAsync();
     }
 
+    // Build-out (Phase 5)
+    public Task<PortfolioDto> GetPortfolioAsync(int? year = null) => Get<PortfolioDto>(Q("api/investments/portfolio", ("year", year)));
+    public Task<List<HoldingDto>> GetHoldingsAsync() => Get<List<HoldingDto>>("api/investments/holdings");
+    public Task<HoldingDto> SaveHoldingAsync(HoldingDto h) => h.Id == 0 ? Post("api/investments/holdings", h) : Put($"api/investments/holdings/{h.Id}", h);
+    public Task DeleteHoldingAsync(int id) => Delete($"api/investments/holdings/{id}");
+    public Task<MarketSyncResultDto> SyncHoldingAsync(int id) => Post<object, MarketSyncResultDto>($"api/investments/holdings/{id}/sync", new { });
+    public Task<List<MarketSyncResultDto>> SyncAllHoldingsAsync() => Post<object, List<MarketSyncResultDto>>("api/investments/sync-all", new { });
+    public Task<TradeDto> SaveTradeAsync(TradeDto t) => t.Id == 0 ? Post("api/investments/trades", t) : Put($"api/investments/trades/{t.Id}", t);
+    public Task DeleteTradeAsync(int id) => Delete($"api/investments/trades/{id}");
+    public Task<DividendDto> AddDividendAsync(DividendDto d) => Post("api/investments/dividends", d);
+    public Task DeleteDividendAsync(int id) => Delete($"api/investments/dividends/{id}");
+    public Task SetPriceAsync(string ticker, DateOnly date, decimal price) => Post<object, object>(Q("api/investments/prices", ("ticker", ticker), ("date", date.ToString("yyyy-MM-dd")), ("price", price)), new { });
+    public Task<List<AssetDto>> GetAssetsAsync() => Get<List<AssetDto>>("api/assets");
+    public Task<AssetDto> SaveAssetAsync(AssetDto a) => a.Id == 0 ? Post("api/assets", a) : Put($"api/assets/{a.Id}", a);
+    public Task DeleteAssetAsync(int id) => Delete($"api/assets/{id}");
+    public Task<AssetDto> SaveAssetValueAsync(int id, AssetValueDto v) => Post<AssetValueDto, AssetDto>($"api/assets/{id}/values", v);
+    public Task<List<PersonDto>> GetPeopleAsync() => Get<List<PersonDto>>("api/people");
+    public Task<List<PersonLedgerDto>> GetLedgersAsync() => Get<List<PersonLedgerDto>>("api/people/ledgers");
+    public Task<PersonDto> SavePersonAsync(PersonDto p) => p.Id == 0 ? Post("api/people", p) : Put($"api/people/{p.Id}", p);
+    public Task DeletePersonAsync(int id) => Delete($"api/people/{id}");
+    public Task<List<IncomeReceiptDto>> GetReceiptsAsync(int year) => Get<List<IncomeReceiptDto>>($"api/side-income/receipts?year={year}");
+    public Task<IncomeReceiptDto> AddReceiptAsync(IncomeReceiptDto r) => Post("api/side-income/receipts", r);
+    public Task DeleteReceiptAsync(int id) => Delete($"api/side-income/receipts/{id}");
+    public Task<List<EstimatedTaxPaymentDto>> GetEstimatedPaymentsAsync(int year) => Get<List<EstimatedTaxPaymentDto>>($"api/side-income/payments?year={year}");
+    public Task<EstimatedTaxPaymentDto> AddEstimatedPaymentAsync(EstimatedTaxPaymentDto p) => Post("api/side-income/payments", p);
+    public Task DeleteEstimatedPaymentAsync(int id) => Delete($"api/side-income/payments/{id}");
+    public Task<SelfEmploymentDto> GetSelfEmploymentAsync(int year, decimal? projected) => Get<SelfEmploymentDto>(Q("api/side-income/estimate", ("year", year), ("projected", projected)));
+    public Task<List<AlertDto>> GetAlertsAsync(string? kind = null) => Get<List<AlertDto>>(Q("api/alerts", ("kind", kind)));
+    public Task<RainyDayDto> GetRainyDayAsync() => Get<RainyDayDto>("api/rainy-day");
+    public Task<HomeDashboardDto> GetDashboardAsync() => Get<HomeDashboardDto>("api/home/dashboard");
+    public Task<AiStatusDto> GetAiStatusAsync() => Get<AiStatusDto>("api/ai/status");
+    public Task<ChatResponseDto> ChatAsync(ChatRequest req) => Post<ChatRequest, ChatResponseDto>("api/ai/chat", req);
+    public Task<AiSummaryDto> GetAiSummaryAsync(int year, int month) => Get<AiSummaryDto>($"api/ai/summary?year={year}&month={month}");
+
     // Views
     public Task<TransferNeedsDto> GetTransferNeedsAsync(DateOnly? asOf = null)
         => Get<TransferNeedsDto>(asOf is { } d ? $"api/transfer-needs?asOf={d:yyyy-MM-dd}" : "api/transfer-needs");
