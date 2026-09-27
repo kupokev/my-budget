@@ -176,6 +176,25 @@ public sealed class ApiClient(HttpClient http)
     public Task<AppSettingsDto> GetAppSettingsAsync() => Get<AppSettingsDto>("api/settings");
     public Task<AppSettingsDto> SaveAppSettingsAsync(AppSettingsDto s) => Put<AppSettingsDto, AppSettingsDto>("api/settings", s);
     public Task<AiProbeDto> ProbeAiAsync(string? baseUrl, string? apiKey) => Get<AiProbeDto>(Q("api/settings/ai/probe", ("baseUrl", baseUrl), ("apiKey", apiKey)));
+    public Task<BackupStatusDto> GetBackupStatusAsync() => Get<BackupStatusDto>("api/backup/status");
+
+    public async Task<(byte[] Content, string FileName)> ExportBudgetAsync()
+    {
+        var r = await http.GetAsync("api/backup/export");
+        await ThrowIfFailed(r);
+        var name = r.Content.Headers.ContentDisposition?.FileNameStar ?? r.Content.Headers.ContentDisposition?.FileName ?? "budget.mybudget";
+        return (await r.Content.ReadAsByteArrayAsync(), name.Trim('"'));
+    }
+
+    public async Task<BackupImportDto> ImportBudgetAsync(string fileName, Stream file)
+    {
+        using var form = new MultipartFormDataContent();
+        using var content = new StreamContent(file);
+        form.Add(content, "file", fileName);
+        var r = await http.PostAsync("api/backup/import", form);
+        await ThrowIfFailed(r);
+        return (await r.Content.ReadFromJsonAsync<BackupImportDto>(Json))!;
+    }
     public Task<ChatResponseDto> ChatAsync(ChatRequest req) => Post<ChatRequest, ChatResponseDto>("api/ai/chat", req);
     public Task<AiSummaryDto> GetAiSummaryAsync(int year, int month) => Get<AiSummaryDto>($"api/ai/summary?year={year}&month={month}");
 

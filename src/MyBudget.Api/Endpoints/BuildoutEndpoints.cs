@@ -95,6 +95,38 @@ public static class BuildoutEndpoints
             return new AiProbeDto(false, url, [], string.Join("; ", attempts));
         });
 
+        var b = api.MapGroup("/backup");
+        b.MapGet("/status", (BackupService backup) =>
+        {
+            if (!backup.Supported) return new BackupStatusDto(false, null, 0, false);
+            var path = backup.DatabasePath;
+            return new BackupStatusDto(true, path,
+                File.Exists(path) ? new FileInfo(path).Length : 0,
+                File.Exists(path + BackupService.PendingSuffix));
+        });
+        b.MapGet("/export", async (BackupService backup) =>
+        {
+            if (!backup.Supported) return Results.BadRequest("Export is only available for the local budget file.");
+            var bytes = await backup.ExportAsync();
+            return Results.File(bytes, "application/vnd.sqlite3", backup.SuggestedFileName);
+        });
+        // Every refusal comes back as a BackupImportDto so the page always has something to show,
+        // rather than a raw error the user has to interpret.
+        b.MapPost("/import", async (HttpRequest req, BackupService backup) =>
+        {
+            static IResult No(string why) => Results.Ok(new BackupImportDto(false, why, null, new Dictionary<string, int>()));
+
+            if (!backup.Supported) return No("Restore is only available for the local budget file.");
+            if (!req.HasFormContentType) return No("Send the budget file as multipart/form-data.");
+            var form = await req.ReadFormAsync();
+            var file = form.Files.FirstOrDefault();
+            if (file is null || file.Length == 0) return No("No file was uploaded.");
+
+            await using var stream = file.OpenReadStream();
+            var r = await backup.StageImportAsync(stream);
+            return Results.Ok(new BackupImportDto(r.Ok, r.Problem, r.ReplacedCopyPath, r.Counts));
+        }).DisableAntiforgery();
+
         var a = api.MapGroup("/ai");
         a.MapGet("/status", async (AiService svc) => await svc.StatusAsync());
         a.MapPost("/chat", async (ChatRequest req, AiService svc, TimeProvider clock) =>

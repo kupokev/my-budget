@@ -1,5 +1,6 @@
 @page "/settings"
 @inject ApiClient Api
+@inject MyBudget.UI.Services.IFileSaver Files
 
 <ErrorBanner @bind-Message="error" />
 
@@ -114,6 +115,82 @@ else
     </section>
 
     <section class="panel">
+        <h2>Back up and restore</h2>
+        <p class="muted">
+            Your whole budget is one file on this machine. Export it before upgrading, or to hand someone
+            their own copy. Restoring replaces everything currently in the app.
+        </p>
+
+        @if (backup is { Supported: true } bk)
+        {
+            <div class="settings-form">
+                <div class="setting">
+                    <div class="setting-label">
+                        <label>Export</label>
+                        <p class="hint">
+                            Saves a snapshot of everything: accounts, budget, transactions, holdings, settings.
+                            It's an ordinary SQLite file, so any database tool can open it.
+                        </p>
+                    </div>
+                    <div class="setting-control">
+                        <button class="secondary" type="button" @onclick="Export" disabled="@exporting">@(exporting ? "Exporting…" : "Export budget")</button>
+                        @if (exportedTo is { } path) { <p class="hint pos">Saved to @path</p> }
+                    </div>
+                </div>
+
+                <div class="setting">
+                    <div class="setting-label">
+                        <label>Restore</label>
+                        <p class="hint">
+                            Replaces everything in the app with the chosen file. What's here now is copied
+                            alongside it first, so a wrong file can be undone. Takes effect when you restart.
+                        </p>
+                    </div>
+                    <div class="setting-control">
+                        <InputFile OnChange="OnBudgetFile" accept=".mybudget,.db,.sqlite" />
+                    </div>
+                </div>
+
+                <div class="setting">
+                    <div class="setting-label">
+                        <label>This budget</label>
+                        <p class="hint">Where the file lives and how big it is.</p>
+                    </div>
+                    <div class="setting-control">
+                        <p class="hint"><code>@bk.DatabasePath</code></p>
+                        <p class="hint">@((bk.SizeBytes / 1024.0 / 1024.0).ToString("0.0")) MB</p>
+                    </div>
+                </div>
+            </div>
+
+            @if (bk.RestorePending)
+            {
+                <p class="status-line ok"><strong>A restore is waiting.</strong> It replaces this budget the next time the app starts.</p>
+            }
+            @if (importResult is { } ir)
+            {
+                <p class="status-line @(ir.Ok ? "ok" : "bad")">
+                    @if (ir.Ok)
+                    {
+                        <strong>Ready to restore.</strong>
+                        <text> @string.Join(", ", ir.Counts.Select(c => $"{c.Value} {c.Key.ToLowerInvariant()}")). Restart the app to switch to it.</text>
+                        @if (ir.ReplacedCopyPath is { } rp) { <span class="detail">The budget being replaced was copied to @rp</span> }
+                    }
+                    else
+                    {
+                        <strong>Not restored.</strong>
+                        <span class="detail">@ir.Problem</span>
+                    }
+                </p>
+            }
+        }
+        else
+        {
+            <p class="muted">Only available for the local database. This app is pointed at a shared API.</p>
+        }
+    </section>
+
+    <section class="panel">
         <h2>What the assistant can answer</h2>
         @if (status is { Tools.Count: > 0 } st)
         {
@@ -131,7 +208,10 @@ else
     private AppSettingsDto? settings;
     private AiProbeDto? probe;
     private AiStatusDto? status;
-    private bool probing, saved, showKey;
+    private BackupStatusDto? backup;
+    private BackupImportDto? importResult;
+    private bool probing, saved, showKey, exporting;
+    private string? exportedTo;
     private string? error;
 
     protected override async Task OnInitializedAsync()
@@ -140,6 +220,31 @@ else
         {
             settings = await Api.GetAppSettingsAsync();
             status = await Api.GetAiStatusAsync();
+            backup = await Api.GetBackupStatusAsync();
+        }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task Export()
+    {
+        exporting = true; exportedTo = null; error = null;
+        try
+        {
+            var (content, name) = await Api.ExportBudgetAsync();
+            exportedTo = await Files.SaveBytesAsync(name, content);
+        }
+        catch (Exception ex) { error = ex.Message; }
+        finally { exporting = false; }
+    }
+
+    private async Task OnBudgetFile(InputFileChangeEventArgs e)
+    {
+        error = null; importResult = null;
+        try
+        {
+            await using var stream = e.File.OpenReadStream(512 * 1024 * 1024);
+            importResult = await Api.ImportBudgetAsync(e.File.Name, stream);
+            backup = await Api.GetBackupStatusAsync();
         }
         catch (Exception ex) { error = ex.Message; }
     }

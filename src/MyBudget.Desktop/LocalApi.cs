@@ -39,6 +39,8 @@ public sealed class LocalApi : IAsyncDisposable
 
     public async Task StartAsync()
     {
+        ApplyPendingRestore();
+
         var port = FreeLoopbackPort();
         BaseUrl = $"http://127.0.0.1:{port}";
 
@@ -54,6 +56,24 @@ public sealed class LocalApi : IAsyncDisposable
         await BudgetApiHost.PrepareDatabaseAsync(app);   // migrates the file, then tops up reference data
         app.MapBudgetApi(ApiKey);
         await app.StartAsync();
+    }
+
+    /// <summary>
+    /// A restore staged from the Settings page is swapped in here, before anything opens the database.
+    /// Doing it at startup is what makes it safe: nothing holds the file, so the move either happens or
+    /// it doesn't, and the sidecar journal files of the old database go with it.
+    /// </summary>
+    private static void ApplyPendingRestore()
+    {
+        var target = DatabasePath;
+        var pending = target + MyBudget.Api.BackupService.PendingSuffix;
+        if (!File.Exists(pending)) return;
+
+        foreach (var sidecar in new[] { target + "-wal", target + "-shm" })
+            if (File.Exists(sidecar)) File.Delete(sidecar);
+
+        File.Move(pending, target, overwrite: true);
+        Console.WriteLine("MyBudget: restored the budget staged on the Settings page.");
     }
 
     /// <summary>Ask the OS for a port rather than guessing one that might already be taken.</summary>

@@ -237,4 +237,31 @@ public class BuildoutEndpointTests : IClassFixture<ApiFixture>
         Assert.Empty(probe.Models);
         Assert.False(string.IsNullOrWhiteSpace(probe.Error));
     }
+
+    [Fact]
+    public async Task Export_and_restore_are_off_unless_the_budget_is_a_local_file()
+    {
+        // Tests run on the in-memory provider, where there is no file to copy.
+        var status = await _api.Get<BackupStatusDto>("api/backup/status");
+        Assert.False(status.Supported);
+        Assert.Null(status.DatabasePath);
+        Assert.False(status.RestorePending);
+    }
+
+    [Fact]
+    public async Task Restoring_something_that_is_not_a_budget_is_refused()
+    {
+        using var form = new MultipartFormDataContent();
+        using var content = new ByteArrayContent("this is not a database"u8.ToArray());
+        form.Add(content, "file", "notes.txt");
+
+        var r = await _api.Client.PostAsync("api/backup/import", form);
+        r.EnsureSuccessStatusCode();
+
+        // A refusal is still a well-formed answer the page can render, not a raw error.
+        var result = (await r.Content.ReadFromJsonAsync<BackupImportDto>(ApiFixture.Json))!;
+        Assert.False(result.Ok);
+        Assert.False(string.IsNullOrWhiteSpace(result.Problem));
+        Assert.Empty(result.Counts);
+    }
 }

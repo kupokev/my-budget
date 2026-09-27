@@ -103,3 +103,26 @@ is the path to a shared server when one exists.
 **Schema changes need a migration.** The file holds real data now, so `Database.MigrateAsync` runs at
 startup for any relational provider. `EnsureCreated` would silently stop matching the model and take
 the data with it. Tests still use the in-memory provider, which has no migrations and needs none.
+
+
+## Export and restore (2026-09-27)
+
+A whole budget is exported and restored as the SQLite database file itself, not a JSON dump.
+
+Nearly every table points at another by id: a transaction at a card, a loan at an asset, a budget
+line at a label, an earn rule at a category and a label. A dump-and-reload would have to renumber
+every key and rewrite every reference that uses it, and the failure mode of getting that wrong is
+silent — wrong numbers attached to the right-looking rows, on real data. A database copy is exact by
+construction and needs no mapping at all.
+
+- **Export** uses `VACUUM INTO`, which produces a consistent, compacted copy including anything still
+  in the write-ahead log. Never a raw file copy of a live database.
+- **Restore** inspects the upload first, requiring `__EFMigrationsHistory` plus the core tables, and
+  reports what it contains before anything is replaced. The current budget is copied beside it, then
+  the upload is staged as `mybudget.db.pending`.
+- **The swap happens at startup**, in `LocalApi.ApplyPendingRestore`, when nothing holds the file open.
+  The old `-wal` and `-shm` sidecars are removed with it, or they would be read against the new file.
+- Migrations then run as usual, so a budget exported from an older version comes forward on load.
+
+Only available on SQLite; the endpoints refuse for any other provider, and a refusal is a normal
+result object rather than an error so the page always has something to show.

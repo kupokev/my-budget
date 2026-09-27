@@ -210,6 +210,12 @@ public sealed record HomeDashboardDto(
 
 // ---- Local AI (AI-1, AI-2) ----------------------------------------------------------------------
 
+/// <summary>What a staged restore contains, so it can be confirmed before the app restarts into it.</summary>
+public sealed record BackupImportDto(bool Ok, string? Problem, string? ReplacedCopyPath, IReadOnlyDictionary<string, int> Counts);
+
+/// <summary>Whether export and restore are available, and where the current budget lives.</summary>
+public sealed record BackupStatusDto(bool Supported, string? DatabasePath, long SizeBytes, bool RestorePending);
+
 public sealed class AppSettingsDto
 {
     public bool AiEnabled { get; set; }

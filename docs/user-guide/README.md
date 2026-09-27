@@ -92,6 +92,15 @@ in-memory database resets on every restart either way.)
   groceries, gas). It is not derived from bills. That figure plus card-eligible bill accruals is the
   whole pool the rewards plan allocates, and the table totals it for you. Untick "can go on a card"
   for anything that can't take one.
+- **Admin → Settings → Back up and restore.** *Export budget* saves your whole budget as one file:
+  accounts, budget lines, transactions, holdings, settings, everything. Do it before upgrading. The
+  file is an ordinary SQLite database, so any database tool can open it, and handing someone the file
+  gives them a complete copy to work from.
+
+  *Restore* replaces everything in the app with a file you choose. What's there now is copied
+  alongside first, named `mybudget-replaced-<date>.mybudget`, so restoring the wrong file is
+  recoverable. The swap happens when the app next starts, because the running app holds the database
+  open; the page tells you a restore is waiting.
 - **Admin → Settings.** Where the local AI is switched on and pointed at your Ollama instance. Enter
   the address, press *Test connection*, and pick the model from the list it comes back with. Nothing
   leaves your network, and the model only calls a fixed set of functions; it never sees the database.

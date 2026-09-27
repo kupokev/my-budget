@@ -32,6 +32,7 @@ public static class BudgetApiHost
         builder.Services.AddScoped<InvestmentService>();
         builder.Services.AddScoped<AlertsService>();
         builder.Services.AddScoped<AiTools>();
+        builder.Services.AddScoped<BackupService>();
         builder.Services.AddHttpClient<IMarketDataProvider, YahooMarketDataProvider>(c => c.Timeout = TimeSpan.FromSeconds(20));
         var configured = builder.Configuration.GetSection(AiOptions.Section).Get<AiOptions>() ?? new AiOptions();
         builder.Services.AddSingleton(configured);
