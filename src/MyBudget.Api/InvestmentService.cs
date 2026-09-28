@@ -283,7 +283,7 @@ public sealed class InvestmentService(BudgetDbContext db, IMarketDataProvider ma
                 Kind = drift > 0 ? TradeKind.Buy : TradeKind.Sell,
                 Shares = Math.Abs(drift),
                 Price = parsed.Lots.FirstOrDefault(l => l.Ticker == position.Ticker)?.Price ?? 0m,
-                Notes = $"adjusted to statement: {position.Units:0.####} shares held on {position.AsOf:yyyy-MM-dd}",
+                Notes = $"{TradeNotes.StatementAdjustment}: {position.Units:0.####} shares held on {position.AsOf:yyyy-MM-dd}",
             });
             imported++;
         }

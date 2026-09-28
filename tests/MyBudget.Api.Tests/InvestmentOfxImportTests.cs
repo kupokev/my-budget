@@ -95,6 +95,38 @@ public class InvestmentOfxImportTests : IClassFixture<ApiFixture>
         Assert.Equal(10.50m, position.FeesThisYear);
     }
 
+    [Fact]
+    public async Task A_contributions_goal_counts_what_was_bought_not_just_what_was_deposited()
+    {
+        var account = await _api.Post("api/accounts", new AccountDto
+        {
+            // A type no other test in this class uses: the metric spans every account of its type, so
+            // sharing one with a sibling test would have them counting each other's purchases.
+            Name = "IRA for goal", Institution = "Vanguard", Type = AccountType.RothIra, IsActive = true,
+        });
+        await ImportAsync(account.Id, Qfx);
+
+        var goal = await _api.Post("api/goals", new GoalDto
+        {
+            Name = "Retirement contributions",
+            Kind = GoalKind.Financial,
+            Metric = GoalMetric.AccountTypeContributions,
+            AccountType = AccountType.RothIra,
+            TargetAmount = 10_000m,
+            StartDate = new DateOnly(2026, 1, 1),
+            EndDate = new DateOnly(2026, 12, 31),
+            IsActive = true,
+        });
+
+        var progress = (await _api.Get<List<GoalProgressDto>>("api/goals/progress")).Single(g => g.Goal.Id == goal.Id);
+
+        // 4.032 × 74.41 = 300.02112, 3.572 × 83.99 = 300.01228 — two $300 contributions, and the
+        // figure that used to report as zero because a retirement contribution is a purchase rather
+        // than a deposit. The statement adjustment is a sell, so it cannot inflate this.
+        Assert.Equal(600.03m, progress.Current);
+        Assert.Contains("purchases", progress.CurrentSource);
+    }
+
     private async Task<PositionDto> Position(int accountId)
     {
         var portfolio = await _api.Get<PortfolioDto>("api/investments/portfolio");

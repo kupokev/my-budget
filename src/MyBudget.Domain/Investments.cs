@@ -1,6 +1,16 @@
 namespace MyBudget.Domain;
 
 public enum TradeKind { Buy, Sell, Reinvest }
+
+public static class TradeNotes
+{
+    /// <summary>
+    /// Marks a trade that exists only to make a holding agree with a statement, rather than because
+    /// anything was bought or sold. Counting one as a contribution or a real purchase would overstate
+    /// what went in, so anything measuring money in has to skip it.
+    /// </summary>
+    public const string StatementAdjustment = "adjusted to statement";
+}
 public enum DataSource { Manual, Fetched }
 
 /// <summary>A ticker held in one brokerage account (INV-1). DRIP turns dividends into reinvest trades (INV-2a).</summary>

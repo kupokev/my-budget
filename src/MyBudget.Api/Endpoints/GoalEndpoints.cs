@@ -112,7 +112,23 @@ public static class GoalEndpoints
                 }
                 var accountIds = await db.Accounts.Where(a => a.Type == type).Select(a => a.Id).ToListAsync();
                 var paidIn = await db.Transactions.Where(t => t.AccountId != null && accountIds.Contains(t.AccountId.Value) && t.Amount > 0 && t.Date >= goal.StartDate && t.Date <= goal.EndDate).SumAsync(t => t.Amount);
-                return (paidIn, $"money into {AccountTypes.Display(type)} accounts {goal.StartDate:MMM d} – {goal.EndDate:MMM d, yyyy}");
+
+                // Money reaches an investment account by being invested: a 401(k) contribution arrives
+                // as a purchase, not a deposit, so counting transactions alone reported zero for an
+                // account with real contributions in it. Reinvested dividends are excluded — that is
+                // the fund paying itself, not money you put in — as are statement adjustments.
+                var invested = await db.Trades
+                    .Where(t => t.Kind == TradeKind.Buy
+                                && t.Holding != null && accountIds.Contains(t.Holding.AccountId)
+                                && t.Date >= goal.StartDate && t.Date <= goal.EndDate
+                                && (t.Notes == null || !t.Notes.StartsWith(TradeNotes.StatementAdjustment)))
+                    .SumAsync(t => t.Shares * t.Price + t.Fees);
+
+                var total = Math.Round(paidIn + invested, 2);
+                var how = invested > 0 && paidIn > 0 ? "deposits and purchases"
+                        : invested > 0 ? "purchases"
+                        : "deposits";
+                return (total, $"money into {AccountTypes.Display(type)} accounts via {how}, {goal.StartDate:MMM d} – {goal.EndDate:MMM d, yyyy}");
             }
             case GoalMetric.Retirement401kContributed:
             {
