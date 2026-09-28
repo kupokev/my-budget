@@ -53,6 +53,13 @@ public sealed class CardDto
 {
     public int Id { get; set; }
     [Required, StringLength(100)] public string Name { get; set; } = "";
+
+    /// <summary>Short name for tables; the full name is kept for identifying the card.</summary>
+    [StringLength(40)] public string? Nickname { get; set; }
+
+    /// <summary>What a list should show: the nickname if there is one.</summary>
+    public string Display => string.IsNullOrWhiteSpace(Nickname) ? Name : Nickname;
+
     [StringLength(60)] public string? Issuer { get; set; }
     [StringLength(30)] public string? Network { get; set; }
     [StringLength(60)] public string? AccountNumber { get; set; }
@@ -64,6 +71,12 @@ public sealed class CardDto
     [Range(0, 10_000_000)] public decimal CreditLimit { get; set; }
     [Range(0, 100_000)] public decimal AnnualFee { get; set; }
     [Range(1, 12)] public int? AnnualFeeMonth { get; set; }
+
+    /// <summary>Keep the annual fee as a budget line. Deleting that line turns this back off.</summary>
+    public bool BudgetAnnualFee { get; set; }
+
+    /// <summary>The budget line holding the fee, when there is one.</summary>
+    public int? FeeBudgetLineId { get; set; }
     public int? PayingAccountId { get; set; }
     public string? Notes { get; set; }
     public bool IsActive { get; set; } = true;

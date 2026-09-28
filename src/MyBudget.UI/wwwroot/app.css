@@ -279,6 +279,13 @@ th.center, td.center { text-align: center; }
 .form .field input, .form .field select, .form .field textarea, .form .field .masked-input { width: 100%; box-sizing: border-box; }
 .form .field .masked-input input { flex: 1; }
 .form .field label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* A field's caption is one line and clips; anything longer goes in a hint, which wraps under the
+   control instead of stretching the column or spilling into the next field. */
+.form .field .hint { display: block; margin-top: 4px; font-size: 11px; line-height: 1.35;
+  color: var(--fg-muted); white-space: normal; }
+/* A checkbox sitting where a control goes lines up with the inputs beside it, not with their labels. */
+.form .field label.inline { margin-top: 6px; font-weight: 400; }
 .form .checks { grid-column: -2 / -1; grid-row: 1 / span 2; display: flex; flex-direction: column; gap: 10px; justify-self: end; align-self: start; padding: 22px 8px 0 0; white-space: nowrap; }
 .form .field.full { margin-bottom: 14px; }
 .form .field.full textarea { width: 100%; }

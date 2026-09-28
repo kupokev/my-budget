@@ -18,7 +18,7 @@ else
                 <select @bind="source">
                     <option value="">—</option>
                     <optgroup label="Bank accounts">@foreach (var a in accounts.Where(a => a.IsActive)) { <option value="account:@a.Id">@Fmt.Label(a.Name, a.AccountNumber)</option> }</optgroup>
-                    <optgroup label="Cards">@foreach (var c in cards.Where(c => c.IsActive)) { <option value="card:@c.Id">@Fmt.Label(c.Name, c.AccountNumber)</option> }</optgroup>
+                    <optgroup label="Cards">@foreach (var c in cards.Where(c => c.IsActive)) { <option value="card:@c.Id">@Fmt.Label(c.Display, c.AccountNumber)</option> }</optgroup>
                 </select></div>
             <div class="field"><label>Layout</label>
                 <select @bind="profile"><option value="auto">Detect from the file</option>@foreach (var p in profiles) { <option value="@p.Key">@p.Name</option> }</select></div>

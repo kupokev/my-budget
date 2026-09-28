@@ -112,6 +112,9 @@ public static class BudgetEndpoints
 
         g.MapDelete("/{id:int}", async (int id, BudgetDbContext db) =>
         {
+            // A card's fee line can be deleted from here; the card's tick has to follow, or it would
+            // claim to be budgeting a fee that has no line.
+            await CardFeeBudget.ForgetLineAsync(db, id);
             var b = await db.BudgetLines.FindAsync(id);
             if (b is null) return Results.NotFound();
             db.BudgetLines.Remove(b);

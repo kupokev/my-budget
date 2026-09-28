@@ -239,7 +239,7 @@ else
                     {
                         <div class="field"><label>Paying card</label><InputSelect @bind-Value="editing.PaymentCardId">
                             <option value="">—</option>
-                            @foreach (var c in cards.Where(c => c.IsActive)) { <option value="@c.Id">@Fmt.Label(c.Name, c.AccountNumber)</option> }
+                            @foreach (var c in cards.Where(c => c.IsActive)) { <option value="@c.Id">@Fmt.Label(c.Display, c.AccountNumber)</option> }
                         </InputSelect></div>
                     }
                     else

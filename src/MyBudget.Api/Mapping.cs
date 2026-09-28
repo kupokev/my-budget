@@ -37,10 +37,11 @@ internal static class Mapping
 
     public static CardDto ToDto(this Card c) => new()
     {
-        Id = c.Id, Name = c.Name, Issuer = c.Issuer, Network = c.Network, AccountNumber = c.AccountNumber, Apr = c.Apr,
+        Id = c.Id, Name = c.Name, Nickname = c.Nickname, Issuer = c.Issuer, Network = c.Network, AccountNumber = c.AccountNumber, Apr = c.Apr,
         PromoApr = c.PromoApr, PromoAprExpires = c.PromoAprExpires, StatementDay = c.StatementDay, DueDay = c.DueDay,
         CreditLimit = c.CreditLimit, AnnualFee = c.AnnualFee, AnnualFeeMonth = c.AnnualFeeMonth,
         PayingAccountId = c.PayingAccountId, Notes = c.Notes, IsActive = c.IsActive,
+        BudgetAnnualFee = c.BudgetAnnualFee, FeeBudgetLineId = c.FeeBudgetLineId,
         LatestBalance = c.Balances.OrderByDescending(b => b.AsOf).FirstOrDefault()?.Balance,
         LatestBalanceAsOf = c.Balances.OrderByDescending(b => b.AsOf).FirstOrDefault()?.AsOf,
         LoyaltyProgramId = c.LoyaltyProgramId,
@@ -48,10 +49,11 @@ internal static class Mapping
 
     public static void Apply(this Card c, CardDto d)
     {
-        c.Name = d.Name.Trim(); c.Issuer = d.Issuer; c.Network = d.Network; c.AccountNumber = d.AccountNumber; c.Apr = d.Apr;
+        c.Name = d.Name.Trim(); c.Nickname = Clean(d.Nickname); c.Issuer = d.Issuer; c.Network = d.Network; c.AccountNumber = d.AccountNumber; c.Apr = d.Apr;
         c.PromoApr = d.PromoApr; c.PromoAprExpires = d.PromoAprExpires; c.StatementDay = d.StatementDay; c.DueDay = d.DueDay;
         c.CreditLimit = d.CreditLimit; c.AnnualFee = d.AnnualFee; c.AnnualFeeMonth = d.AnnualFeeMonth;
         c.PayingAccountId = d.PayingAccountId; c.Notes = d.Notes; c.IsActive = d.IsActive;
+        c.BudgetAnnualFee = d.BudgetAnnualFee;   // the line itself is created or removed by CardFeeBudget
     }
 
     public static CardBalanceDto ToDto(this CardBalance b) => new() { Id = b.Id, CardId = b.CardId, AsOf = b.AsOf, Balance = b.Balance };

@@ -63,7 +63,7 @@ else
                         <td><input type="text" class="narrow" @bind="x.TierName" /></td>
                         <td><select @bind="x.Kind">@foreach (var k in Enum.GetValues<StatusPathKind>()) { <option value="@k">@Fmt.Words(k)</option> }</select></td>
                         <td><input type="number" step="1" class="narrow-money" @bind="x.Threshold" /></td>
-                        <td>@if (x.Kind is StatusPathKind.CardSpend or StatusPathKind.HoldCard) { <select @bind="x.CardId"><option value="">—</option>@foreach (var c in cards) { <option value="@c.Id">@Fmt.Label(c.Name, c.AccountNumber)</option> }</select> }</td>
+                        <td>@if (x.Kind is StatusPathKind.CardSpend or StatusPathKind.HoldCard) { <select @bind="x.CardId"><option value="">—</option>@foreach (var c in cards) { <option value="@c.Id">@Fmt.Label(c.Display, c.AccountNumber)</option> }</select> }</td>
                         <td><input type="number" class="narrow" placeholder="any" @bind="x.StartYear" /></td>
                         <td><input type="number" class="narrow" placeholder="any" @bind="x.EndYear" /></td>
                         <td><input type="text" @bind="x.Notes" /></td>

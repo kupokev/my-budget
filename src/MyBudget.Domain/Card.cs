@@ -5,6 +5,14 @@ public class Card
 {
     public int Id { get; set; }
     public required string Name { get; set; }
+
+    /// <summary>
+    /// A short name for tables. Card names as the issuer writes them — "WELLS FARGO CASH WISE VISA
+    /// PLATINUM® CARD" — blow out every column they appear in. The full name stays for the places
+    /// that identify the card; this is what gets shown in a list.
+    /// </summary>
+    public string? Nickname { get; set; }
+
     public string? Issuer { get; set; }
     public string? Network { get; set; }
     public string? AccountNumber { get; set; }
@@ -18,6 +26,17 @@ public class Card
     public decimal AnnualFee { get; set; }
     /// <summary>1–12; month the annual fee posts. Null when there is no fee.</summary>
     public int? AnnualFeeMonth { get; set; }
+    /// <summary>
+    /// Keep the annual fee as a budget line. Off by default: a fee is money you will spend, but no row
+    /// should appear in someone's budget without them asking for it. Deleting the line turns this back
+    /// off, so the tick always reflects what is actually there.
+    /// </summary>
+    public bool BudgetAnnualFee { get; set; }
+
+    /// <summary>The budget line created for the annual fee, so it can be kept in step or removed.</summary>
+    public int? FeeBudgetLineId { get; set; }
+    public BudgetLine? FeeBudgetLine { get; set; }
+
     /// <summary>The bank account that pays this card's statement.</summary>
     public int? PayingAccountId { get; set; }
     public Account? PayingAccount { get; set; }

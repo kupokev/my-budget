@@ -46,6 +46,24 @@ them as the design evolves, don't treat the original doc as authoritative once t
   component library (ADR-0007). Real data lives in SQLite; tests use the EF Core in-memory
   provider (ADR-0010, superseding the hosting half of ADR-0005).
 
+## Forms and tables
+
+A field added to a form is a design decision, not a drop. Before adding one:
+
+- **Put it where it belongs.** Group it in the `<fieldset class="group">` whose legend describes it,
+  next to the fields it relates to — a fee's month and its budget tick belong beside the fee, not at
+  the end of the form.
+- **`.field` is one caption and one control.** `.form .field label` is clipped to a single line, so
+  explanation never goes in the label. Longer text is a `<span class="hint">`, which wraps under the
+  control. A checkbox acting as the control gets `<label class="inline">` under a normal caption;
+  standalone flags like "Active" go in the `.checks` column.
+- **Keep columns narrow.** Show a short name in a table — `CardDto.Display` returns the nickname
+  where there is one — and keep the full name for the editor and hovers.
+- **Say what empty means.** An optional date uses `<OptionalDate Empty="no end" />` rather than a bare
+  picker; an optional number says what leaving it blank does.
+- **Look at it.** A screenshot of a form with a field wrapping into its neighbour is a bug report, and
+  it should not take one.
+
 ## Tech stack
 
 | Layer | Choice |

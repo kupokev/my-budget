@@ -17,7 +17,7 @@ else
         <label class="inline"><input type="checkbox" @bind="onlyUnreconciled" @bind:after="Load" /> Needs reconciling</label>
         <label class="inline">Source <select @bind="sourceFilter" @bind:after="Load"><option value="">all</option>
             @foreach (var a in accounts) { <option value="account:@a.Id">@Fmt.Label(a.Name, a.AccountNumber)</option> }
-            @foreach (var c in cards) { <option value="card:@c.Id">@Fmt.Label(c.Name, c.AccountNumber)</option> }</select></label>
+            @foreach (var c in cards) { <option value="card:@c.Id">@Fmt.Label(c.Display, c.AccountNumber)</option> }</select></label>
         <input type="search" placeholder="Search description" @bind="search" @bind:after="Load" />
         <span class="muted">@(rows?.Count ?? 0) lines · <Money Value="rows?.Where(r => r.Amount < 0 && !r.IsTransfer).Sum(r => r.Amount) ?? 0" Signed="true" /> out</span>
         <button class="secondary" type="button" @onclick="ShowRules">Rules</button>
@@ -143,7 +143,7 @@ else
                 <div class="field"><label>Goes on</label>
                     <select @bind="createSource" @bind:after="OnCreateSourceChanged">
                         <optgroup label="Accounts">@foreach (var a in accounts!.Where(a => a.IsActive)) { <option value="account:@a.Id">@Fmt.Label(a.Name, a.AccountNumber)</option> }</optgroup>
-                        <optgroup label="Cards">@foreach (var c in cards!.Where(c => c.IsActive)) { <option value="card:@c.Id">@Fmt.Label(c.Name, c.AccountNumber)</option> }</optgroup>
+                        <optgroup label="Cards">@foreach (var c in cards!.Where(c => c.IsActive)) { <option value="card:@c.Id">@Fmt.Label(c.Display, c.AccountNumber)</option> }</optgroup>
                     </select>
                 </div>
                 <div class="field"><label>Date</label><input type="date" @bind="nt.Date" /></div>

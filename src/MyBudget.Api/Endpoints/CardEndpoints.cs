@@ -55,6 +55,9 @@ public static class CardEndpoints
             c.Apply(dto);
             db.Cards.Add(c);
             await db.SaveChangesAsync();
+            try { await CardFeeBudget.SyncAsync(db, c); }
+            catch (InvalidOperationException ex) { return Results.Problem(ex.Message, statusCode: 400); }
+            await db.SaveChangesAsync();
             return Results.Created($"/api/cards/{c.Id}", c.ToDto());
         });
 
@@ -63,6 +66,8 @@ public static class CardEndpoints
             var c = await db.Cards.Include(x => x.Balances).FirstOrDefaultAsync(x => x.Id == id);
             if (c is null) return Results.NotFound();
             c.Apply(dto);
+            try { await CardFeeBudget.SyncAsync(db, c); }
+            catch (InvalidOperationException ex) { return Results.Problem(ex.Message, statusCode: 400); }
             await db.SaveChangesAsync();
             return Results.Ok(c.ToDto());
         });

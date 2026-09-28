@@ -64,6 +64,21 @@ public static class BudgetApiHost
             await db.Database.MigrateAsync();
         }
 
+        // A handful of categories to start from, written once when the budget is brand new. Not topped
+        // up afterwards: deleting "Taxes" has to mean it stays deleted, not that it returns next launch.
+        if (!await db.Categories.AnyAsync())
+        {
+            var fees = new Category { Name = "Fees", IsCardEligible = false };
+            db.Categories.AddRange(fees,
+                new Category { Name = "Utilities" },
+                new Category { Name = "General Merchandise" },
+                new Category { Name = "Taxes", IsCardEligible = false });
+
+            // A card's annual fee lands here, so the label exists before the first card needs it.
+            db.Labels.Add(new Label { Name = "Credit Card", Category = fees });
+            await db.SaveChangesAsync();
+        }
+
         // Year-keyed reference tables (tax tables, HSA limits) are additive: only missing years are added.
         await ReferenceSeed.SeedAsync(db);
 

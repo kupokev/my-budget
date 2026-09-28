@@ -184,6 +184,7 @@ else
                 <fieldset class="group">
                     <legend>Card</legend>
                     <div class="field"><label>Name</label><InputText @bind-Value="editing.Name" /><ValidationMessage For="() => editing.Name" /></div>
+                    <div class="field"><label>Short name <span class="muted">(for tables)</span></label><InputText @bind-Value="editing.Nickname" placeholder="e.g. Wells Fargo" /></div>
                     <div class="field"><label>Issuer</label><InputText @bind-Value="editing.Issuer" /></div>
                     <div class="field"><label>Network</label><InputText @bind-Value="editing.Network" /></div>
                     <div class="field"><label>Card number</label><MaskedInput @bind-Value="editing.AccountNumber" /></div>
@@ -196,6 +197,11 @@ else
                     <div class="field"><label>Credit limit</label><InputNumber @bind-Value="editing.CreditLimit" step="0.01" /></div>
                     <div class="field"><label>Annual fee</label><InputNumber @bind-Value="editing.AnnualFee" step="0.01" /></div>
                     <div class="field"><label>Fee posts in month (1–12)</label><InputNumber @bind-Value="editing.AnnualFeeMonth" /></div>
+                    <div class="field">
+                        <label>Fee in the budget</label>
+                        <label class="inline"><InputCheckbox @bind-Value="editing.BudgetAnnualFee" /> Keep a budget line</label>
+                        <span class="hint">Filed under Fees · Credit Card. Deleting the line unticks this.</span>
+                    </div>
                 </fieldset>
                 <fieldset class="group">
                     <legend>Statement and payment</legend>
@@ -250,7 +256,7 @@ else
             var net = value + thresholds + perks - cost;
             var verdict = cost == 0 && value == 0 && perks == 0 ? "free, unused" : net < 0 ? (value == 0 ? "costing you, no rewards recorded" : "costing more than it returns") : net == 0 ? "break-even" : "earning its keep";
             var formula = $"fee {c.AnnualFee:C} + {balance:C} × {apr:0.##}% = {cost:C} cost; {value:C} rewards" + (thresholds > 0 ? $" + {thresholds:C} thresholds" : "") + (perks > 0 ? $" + {perks:C} perks for holding it" : "") + $" → {net:C}";
-            return new CostRow(c.Name, c.AnnualFee, interest, cost, value, thresholds, perks, net, verdict, formula);
+            return new CostRow(c.Display, c.AnnualFee, interest, cost, value, thresholds, perks, net, verdict, formula);
         }).OrderBy(r => r.Net).ThenByDescending(r => r.Cost);
     }
     private CardBalanceDto newBalance = new();
@@ -292,9 +298,10 @@ else
         balanceFor = null; rewards = null;
         editing = new()
         {
-            Id = c.Id, Name = c.Name, Issuer = c.Issuer, Network = c.Network, AccountNumber = c.AccountNumber, Apr = c.Apr, PromoApr = c.PromoApr,
+            Id = c.Id, Name = c.Name, Nickname = c.Nickname, Issuer = c.Issuer, Network = c.Network, AccountNumber = c.AccountNumber, Apr = c.Apr, PromoApr = c.PromoApr,
             PromoAprExpires = c.PromoAprExpires, StatementDay = c.StatementDay, DueDay = c.DueDay, CreditLimit = c.CreditLimit,
             AnnualFee = c.AnnualFee, AnnualFeeMonth = c.AnnualFeeMonth, PayingAccountId = c.PayingAccountId, Notes = c.Notes, IsActive = c.IsActive,
+            BudgetAnnualFee = c.BudgetAnnualFee, FeeBudgetLineId = c.FeeBudgetLineId,
         };
     }
 
