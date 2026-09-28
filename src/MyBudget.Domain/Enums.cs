@@ -47,4 +47,4 @@ public enum TransferCadence { Monthly, PerPaycheck }
 public enum BudgetFrequency { Monthly, Quarterly, SemiAnnual, Annual, OneOff, Variable }
 
 /// <summary>What actually pays the line: a bank account directly, or a credit card whose statement is paid later.</summary>
-public enum PaymentMethodKind { Account, Card }
+public enum PaymentMethodKind { Account, Card, Cash }

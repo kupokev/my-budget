@@ -226,6 +226,7 @@ else
                     <div class="field"><label>Paid via</label><InputSelect @bind-Value="editing.PaymentMethod">
                         <option value="@PaymentMethodKind.Account">Bank account</option>
                         <option value="@PaymentMethodKind.Card">Credit card</option>
+                        <option value="@PaymentMethodKind.Cash">Cash</option>
                     </InputSelect></div>
                     @if (editing.PaymentMethod == PaymentMethodKind.Account)
                     {
@@ -234,12 +235,17 @@ else
                             @foreach (var a in accounts.Where(a => a.IsActive)) { <option value="@a.Id">@Fmt.Label(a.Name, a.AccountNumber)</option> }
                         </InputSelect></div>
                     }
-                    else
+                    else if (editing.PaymentMethod == PaymentMethodKind.Card)
                     {
                         <div class="field"><label>Paying card</label><InputSelect @bind-Value="editing.PaymentCardId">
                             <option value="">—</option>
                             @foreach (var c in cards.Where(c => c.IsActive)) { <option value="@c.Id">@Fmt.Label(c.Name, c.AccountNumber)</option> }
                         </InputSelect></div>
+                    }
+                    else
+                    {
+                        @* Cash names no payer. "Funded from" below still says which account it comes out of. *@
+                        <div class="field"><label>Paying account</label><span class="muted">Cash — nothing to pick</span></div>
                     }
                     <div class="field"><label>Funded from <span class="muted">(where the money really comes from)</span></label><InputSelect @bind-Value="editing.FundingAccountId">
                         <option value="0">—</option>

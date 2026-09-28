@@ -140,10 +140,21 @@ public static class AccountEndpoints
             var period = b.Periods.FirstOrDefault(p => p.Period == start);
             var amount = period?.ProjectedAmount ?? (due.Count > 0 ? b.ProjectedAmount * due.Count : 0m);
             if (amount <= 0) continue;
-            int? accountId = b.PaymentMethod == PaymentMethodKind.Card ? b.PaymentCard?.PayingAccountId : b.PaymentAccountId;
+            int? accountId = b.PaymentMethod switch
+            {
+                PaymentMethodKind.Card => b.PaymentCard?.PayingAccountId,
+                // Cash names no paying account, but it is withdrawn from the one funding the line.
+                PaymentMethodKind.Cash => b.FundingAccountId,
+                _ => b.PaymentAccountId,
+            };
             if (accountId is null) continue;
             if (!byAccount.TryGetValue(accountId.Value, out var list)) byAccount[accountId.Value] = list = [];
-            list.Add((b.PaymentMethod == PaymentMethodKind.Card ? $"{b.Name} (via {b.PaymentCard!.Name})" : b.Name, amount));
+            list.Add((b.PaymentMethod switch
+            {
+                PaymentMethodKind.Card => $"{b.Name} (via {b.PaymentCard!.Name})",
+                PaymentMethodKind.Cash => $"{b.Name} (cash)",
+                _ => b.Name,
+            }, amount));
         }
         return byAccount.ToDictionary(kv => kv.Key, kv => (Math.Round(kv.Value.Sum(x => x.Amount), 2), string.Join(", ", kv.Value.OrderByDescending(x => x.Amount).Select(x => $"{x.Name} {x.Amount:C}"))));
     }

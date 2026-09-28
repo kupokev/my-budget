@@ -198,7 +198,12 @@ public static class BudgetEndpoints
         return lines
             .SelectMany(b => BudgetDueDates.Between(b, asOf, to, DueOverrides(b)).Select(d => new UpcomingLineDto(
                 b.Id, b.Name, d, b.Periods.FirstOrDefault(p => p.Period == new DateOnly(d.Year, d.Month, 1))?.ProjectedAmount ?? b.ProjectedAmount,
-                b.PaymentMethod == PaymentMethodKind.Card ? $"Card: {b.PaymentCard?.Name}" : b.PaymentAccount?.Name ?? "—",
+                b.PaymentMethod switch
+                {
+                    PaymentMethodKind.Card => $"Card: {b.PaymentCard?.Name}",
+                    PaymentMethodKind.Cash => "Cash",
+                    _ => b.PaymentAccount?.Name ?? "—",
+                },
                 b.FundingAccount?.Name ?? "—", b.IsAutopay)))
             .OrderBy(u => u.DueDate).ThenBy(u => u.LineName)
             .ToList();

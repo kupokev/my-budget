@@ -88,6 +88,29 @@ public class CategoryDeleteTests : IClassFixture<ApiFixture>
     }
 
     [Fact]
+    public async Task A_cash_line_needs_no_payer_and_keeps_none()
+    {
+        var funding = (await _api.Get<List<AccountDto>>("api/accounts")).First();
+
+        var cash = await _api.Post("api/budget", new BudgetLineDto
+        {
+            Name = "Lawn guy",
+            FundingAccountId = funding.Id,
+            PaymentMethod = MyBudget.Domain.PaymentMethodKind.Cash,
+            // Deliberately set: choosing Cash must drop them rather than store a payer it will not use.
+            PaymentAccountId = funding.Id,
+            Frequency = MyBudget.Domain.BudgetFrequency.Monthly,
+            ProjectedAmount = 120m,
+            IsActive = true,
+        });
+
+        Assert.Equal(MyBudget.Domain.PaymentMethodKind.Cash, cash.PaymentMethod);
+        Assert.Null(cash.PaymentAccountId);
+        Assert.Null(cash.PaymentCardId);
+        Assert.Equal(funding.Id, cash.FundingAccountId);
+    }
+
+    [Fact]
     public async Task Deleting_a_category_that_is_not_there_is_a_not_found()
     {
         var missing = await _api.Client.DeleteAsync("api/categories/999999");
