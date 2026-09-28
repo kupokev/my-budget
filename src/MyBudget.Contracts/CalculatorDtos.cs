@@ -201,6 +201,15 @@ public sealed class LoanDto
     public bool IsActive { get; set; } = true;
     public decimal? LatestBalance { get; set; }
     public DateOnly? LatestBalanceAsOf { get; set; }
+
+    /// <summary>
+    /// The balance to show. Falls back to the original principal when nothing has been recorded yet,
+    /// with <see cref="BalanceIsEstimate"/> set so a screen can say so rather than implying it is known.
+    /// </summary>
+    public decimal EffectiveBalance { get; set; }
+
+    /// <summary>True when no balance has been recorded and the original principal is standing in.</summary>
+    public bool BalanceIsEstimate { get; set; }
 }
 
 public sealed class LoanBalanceDto

@@ -61,8 +61,9 @@ public static class LoanEndpoints
 
             var (payment, formula) = l.ScheduledPayment is { } sp ? (sp, $"{sp:N2} as entered") : Amort.Payment(l.OriginalPrincipal, l.AnnualRate, l.TermMonths);
             var latest = l.Balances.OrderByDescending(b => b.AsOf).FirstOrDefault();
-            var fromBalance = latest?.Balance ?? l.OriginalPrincipal;
-            var fromDate = latest?.AsOf ?? l.StartDate;
+            var known = LoanBalanceMath.Of(l, today);
+            var fromBalance = known.Balance;
+            var fromDate = known.AsOf ?? l.StartDate;
             var firstPayment = new DateOnly(fromDate.Year, fromDate.Month, 1).AddMonths(1);
             var extraMonthly = extra ?? l.ExtraMonthlyPayment;
 
@@ -86,11 +87,13 @@ public static class LoanEndpoints
     private static LoanDto ToDto(Loan l)
     {
         var latest = l.Balances.OrderByDescending(b => b.AsOf).FirstOrDefault();
+        var current = LoanBalanceMath.Of(l, DateOnly.FromDateTime(DateTime.Today));
         return new()
         {
             Id = l.Id, Name = l.Name, Kind = l.Kind, Lender = l.Lender, AccountNumber = l.AccountNumber, OriginalPrincipal = l.OriginalPrincipal, AnnualRatePercent = l.AnnualRate * 100m,
             TermMonths = l.TermMonths, StartDate = l.StartDate, ScheduledPayment = l.ScheduledPayment, ExtraMonthlyPayment = l.ExtraMonthlyPayment,
             BudgetLineId = l.BudgetLineId, AssetId = l.AssetId, Notes = l.Notes, IsActive = l.IsActive, LatestBalance = latest?.Balance, LatestBalanceAsOf = latest?.AsOf,
+            EffectiveBalance = current.Balance, BalanceIsEstimate = current.IsEstimate,
         };
     }
 

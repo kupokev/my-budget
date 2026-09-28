@@ -112,9 +112,9 @@ public static class ReportEndpoints
         foreach (var c in cards) { var (bal, d) = Latest(c.Balances, b => b.AsOf, b => b.Balance, asOf); cardDebt += bal; if (d is not null) lines.Add(new(c.Name, "card", -bal, d)); }
         foreach (var l in loans)
         {
-            var (bal, d) = Latest(l.Balances, b => b.AsOf, b => b.Balance, asOf);
-            if (d is null) { bal = l.OriginalPrincipal; }
-            loanDebt += bal; lines.Add(new(l.Name, "loan", -bal, d));
+            var current = LoanBalanceMath.Of(l, asOf);
+            loanDebt += current.Balance;
+            lines.Add(new(l.Name, "loan", -current.Balance, current.AsOf));
         }
         var total = assets - cardDebt - loanDebt;
 

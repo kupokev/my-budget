@@ -77,12 +77,22 @@ else
             @if (loans.Any(l => l.IsActive))
             {
                 <h3>Loans</h3>
+                @if (loans.Any(l => l.IsActive && l.BalanceIsEstimate))
+                {
+                    <p class="muted">A loan's balance is whatever you last recorded against it — the lender is the
+                    authority, not the schedule. Ones marked <em>orig</em> have none yet and show the original
+                    principal; record one with ＋ on <a href="loans">Loans</a>.</p>
+                }
                 <table class="compact">
                     <thead><tr><th>Loan</th><th class="money">Balance</th><th class="money">Rate</th></tr></thead>
                     <tbody>
-                    @foreach (var l in loans.Where(l => l.IsActive).OrderByDescending(l => l.LatestBalance ?? 0))
+                    @foreach (var l in loans.Where(l => l.IsActive).OrderByDescending(l => l.EffectiveBalance))
                     {
-                        <tr><td>@l.Name</td><td class="money">@Fmt.Money(l.LatestBalance)</td><td class="money">@l.AnnualRatePercent.ToString("0.##")%</td></tr>
+                        <tr>
+                            <td>@l.Name</td>
+                            <td class="money">@Fmt.Money(l.EffectiveBalance)@if (l.BalanceIsEstimate) { <span class="muted" title="No balance recorded yet, so this is the original principal. Record one on Loans."> orig</span> }</td>
+                            <td class="money">@l.AnnualRatePercent.ToString("0.##")%</td>
+                        </tr>
                     }
                     </tbody>
                 </table>
