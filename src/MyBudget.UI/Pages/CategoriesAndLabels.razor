@@ -47,7 +47,7 @@ else
             {
                 <tr @key="l.Id" class="@(l.IsActive ? "" : "muted")">
                     <td><input type="text" @bind="l.Name" @bind:after="() => AutoSaveLabel(l)" /></td>
-                    <td><select @bind="l.CategoryId" @bind:after="() => AutoSaveLabel(l)"><option value="">—</option>@foreach (var c in categories.Where(c => c.IsActive)) { <option value="@c.Id">@c.Name</option> }</select></td>
+                    <td><select @bind="l.CategoryId" @bind:after="() => AutoSaveLabel(l)"><option value="">—</option>@foreach (var c in CategoryOptions(l)) { <option @key="c.Id" value="@c.Id">@c.Name</option> }</select></td>
                     <td class="money">@Fmt.Money(PlannedForLabel(l.Id))</td>
                     <td class="muted">@(labelCounts.TryGetValue(l.Id, out var n) ? n.ToString() : "0")</td>
                     <td class="center"><input type="checkbox" @bind="l.IsActive" @bind:after="() => AutoSaveLabel(l)" /></td>
@@ -78,6 +78,21 @@ else
     /// of its label. Without the second half a line tagged only with a label would go uncounted, and
     /// the category figures are meant to be the roll-up of the labels beneath them.
     /// </summary>
+    /// <summary>
+    /// The categories a label can be set to: the active ones, plus its own if that has been retired,
+    /// so the dropdown always contains the value it is bound to. A select whose value is missing from
+    /// its options falls back to whatever sits at that index, which — with autosave on change — would
+    /// write that wrong category to the database.
+    /// </summary>
+    private IEnumerable<CategoryDto> CategoryOptions(LabelDto l)
+    {
+        var options = categories?.Where(c => c.IsActive).ToList() ?? [];
+        if (l.CategoryId is { } id && options.All(c => c.Id != id)
+            && categories?.FirstOrDefault(c => c.Id == id) is { } retired)
+            options.Add(retired);
+        return options;
+    }
+
     private int? EffectiveCategory(BudgetLineDto b)
         => b.CategoryId ?? (b.LabelId is { } labelId ? labels?.FirstOrDefault(l => l.Id == labelId)?.CategoryId : null);
 
