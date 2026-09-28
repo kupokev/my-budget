@@ -163,6 +163,13 @@ else
                                     <div class="field"><label>&nbsp;</label><button class="secondary" type="button" @onclick="() => AddDividend(p.Holding.Id)">Add dividend</button></div>
                                     <div class="field"><label>Price today</label><input type="number" step="0.01" class="narrow-money" @bind="manualPrice" /></div>
                                     <div class="field"><label>&nbsp;</label><button class="secondary" type="button" @onclick="() => SetPrice(p.Holding.Ticker)">Set price</button></div>
+                                    @if (p.Holding.IsCashEquivalent)
+                                    {
+                                        @* A sweep balance changes without a new export, so it can be typed here. *@
+                                        <div class="field"><label>Cash balance</label><input type="number" step="0.01" class="narrow-money" @bind="cashBalance" placeholder="@p.Shares.ToString("0.00")" /></div>
+                                        <div class="field"><label>As of</label><OptionalDate @bind-Value="cashAsOf" Empty="today" /></div>
+                                        <div class="field"><label>&nbsp;</label><button class="secondary" type="button" @onclick="() => SetCashBalance(p)">Set balance</button></div>
+                                    }
                                 </div>
                                 <h3>Open lots</h3>
                                 <table class="compact">
@@ -222,6 +229,9 @@ else
     private DividendDto newDividend = new() { ExDate = DateOnly.FromDateTime(DateTime.Today) };
     private decimal manualPrice;
     private bool syncing;
+    private decimal? cashBalance;
+    private DateOnly? cashAsOf;
+
     private List<MarketSyncResultDto>? syncResults;
 
     /// <summary>Holdings the refresh actually moved — the only ones worth listing.</summary>
@@ -289,6 +299,22 @@ else
     private async Task DeleteHolding()
     {
         try { await Api.DeleteHoldingAsync(editing!.Id); editing = null; await Load(); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    /// <summary>
+    /// Sets a sweep to a stated balance. The difference is booked as a trade, the same way an import
+    /// does it, so the position lands on the number without a second pot of cash appearing.
+    /// </summary>
+    private async Task SetCashBalance(PositionDto p)
+    {
+        if (cashBalance is not { } balance) { error = "Enter the balance first."; return; }
+        try
+        {
+            await Api.SetCashBalanceAsync(p.Holding.Id, balance, cashAsOf ?? DateOnly.FromDateTime(DateTime.Today));
+            cashBalance = null; cashAsOf = null;
+            await Load();
+        }
         catch (Exception ex) { error = ex.Message; }
     }
 

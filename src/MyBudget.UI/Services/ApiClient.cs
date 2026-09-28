@@ -163,6 +163,9 @@ public sealed class ApiClient(HttpClient http)
         return (await r.Content.ReadFromJsonAsync<ImportKindDto>(Json))!;
     }
 
+    public Task<decimal> SetCashBalanceAsync(int holdingId, decimal balance, DateOnly asOf)
+        => Post<CashBalanceDto, decimal>($"api/investments/holdings/{holdingId}/cash-balance", new() { Balance = balance, AsOf = asOf });
+
     public Task<List<AssetDto>> GetAssetsAsync() => Get<List<AssetDto>>("api/assets");
     public Task<AssetDto> SaveAssetAsync(AssetDto a) => a.Id == 0 ? Post("api/assets", a) : Put($"api/assets/{a.Id}", a);
     public Task DeleteAssetAsync(int id) => Delete($"api/assets/{id}");

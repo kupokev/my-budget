@@ -13,6 +13,10 @@ public sealed class HoldingDto
     public int AccountId { get; set; }
     public string? AccountName { get; set; }
     public bool Drip { get; set; }
+
+    /// <summary>A money-market fund or cash sweep: a balance you set, not a position you trade.</summary>
+    public bool IsCashEquivalent { get; set; }
+
     public bool IsActive { get; set; } = true;
     public string? Notes { get; set; }
 }
@@ -60,6 +64,13 @@ public sealed record GainsTaxDto(decimal ShortTermGain, decimal LongTermGain, de
 
 public sealed record PortfolioDto(DateOnly AsOf, int Year, IReadOnlyList<PositionDto> Positions, decimal TotalValue, decimal TotalCost, decimal TotalUnrealized, decimal DividendsThisYear,
     decimal RealizedShortTerm, decimal RealizedLongTerm, GainsTaxDto? Tax, IReadOnlyList<string> Warnings);
+
+/// <summary>A cash or sweep balance as at a date, set by hand when no fresh export exists.</summary>
+public sealed class CashBalanceDto
+{
+    [Range(0, 100_000_000)] public decimal Balance { get; set; }
+    public DateOnly AsOf { get; set; }
+}
 
 public sealed record MarketSyncResultDto(string Ticker, int PricesAdded, int DividendsAdded, int ReinvestsCreated, decimal? LastPrice, string? Error);
 

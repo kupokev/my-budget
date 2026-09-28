@@ -63,6 +63,11 @@ public static class InvestmentEndpoints
             return results;
         });
 
+        // A sweep balance moves without a new export, so it can be typed. Traded holdings are refused:
+        // there the buy or sell is the record, not the resulting number.
+        g.MapPost("/holdings/{id:int}/cash-balance", async (int id, CashBalanceDto dto, InvestmentService svc) =>
+            await PaycheckEndpoints.Guarded(() => svc.SetCashBalanceAsync(id, dto.Balance, dto.AsOf)));
+
         g.MapPost("/trades", async (TradeDto dto, BudgetDbContext db) =>
         {
             if (await db.Holdings.FindAsync(dto.HoldingId) is null) return Results.NotFound("Holding not found.");

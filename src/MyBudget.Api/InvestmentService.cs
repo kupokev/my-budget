@@ -159,6 +159,41 @@ public sealed class InvestmentService(BudgetDbContext db, IMarketDataProvider ma
     }
 
     /// <summary>Turns a tax-lot export into holdings and buy trades in one account; lots already present (same date, shares, cost) are left alone.</summary>
+    /// <summary>
+    /// Makes a cash position equal <paramref name="balance"/> by recording the difference, rather than
+    /// adding another lot. A sweep is one pot that every statement restates: appending each statement
+    /// would stack last month's cash on top of this month's. Booking the delta leaves the position at
+    /// the stated figure and keeps the movement visible.
+    /// </summary>
+    /// <returns>True when something changed; false when it already matched.</returns>
+    private static bool SetCashBalance(Holding h, decimal balance, DateOnly asOf, string source)
+    {
+        var held = MyBudget.Engines.Investments.Portfolio.SharesHeldOn(h.Trades, asOf);
+        var delta = balance - held;
+        if (delta == 0) return false;
+
+        h.Trades.Add(new Trade
+        {
+            Date = asOf,
+            Kind = delta > 0 ? TradeKind.Buy : TradeKind.Sell,
+            Shares = Math.Abs(delta),
+            Price = 1m,
+            Notes = $"cash balance {balance:N2} {source}",
+        });
+        return true;
+    }
+
+    /// <summary>Sets a cash position by hand, for when the balance moved but no new export exists.</summary>
+    public async Task<decimal> SetCashBalanceAsync(int holdingId, decimal balance, DateOnly asOf, CancellationToken ct = default)
+    {
+        var h = await db.Holdings.Include(x => x.Trades).FirstOrDefaultAsync(x => x.Id == holdingId, ct)
+            ?? throw new KeyNotFoundException("Holding not found.");
+        if (!h.IsCashEquivalent) throw new InvalidOperationException($"{h.Ticker} is a traded holding; record a buy or sell instead of setting a balance.");
+
+        if (SetCashBalance(h, balance, asOf, "entered by hand")) await db.SaveChangesAsync(ct);
+        return balance;
+    }
+
     public async Task<LotImportResultDto> ImportLotsAsync(int accountId, string content, CancellationToken ct = default)
     {
         var account = await db.Accounts.FindAsync([accountId], ct) ?? throw new KeyNotFoundException("Account not found.");
@@ -179,28 +214,10 @@ public sealed class InvestmentService(BudgetDbContext db, IMarketDataProvider ma
 
             if (h.IsCashEquivalent)
             {
-                // A sweep line is a balance, not a lot. Every statement restates the same pot, so
-                // appending it would stack last month's cash on top of this month's. Record the
-                // difference instead: the position ends up at the stated balance, and the history of
-                // how it moved survives.
                 var stated = group.Sum(l => l.Quantity);
                 var asOf = group.Max(l => l.PriceDate ?? l.Acquired);
-                var held = MyBudget.Engines.Investments.Portfolio.SharesHeldOn(h.Trades, asOf);
-                var delta = stated - held;
-
-                if (delta == 0) { present++; }
-                else
-                {
-                    h.Trades.Add(new Trade
-                    {
-                        Date = asOf,
-                        Kind = delta > 0 ? TradeKind.Buy : TradeKind.Sell,
-                        Shares = Math.Abs(delta),
-                        Price = 1m,
-                        Notes = $"cash balance {stated:N2} from statement {asOf:yyyy-MM-dd}",
-                    });
-                    imported++;
-                }
+                if (SetCashBalance(h, stated, asOf, $"from statement {asOf:yyyy-MM-dd}")) imported++;
+                else present++;
             }
             else
             {
@@ -244,7 +261,7 @@ public sealed class InvestmentService(BudgetDbContext db, IMarketDataProvider ma
             pricesFetched, dividendsFetched, fetchErrors);
     }
 
-    public static HoldingDto ToDto(Holding h) => new() { Id = h.Id, Ticker = h.Ticker, Name = h.Name, AccountId = h.AccountId, AccountName = h.Account?.Name, Drip = h.Drip, IsActive = h.IsActive, Notes = h.Notes };
+    public static HoldingDto ToDto(Holding h) => new() { Id = h.Id, Ticker = h.Ticker, Name = h.Name, AccountId = h.AccountId, AccountName = h.Account?.Name, Drip = h.Drip, IsCashEquivalent = h.IsCashEquivalent, IsActive = h.IsActive, Notes = h.Notes };
     public static TradeDto ToDto(Trade t) => new() { Id = t.Id, HoldingId = t.HoldingId, Date = t.Date, Kind = t.Kind, Shares = t.Shares, Price = t.Price, Fees = t.Fees, Notes = t.Notes, DividendPaymentId = t.DividendPaymentId };
     public static DividendDto ToDto(DividendPayment d) => new() { Id = d.Id, HoldingId = d.HoldingId, ExDate = d.ExDate, PayDate = d.PayDate, PerShare = d.PerShare, SharesHeld = d.SharesHeld, Amount = d.Amount, Reinvested = d.Reinvested, Source = d.Source };
 

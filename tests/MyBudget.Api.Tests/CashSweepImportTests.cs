@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Json;
 using MyBudget.Contracts;
 using MyBudget.Domain;
@@ -57,6 +58,44 @@ public class CashSweepImportTests : IClassFixture<ApiFixture>
 
         Assert.Equal(11_012.76m, sweep.Shares);
         Assert.Equal(0, again.LotsImported);
+    }
+
+    [Fact]
+    public async Task A_sweep_balance_can_be_set_by_hand_when_no_fresh_export_exists()
+    {
+        var account = await _api.Post("api/accounts", new AccountDto
+        {
+            Name = "IRA for manual balance", Institution = "JPM", Type = AccountType.TraditionalIra, IsActive = true,
+        });
+        await ImportAsync(account.Id, Sweep(11_012.76m, "09/25/2026"));
+        var sweep = await SweepPosition(account.Id);
+
+        var set = await _api.Client.PostAsJsonAsync($"api/investments/holdings/{sweep.Holding.Id}/cash-balance",
+            new CashBalanceDto { Balance = 5_512.38m, AsOf = new DateOnly(2026, 9, 28) }, ApiFixture.Json);
+        set.EnsureSuccessStatusCode();
+
+        Assert.Equal(5_512.38m, (await SweepPosition(account.Id)).Shares);
+    }
+
+    [Fact]
+    public async Task A_traded_holding_refuses_a_balance_because_the_trade_is_the_record()
+    {
+        var account = await _api.Post("api/accounts", new AccountDto
+        {
+            Name = "IRA for refusal", Institution = "JPM", Type = AccountType.TraditionalIra, IsActive = true,
+        });
+        await ImportAsync(account.Id,
+            Header + "\n\"Traditional IRA\",\"...4077\",\"Equity\",\"CHUBB LTD COM\",CB,2,333.37,09/25/2026 08:00:00,08/06/2024,265\n");
+
+        var portfolio = await _api.Get<PortfolioDto>("api/investments/portfolio");
+        var chubb = Assert.Single(portfolio.Positions, x => x.Holding.Ticker == "CB" && x.Holding.AccountId == account.Id);
+
+        var refused = await _api.Client.PostAsJsonAsync($"api/investments/holdings/{chubb.Holding.Id}/cash-balance",
+            new CashBalanceDto { Balance = 999m, AsOf = new DateOnly(2026, 9, 28) }, ApiFixture.Json);
+
+        Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
+        Assert.Equal(2m, (await _api.Get<PortfolioDto>("api/investments/portfolio")).Positions
+            .Single(x => x.Holding.Ticker == "CB" && x.Holding.AccountId == account.Id).Shares);
     }
 
     private async Task<PositionDto> SweepPosition(int accountId)
