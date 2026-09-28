@@ -437,3 +437,25 @@ tr.lots-row > td { background: color-mix(in srgb, var(--fg) 4%, transparent); pa
 /* An optional date plus its Clear button, kept on one line. */
 .optional-date { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .optional-date button.link:disabled { opacity: .35; cursor: default; }
+
+/* Hover cards must not be clipped by the grid they sit in.
+   .scroll-x scrolls horizontally, and an overflow container clips absolutely-positioned descendants
+   on BOTH axes — CSS will not allow overflow-x:auto with overflow-y:visible — so a card on a lower
+   row was cut off at the container's edge. Anchor positioning takes the card out of the scroller
+   entirely and pins it to its trigger, so there is nothing left to clip it.
+   anchor-scope keeps each name inside its own .tip; without it every card would anchor to the same
+   element, so both properties are required before any of this applies. Where they are missing the
+   rules are skipped and the original absolute positioning stands. */
+@supports (anchor-name: --a) and (anchor-scope: --a) and (position-anchor: --a) {
+  .tip { anchor-name: --tip-anchor; anchor-scope: --tip-anchor; }
+
+  .tip .tip-box {
+    position: fixed;
+    position-anchor: --tip-anchor;
+    top: anchor(bottom);
+    left: anchor(left);
+    margin-top: 6px;
+    /* Near the bottom or right of the window, put it on the other side instead of off-screen. */
+    position-try-fallbacks: flip-block, flip-inline, flip-block flip-inline;
+  }
+}
