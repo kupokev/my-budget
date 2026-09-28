@@ -98,7 +98,32 @@ nfpm package -f "$NFPM_CONFIG" -p deb       -t "$OUT/mybudget_${VERSION}_amd64.d
 echo "==> rpm"
 nfpm package -f "$NFPM_CONFIG" -p rpm       -t "$OUT/mybudget-${VERSION}-1.x86_64.rpm"
 echo "==> pacman"
-nfpm package -f "$NFPM_CONFIG" -p archlinux -t "$OUT/mybudget-${VERSION}-1-x86_64.pkg.tar.zst"
+ARCH_PKG="$OUT/mybudget-${VERSION}-1-x86_64.pkg.tar.zst"
+nfpm package -f "$NFPM_CONFIG" -p archlinux -t "$ARCH_PKG"
+
+# nfpm writes directory modes into the .MTREE as Go's FileMode ("20000000755", permission bits with
+# the directory flag on top) where makepkg writes plain "755". pacman compares the raw values, fails,
+# and then prints both sides masked — so every install says "directory permissions differ ...
+# filesystem: 755 package: 755" for each standard directory. Harmless but noisy, and there is no nfpm
+# release with it fixed, so rewrite those entries and repack. File entries are already correct.
+fix_arch_dir_modes() {
+  local pkg="$1" work
+  work=$(mktemp -d)
+
+  tar -xpf "$pkg" -C "$work"
+  gzip -dc "$work/.MTREE" > "$work/mtree.txt"
+  sed -i -E '/type=dir/ s/ mode=2[0-9]{7}([0-7]{3})/ mode=\1/' "$work/mtree.txt"
+  gzip -9 -n -c "$work/mtree.txt" > "$work/.MTREE"
+  rm -f "$work/mtree.txt"
+
+  # .PKGINFO must come first, and everything is owned by root regardless of who runs this script.
+  local rest
+  rest=$(cd "$work" && ls -A | grep -vx '.PKGINFO' | grep -vx '.MTREE')
+  (cd "$work" && tar --zstd --owner=0 --group=0 --numeric-owner -cf "$pkg.tmp" .PKGINFO .MTREE $rest)
+  mv "$pkg.tmp" "$pkg"
+  rm -rf "$work"
+}
+fix_arch_dir_modes "$ARCH_PKG"
 
 echo
 echo "Built:"

@@ -33,9 +33,19 @@ Grab a package from [Releases](https://github.com/kupokev/my-budget/releases).
 | Arch | `sudo pacman -U ./mybudget-<version>-1-x86_64.pkg.tar.zst` |
 | Anything else | `chmod +x MyBudget-<version>-x86_64.AppImage` and run it |
 
-Each package bundles the .NET runtime, so nothing needs installing first — except **WebKitGTK**,
-which draws the window. The deb, rpm and pacman packages pull it in. The AppImage can't, so it
-expects it to be there already; that's the usual reason an AppImage opens no window.
+The AppImage needs no installation — make it executable and run it. The native packages install
+through your package manager, which also pulls in the **WebKitGTK** dependency that draws the window.
+The AppImage can't do that, so it expects WebKitGTK to be there already; that is the usual reason an
+AppImage opens no window.
+
+Nothing here updates itself. To move to a new version, download it and install over the top — your
+budget file is untouched. Export a backup from **Admin → Settings** first if you want one.
+
+Uninstall with `sudo apt remove mybudget`, `sudo dnf remove mybudget` or `sudo pacman -R mybudget`.
+Removing the package leaves your budget file alone; delete `~/.local/share/MyBudget/` to remove that
+too.
+
+Each package bundles the .NET runtime, so nothing else needs installing first.
 
 Linux x86-64 only. Android is a later phase using the same UI.
 
