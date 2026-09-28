@@ -102,7 +102,7 @@ internal static class Mapping
         PaySchedules = s.PaySchedules.OrderBy(p => p.EffectiveDate).Select(p => new PayScheduleDto
         {
             Id = p.Id, IncomeSourceId = p.IncomeSourceId, Frequency = p.Frequency, EffectiveDate = p.EffectiveDate, AnchorPayDate = p.AnchorPayDate,
-            PayOnPriorBusinessDay = p.PayOnPriorBusinessDay, FirstPayDay = p.FirstPayDay, SecondPayDay = p.SecondPayDay,
+            PayOnPriorBusinessDay = p.PayOnPriorBusinessDay, PayLagDays = p.PayLagDays, FirstPayDay = p.FirstPayDay, SecondPayDay = p.SecondPayDay,
         }).ToList(),
         Deductions = s.Deductions.OrderBy(d => d.EffectiveDate).ThenBy(d => d.Name).Select(d => new DeductionElectionDto
         {
@@ -131,7 +131,7 @@ internal static class Mapping
         s.PaySchedules.AddRange(d.PaySchedules.Select(p => new PaySchedule
         {
             Frequency = p.Frequency, EffectiveDate = p.EffectiveDate, AnchorPayDate = p.AnchorPayDate,
-            PayOnPriorBusinessDay = p.PayOnPriorBusinessDay,
+            PayOnPriorBusinessDay = p.PayOnPriorBusinessDay, PayLagDays = p.PayLagDays,
             FirstPayDay = p.Frequency == PayFrequency.SemiMonthly ? p.FirstPayDay : null,
             SecondPayDay = p.Frequency == PayFrequency.SemiMonthly ? p.SecondPayDay : null,
         }));

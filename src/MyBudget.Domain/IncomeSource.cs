@@ -64,6 +64,16 @@ public class PaySchedule
     /// <summary>Shift a pay date that lands on a weekend to the preceding Friday, as most employers do.</summary>
     public bool PayOnPriorBusinessDay { get; set; } = true;
 
+    /// <summary>
+    /// Days between the end of the work period and the day it is paid.
+    ///
+    /// 0 is "live" or current pay: the cheque covers work up to and including the pay date, so part of
+    /// it is for days not yet worked. 7 is a week in arrears: the period closed a week before payday.
+    /// Employers move between the two — the switch is a new schedule with a later anchor and a lag —
+    /// and the difference decides which period a cheque is for, not how much it is.
+    /// </summary>
+    public int PayLagDays { get; set; }
+
     /// <summary>Semi-monthly only: the two pay days of the month. 31 means "last day of the month".</summary>
     public int? FirstPayDay { get; set; }
     public int? SecondPayDay { get; set; }

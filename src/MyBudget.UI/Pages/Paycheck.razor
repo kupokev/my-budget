@@ -37,6 +37,13 @@ else
             <div class="row">
                 <section class="panel">
                     <h2>@Fmt.Date(estimate.PayDate) · @estimate.IncomeSource</h2>
+                    @if (estimate.WorkPeriodStart is { } ws && estimate.WorkPeriodEnd is { } we)
+                    {
+                        @* Which stretch of work the cheque is for. Under live pay it runs to payday
+                           itself, so its last days are paid before they are worked. *@
+                        <p class="muted">Covers @Fmt.Date(ws) – @Fmt.Date(we) ·
+                            @(estimate.PayLagDays == 0 ? "live pay (through payday)" : $"{estimate.PayLagDays} days in arrears")</p>
+                    }
                     <p class="muted">@Fmt.Money(estimate.AnnualSalary) ÷ @estimate.PeriodsPerYear checks · W-4: @estimate.W4Summary · MO W-4: @estimate.MoW4Summary · @estimate.TaxYear tables@(estimate.TaxYearVerified ? "" : " (unverified)")</p>
                     <EstimateTable E="estimate" />
                     <Warnings Items="estimate.Warnings" />

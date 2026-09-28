@@ -87,9 +87,9 @@ else
                 </table>
                 <button class="secondary" type="button" @onclick="() => editing.SalaryRates.Add(new SalaryRateDto { EffectiveDate = today })">Add salary row</button>
 
-                <h3>Pay schedules <span class="muted">(effective-dated; the 24 → 26 switch is two rows)</span></h3>
+                <h3>Pay schedules <span class="muted">(effective-dated; a frequency change or a live → arrears switch is two rows)</span></h3>
                 <table class="compact">
-                    <thead><tr><th>Effective</th><th>Frequency</th><th>Known pay date</th><th>Semi-monthly days</th><th class="center">Weekend → Friday</th><th></th></tr></thead>
+                    <thead><tr><th>Effective</th><th>Frequency</th><th>Known pay date</th><th title="Days between the end of the work period and payday. 0 = live pay, 7 = a week in arrears.">Pay lag</th><th>Semi-monthly days</th><th class="center">Weekend → Friday</th><th></th></tr></thead>
                     <tbody>
                     @foreach (var p in editing.PaySchedules)
                     {
@@ -99,6 +99,14 @@ else
                                 @foreach (var f in Enum.GetValues<PayFrequency>()) { <option value="@f">@Fmt.Words(f)</option> }
                             </InputSelect></td>
                             <td><InputDate @bind-Value="p.AnchorPayDate" /></td>
+                            <td>
+                                @* Named rather than a raw number: "live" and "arrears" are what payroll calls it. *@
+                                <InputSelect @bind-Value="p.PayLagDays">
+                                    <option value="0">Live (through payday)</option>
+                                    <option value="7">1 week in arrears</option>
+                                    <option value="14">2 weeks in arrears</option>
+                                </InputSelect>
+                            </td>
                             <td>
                                 @if (p.Frequency == PayFrequency.SemiMonthly)
                                 {
@@ -221,7 +229,7 @@ else
         PaySchedules = s.PaySchedules.Select(p => new PayScheduleDto
         {
             Id = p.Id, IncomeSourceId = p.IncomeSourceId, Frequency = p.Frequency, EffectiveDate = p.EffectiveDate, AnchorPayDate = p.AnchorPayDate,
-            PayOnPriorBusinessDay = p.PayOnPriorBusinessDay, FirstPayDay = p.FirstPayDay, SecondPayDay = p.SecondPayDay,
+            PayOnPriorBusinessDay = p.PayOnPriorBusinessDay, PayLagDays = p.PayLagDays, FirstPayDay = p.FirstPayDay, SecondPayDay = p.SecondPayDay,
         }).ToList(),
         Deductions = s.Deductions.Select(d => new DeductionElectionDto
         {

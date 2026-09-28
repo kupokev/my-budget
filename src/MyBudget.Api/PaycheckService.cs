@@ -143,10 +143,12 @@ public sealed class PaycheckService(BudgetDbContext db)
         var w = c.W4;
         var w4 = $"{Words(w.FederalStatus)}{(w.MultipleJobs ? ", Step 2 checked" : "")}{(w.DependentCredits > 0 ? $", credits {w.DependentCredits:C0}" : "")}{(w.OtherIncome > 0 ? $", other income {w.OtherIncome:C0}" : "")}{(w.Deductions > 0 ? $", deductions {w.Deductions:C0}" : "")}{(w.ExtraWithholding > 0 ? $", extra {w.ExtraWithholding:C}" : "")}";
         var mo = $"{Words(w.MissouriStatus)}{(w.MissouriExtraWithholding > 0 ? $", extra {w.MissouriExtraWithholding:C}" : "")}";
+        var period = MyBudget.Engines.Ledger.PayDates.WorkPeriod(c.Schedule, c.Date);
         return new PaycheckEstimateDto(c.Date, c.Source.Name, c.PeriodsPerYear, annualSalary, c.TaxYear.Year, c.TaxYear.Verified, w4, mo,
             r.Gross, r.PreTaxDeductions.Select(L).ToList(), r.FicaWages, r.FederalTaxableWages,
             L(r.FederalIncomeTax), L(r.SocialSecurity), L(r.Medicare), L(r.MissouriIncomeTax),
-            r.PostTaxDeductions.Select(L).ToList(), r.TotalPreTaxDeductions, r.TotalTaxes, r.TotalPostTaxDeductions, r.Net, r.Steps, c.Warnings);
+            r.PostTaxDeductions.Select(L).ToList(), r.TotalPreTaxDeductions, r.TotalTaxes, r.TotalPostTaxDeductions, r.Net, r.Steps, c.Warnings,
+            period.Start, period.End, c.Schedule.PayLagDays);
     }
 
     private static string Words(Enum e) => System.Text.RegularExpressions.Regex.Replace(e.ToString(), "(?<=[a-z0-9])([A-Z])", " $1");

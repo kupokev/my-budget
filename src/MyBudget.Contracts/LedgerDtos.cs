@@ -215,6 +215,9 @@ public sealed class PayScheduleDto
     public PayFrequency Frequency { get; set; }
     public DateOnly EffectiveDate { get; set; }
     public DateOnly AnchorPayDate { get; set; }
+
+    /// <summary>Days between the end of the work period and payday. 0 = live/current pay, 7 = a week in arrears.</summary>
+    [Range(0, 60)] public int PayLagDays { get; set; }
     public bool PayOnPriorBusinessDay { get; set; } = true;
     [Range(1, 31)] public int? FirstPayDay { get; set; }
     [Range(1, 31)] public int? SecondPayDay { get; set; }

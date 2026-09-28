@@ -14,6 +14,24 @@ public static class PayDates
     };
 
     /// <summary>
+    /// The stretch of work a pay date covers: it ends <see cref="PaySchedule.PayLagDays"/> before the
+    /// pay date and runs back over one pay period. With no lag the period ends on payday itself, which
+    /// is what "live pay" means — the last days of it have not been worked when the cheque lands.
+    /// </summary>
+    public static (DateOnly Start, DateOnly End) WorkPeriod(PaySchedule schedule, DateOnly payDate)
+    {
+        var end = payDate.AddDays(-schedule.PayLagDays);
+        var start = schedule.Frequency switch
+        {
+            PayFrequency.BiWeekly => end.AddDays(-13),
+            PayFrequency.SemiMonthly => end.Day > 15 ? new DateOnly(end.Year, end.Month, 16) : new DateOnly(end.Year, end.Month, 1),
+            PayFrequency.Monthly => new DateOnly(end.Year, end.Month, 1),
+            _ => throw new ArgumentOutOfRangeException(nameof(schedule)),
+        };
+        return (start, end);
+    }
+
+    /// <summary>
     /// Pay dates in [from, to], inclusive. On any given date the schedule in effect is the one with
     /// the latest EffectiveDate on or before it; a schedule contributes only dates it is in effect for.
     /// </summary>

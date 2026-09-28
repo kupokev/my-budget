@@ -75,7 +75,9 @@ public sealed record PaycheckEstimateDto(
     LineDto FederalIncomeTax, LineDto SocialSecurity, LineDto Medicare, LineDto MissouriIncomeTax,
     IReadOnlyList<LineDto> PostTaxDeductions,
     decimal TotalPreTax, decimal TotalTaxes, decimal TotalPostTax, decimal Net,
-    IReadOnlyList<string> Steps, IReadOnlyList<string> Warnings);
+    IReadOnlyList<string> Steps, IReadOnlyList<string> Warnings,
+    /// <summary>The stretch of work this cheque is for, and whether it is live pay or in arrears.</summary>
+    DateOnly? WorkPeriodStart = null, DateOnly? WorkPeriodEnd = null, int PayLagDays = 0);
 
 public sealed record YearCheckDto(DateOnly Date, decimal Gross, decimal PreTax, decimal Federal, decimal SocialSecurity, decimal Medicare, decimal Missouri, decimal PostTax, decimal Net);
 
