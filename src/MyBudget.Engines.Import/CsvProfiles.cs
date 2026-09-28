@@ -38,6 +38,11 @@ public static class CsvProfiles
         new("pnc", "PNC", ["Date", "Description", "Withdrawals", "Deposits"], "Date", null, null, "Withdrawals", "Deposits", "Description", "Category", null, false),
         new("wells-fargo", "Wells Fargo", [], "1", null, "2", null, null, "5", null, null, false, HasHeader: false,
             Notes: "No header: date, amount, *, blank, description"),
+        // Listed after the card profiles on purpose: this signature is a subset of Chase's card export,
+        // which also has Transaction Date, Description, Type and Amount. Chase is matched first because
+        // it additionally requires Post Date, which Wealthfront does not have.
+        new("wealthfront", "Wealthfront cash account", ["Transaction date", "Description", "Type", "Amount"], "Transaction date", null, "Amount", null, null, "Description", null, "Type", false,
+            Notes: "Amounts are already signed: deposits positive, withdrawals negative"),
         new("generic", "Generic (Date, Description, Amount)", ["Date", "Description", "Amount"], "Date", null, "Amount", null, null, "Description", null, null, false),
     ];
 
