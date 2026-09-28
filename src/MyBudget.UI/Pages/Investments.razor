@@ -21,7 +21,26 @@ else
     <Warnings Items="portfolio.Warnings" />
     @if (syncResults is { Count: > 0 })
     {
-        <ul class="muted">@foreach (var r in syncResults) { <li>@r.Ticker: @(r.Error ?? $"{r.PricesAdded} prices, {r.DividendsAdded} dividends, {r.ReinvestsCreated} DRIP trades; last {Fmt.Money(r.LastPrice)}")</li> }</ul>
+        @* A line per holding buried the answer under forty rows of "0 prices, 0 dividends". The
+           outcome goes on one line; anything that failed stays visible; the rest folds away. *@
+        <p class="muted">
+            Refreshed @syncResults.Count holdings — @SyncCount(r => r.PricesAdded) prices,
+            @SyncCount(r => r.DividendsAdded) dividends, @SyncCount(r => r.ReinvestsCreated) DRIP trades.
+            @if (SyncChanged.Count == 0 && SyncFailed.Count == 0) { <text>Everything was already up to date.</text> }
+        </p>
+
+        @if (SyncFailed.Count > 0)
+        {
+            <ul class="warnings">@foreach (var r in SyncFailed) { <li>@r.Ticker: @r.Error</li> }</ul>
+        }
+
+        @if (SyncChanged.Count > 0)
+        {
+            <details>
+                <summary class="muted">What changed (@SyncChanged.Count)</summary>
+                <ul class="muted">@foreach (var r in SyncChanged) { <li>@r.Ticker: @r.PricesAdded prices, @r.DividendsAdded dividends, @r.ReinvestsCreated DRIP trades; last @Fmt.Money(r.LastPrice)</li> }</ul>
+            </details>
+        }
     }
 
     <div class="row tiles">
@@ -204,6 +223,15 @@ else
     private decimal manualPrice;
     private bool syncing;
     private List<MarketSyncResultDto>? syncResults;
+
+    /// <summary>Holdings the refresh actually moved — the only ones worth listing.</summary>
+    private List<MarketSyncResultDto> SyncChanged => syncResults?
+        .Where(r => r.Error is null && (r.PricesAdded > 0 || r.DividendsAdded > 0 || r.ReinvestsCreated > 0))
+        .ToList() ?? [];
+
+    private List<MarketSyncResultDto> SyncFailed => syncResults?.Where(r => r.Error is not null).ToList() ?? [];
+
+    private int SyncCount(Func<MarketSyncResultDto, int> of) => syncResults?.Sum(of) ?? 0;
     private string? error;
 
     protected override Task OnInitializedAsync() => Load();
