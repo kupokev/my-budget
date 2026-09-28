@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using MyBudget.Data;
 
@@ -10,9 +11,11 @@ using MyBudget.Data;
 namespace MyBudget.Data.Migrations
 {
     [DbContext(typeof(BudgetDbContext))]
-    partial class BudgetDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260928213246_PricedFromStatement")]
+    partial class PricedFromStatement
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.12");
@@ -993,35 +996,6 @@ namespace MyBudget.Data.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("IncomeSources");
-                });
-
-            modelBuilder.Entity("MyBudget.Domain.InvestmentFee", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
-
-                    b.Property<decimal>("Amount")
-                        .HasPrecision(14, 2)
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateOnly>("Date")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Description")
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("HoldingId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("Source")
-                        .HasColumnType("INTEGER");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("HoldingId");
-
-                    b.ToTable("InvestmentFees");
                 });
 
             modelBuilder.Entity("MyBudget.Domain.Label", b =>
@@ -2239,17 +2213,6 @@ namespace MyBudget.Data.Migrations
                     b.Navigation("IncomeSource");
                 });
 
-            modelBuilder.Entity("MyBudget.Domain.InvestmentFee", b =>
-                {
-                    b.HasOne("MyBudget.Domain.Holding", "Holding")
-                        .WithMany("Fees")
-                        .HasForeignKey("HoldingId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Holding");
-                });
-
             modelBuilder.Entity("MyBudget.Domain.Label", b =>
                 {
                     b.HasOne("MyBudget.Domain.Category", "Category")
@@ -2584,8 +2547,6 @@ namespace MyBudget.Data.Migrations
             modelBuilder.Entity("MyBudget.Domain.Holding", b =>
                 {
                     b.Navigation("Dividends");
-
-                    b.Navigation("Fees");
 
                     b.Navigation("Trades");
                 });

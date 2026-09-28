@@ -16,7 +16,9 @@ public sealed class InvestmentService(BudgetDbContext db, IMarketDataProvider ma
             ?? throw new KeyNotFoundException("Holding not found.");
         // Nothing to fetch for cash: it holds at $1.00 and the statement already priced it. Asking
         // anyway produced a 404 on every sync for tickers that are not tickers at all.
-        if (h.IsCashEquivalent) return new MarketSyncResultDto(h.Ticker, 0, 0, 0, null, null);
+        // Nothing to fetch: cash holds at $1.00, and a plan-only fund is not quoted anywhere. Both
+        // already carry the statement's price, so a lookup can only fail.
+        if (h.IsCashEquivalent || h.PricedFromStatement) return new MarketSyncResultDto(h.Ticker, 0, 0, 0, null, null);
 
         var firstTrade = h.Trades.Where(t => t.Kind != TradeKind.Sell).MinBy(t => t.Date)?.Date;
         var from = firstTrade ?? DateOnly.FromDateTime(DateTime.Today).AddYears(-1);
@@ -82,7 +84,7 @@ public sealed class InvestmentService(BudgetDbContext db, IMarketDataProvider ma
 
     public async Task<PortfolioDto> PortfolioAsync(DateOnly asOf, int year, CancellationToken ct = default)
     {
-        var holdings = await db.Holdings.Include(h => h.Account).Include(h => h.Trades).Include(h => h.Dividends).Where(h => h.IsActive).OrderBy(h => h.Ticker).ToListAsync(ct);
+        var holdings = await db.Holdings.Include(h => h.Account).Include(h => h.Trades).Include(h => h.Dividends).Include(h => h.Fees).Where(h => h.IsActive).OrderBy(h => h.Ticker).ToListAsync(ct);
         var warnings = new List<string>();
         var positions = new List<PositionDto>();
         decimal st = 0, lt = 0;
@@ -112,7 +114,9 @@ public sealed class InvestmentService(BudgetDbContext db, IMarketDataProvider ma
                 r.WashSales.Select(w => new WashSaleDto(w.SellTradeId, w.SellDate, w.Loss, w.WindowOpens, w.WindowCloses, w.EarliestSafeRepurchase, w.DisallowedLoss, w.WindowStillOpen, w.Message)).ToList(),
                 previous?.Price, previous?.Date, day.Change, day.Percent,
                 s.CostBasis == 0 || s.UnrealizedGain is not { } ug ? null : Round(ug / s.CostBasis * 100m),
-                est.Amount, est.Yield, est.Formula));
+                est.Amount, est.Yield, est.Formula,
+                h.Fees.OrderByDescending(f => f.Date).Select(f => new InvestmentFeeDto(f.Id, f.Date, f.Amount, f.Description, f.Source)).ToList(),
+                h.Fees.Where(f => f.Date.Year == year).Sum(f => f.Amount)));
         }
 
         GainsTaxDto? tax = null;
@@ -197,9 +201,13 @@ public sealed class InvestmentService(BudgetDbContext db, IMarketDataProvider ma
     public async Task<LotImportResultDto> ImportLotsAsync(int accountId, string content, CancellationToken ct = default)
     {
         var account = await db.Accounts.FindAsync([accountId], ct) ?? throw new KeyNotFoundException("Account not found.");
-        var parsed = MyBudget.Engines.Import.TaxLotParser.Parse(content);
+        // Two shapes of the same thing: a brokerage's tax-lot CSV, or an investment OFX/QFX. Both
+        // reduce to lots, so everything below this line is shared.
+        var parsed = MyBudget.Engines.Import.InvestmentOfxParser.LooksLikeInvestmentOfx(content)
+            ? MyBudget.Engines.Import.InvestmentOfxParser.Parse(content)
+            : MyBudget.Engines.Import.TaxLotParser.Parse(content);
         var holdings = await db.Holdings.Include(h => h.Trades).Where(h => h.AccountId == accountId).ToListAsync(ct);
-        int created = 0, imported = 0, present = 0, prices = 0;
+        int created = 0, imported = 0, present = 0, prices = 0, feesRecorded = 0;
         foreach (var group in parsed.Lots.GroupBy(l => l.Ticker))
         {
             var h = holdings.FirstOrDefault(x => x.Ticker == group.Key);
@@ -211,6 +219,7 @@ public sealed class InvestmentService(BudgetDbContext db, IMarketDataProvider ma
             // Set on every import, not only on creation, so a holding first seen before this was
             // understood gets corrected the next time its statement comes through.
             if (group.Any(l => l.IsCashEquivalent)) h.IsCashEquivalent = true;
+            if (group.Any(l => l.PricedFromStatement)) h.PricedFromStatement = true;
 
             if (h.IsCashEquivalent)
             {
@@ -238,6 +247,47 @@ public sealed class InvestmentService(BudgetDbContext db, IMarketDataProvider ma
                 }
             }
         }
+        // Charges the statement lists, kept so plan costs can be added up later. Deduped on date and
+        // amount the way lots are, so re-importing the same statement does not double-count them.
+        foreach (var fee in parsed.Fees ?? [])
+        {
+            var h = holdings.FirstOrDefault(x => x.Ticker == fee.Ticker);
+            if (h is null) continue;
+
+            if (await db.InvestmentFees.AnyAsync(f => f.HoldingId == h.Id && f.Date == fee.Date && f.Amount == fee.Amount, ct)) continue;
+
+            db.InvestmentFees.Add(new InvestmentFee
+            {
+                Holding = h, Date = fee.Date, Amount = fee.Amount,
+                Description = fee.Description, Source = DataSource.Fetched,
+            });
+            feesRecorded++;
+        }
+
+        // Settle each holding on what the statement says is held. A plan statement reports fees as
+        // dollars with no share count, so the purchases alone overstate the position — here by the
+        // 0.248 shares four fees were taken in. The correction is a dated trade, so the holding matches
+        // the statement and the adjustment is visible rather than the two quietly disagreeing.
+        foreach (var position in parsed.Positions ?? [])
+        {
+            var h = holdings.FirstOrDefault(x => x.Ticker == position.Ticker);
+            if (h is null) continue;
+
+            var held = MyBudget.Engines.Investments.Portfolio.SharesHeldOn(h.Trades, position.AsOf);
+            var drift = Math.Round(position.Units - held, 6);
+            if (drift == 0) continue;
+
+            h.Trades.Add(new Trade
+            {
+                Date = position.AsOf,
+                Kind = drift > 0 ? TradeKind.Buy : TradeKind.Sell,
+                Shares = Math.Abs(drift),
+                Price = parsed.Lots.FirstOrDefault(l => l.Ticker == position.Ticker)?.Price ?? 0m,
+                Notes = $"adjusted to statement: {position.Units:0.####} shares held on {position.AsOf:yyyy-MM-dd}",
+            });
+            imported++;
+        }
+
         await db.SaveChangesAsync(ct);
 
         // A tax-lot export carries no prices beyond the one on the row and no dividend history at all,
@@ -258,10 +308,10 @@ public sealed class InvestmentService(BudgetDbContext db, IMarketDataProvider ma
 
         return new LotImportResultDto(account.Name, created, imported, present, prices,
             parsed.Lots.Select(l => l.Ticker).Distinct().OrderBy(t => t).ToList(), parsed.Skipped, parsed.Warnings,
-            pricesFetched, dividendsFetched, fetchErrors);
+            pricesFetched, dividendsFetched, fetchErrors, feesRecorded);
     }
 
-    public static HoldingDto ToDto(Holding h) => new() { Id = h.Id, Ticker = h.Ticker, Name = h.Name, AccountId = h.AccountId, AccountName = h.Account?.Name, Drip = h.Drip, IsCashEquivalent = h.IsCashEquivalent, IsActive = h.IsActive, Notes = h.Notes };
+    public static HoldingDto ToDto(Holding h) => new() { Id = h.Id, Ticker = h.Ticker, Name = h.Name, AccountId = h.AccountId, AccountName = h.Account?.Name, Drip = h.Drip, IsCashEquivalent = h.IsCashEquivalent, PricedFromStatement = h.PricedFromStatement, IsActive = h.IsActive, Notes = h.Notes };
     public static TradeDto ToDto(Trade t) => new() { Id = t.Id, HoldingId = t.HoldingId, Date = t.Date, Kind = t.Kind, Shares = t.Shares, Price = t.Price, Fees = t.Fees, Notes = t.Notes, DividendPaymentId = t.DividendPaymentId };
     public static DividendDto ToDto(DividendPayment d) => new() { Id = d.Id, HoldingId = d.HoldingId, ExDate = d.ExDate, PayDate = d.PayDate, PerShare = d.PerShare, SharesHeld = d.SharesHeld, Amount = d.Amount, Reinvested = d.Reinvested, Source = d.Source };
 

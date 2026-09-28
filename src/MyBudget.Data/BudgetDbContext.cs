@@ -34,6 +34,7 @@ public sealed class BudgetDbContext(DbContextOptions<BudgetDbContext> options) :
     public DbSet<Holding> Holdings => Set<Holding>();
     public DbSet<Trade> Trades => Set<Trade>();
     public DbSet<DividendPayment> Dividends => Set<DividendPayment>();
+    public DbSet<InvestmentFee> InvestmentFees => Set<InvestmentFee>();
     public DbSet<PriceSnapshot> Prices => Set<PriceSnapshot>();
     public DbSet<Asset> Assets => Set<Asset>();
     public DbSet<Person> People => Set<Person>();

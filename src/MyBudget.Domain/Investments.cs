@@ -20,10 +20,39 @@ public class Holding
     /// </summary>
     public bool IsCashEquivalent { get; set; }
 
+    /// <summary>
+    /// A fund whose price comes from the statement because no market quotes it: a 401(k) collective
+    /// trust like "Target Retire 2050 Tr II" has real shares and a real NAV, but it is sold only
+    /// inside the plan and its identifier is the plan's, not a ticker. Unlike cash this is a genuine
+    /// position that rises and falls — it simply cannot be looked up, so asking only ever 404s.
+    /// </summary>
+    public bool PricedFromStatement { get; set; }
+
     public bool IsActive { get; set; } = true;
     public string? Notes { get; set; }
     public List<Trade> Trades { get; set; } = [];
     public List<DividendPayment> Dividends { get; set; } = [];
+    public List<InvestmentFee> Fees { get; set; } = [];
+}
+
+/// <summary>
+/// A charge taken out of a holding: a plan's administrative fee, an expense-ratio deduction, an
+/// advisory charge. Kept apart from trades because it is a cost of holding rather than a change in
+/// position — and because the point of recording it is to be able to add it up and see what a plan
+/// costs to run. A plan often takes it in shares, in which case the share count moves too.
+/// </summary>
+public class InvestmentFee
+{
+    public int Id { get; set; }
+    public int HoldingId { get; set; }
+    public Holding? Holding { get; set; }
+    public DateOnly Date { get; set; }
+
+    /// <summary>What was taken, as a positive amount.</summary>
+    public decimal Amount { get; set; }
+
+    public string? Description { get; set; }
+    public DataSource Source { get; set; }
 }
 
 /// <summary>A buy, sell, or dividend reinvestment. Each buy/reinvest is its own lot (INV-4/5 need exact lot dates).</summary>

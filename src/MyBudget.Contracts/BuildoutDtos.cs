@@ -17,6 +17,9 @@ public sealed class HoldingDto
     /// <summary>A money-market fund or cash sweep: a balance you set, not a position you trade.</summary>
     public bool IsCashEquivalent { get; set; }
 
+    /// <summary>A plan-only fund with no market quote; its price comes from the statement.</summary>
+    public bool PricedFromStatement { get; set; }
+
     public bool IsActive { get; set; } = true;
     public string? Notes { get; set; }
 }
@@ -47,6 +50,8 @@ public sealed class DividendDto
     public DataSource Source { get; set; }
 }
 
+public sealed record InvestmentFeeDto(int Id, DateOnly Date, decimal Amount, string? Description, DataSource Source);
+
 public sealed record LotDto(int TradeId, DateOnly Acquired, decimal Shares, decimal CostPerShare, decimal RemainingShares, bool FromReinvest, decimal DisallowedLossAdded);
 public sealed record RealizedGainDto(int SellTradeId, DateOnly SellDate, DateOnly Acquired, decimal Shares, decimal Proceeds, decimal CostBasis, decimal Gain, string Term, int DaysHeld, bool WashSale, decimal DisallowedLoss, string Formula);
 public sealed record WashSaleDto(int SellTradeId, DateOnly SellDate, decimal Loss, DateOnly WindowOpens, DateOnly WindowCloses, DateOnly EarliestSafeRepurchase, decimal DisallowedLoss, bool WindowStillOpen, string Message);
@@ -58,7 +63,9 @@ public sealed record PositionDto(HoldingDto Holding, bool TaxAdvantaged, decimal
     /// <summary>Unrealized gain as a share of cost basis.</summary>
     decimal? UnrealizedPercent = null,
     /// <summary>What a full year at the current run rate would pay: trailing-twelve-month dividends per share × shares held now.</summary>
-    decimal? EstimatedDividends = null, decimal? EstimatedYieldPercent = null, string? EstimatedDividendsFormula = null);
+    decimal? EstimatedDividends = null, decimal? EstimatedYieldPercent = null, string? EstimatedDividendsFormula = null,
+    /// <summary>Charges taken out of this holding, and what they came to this year.</summary>
+    IReadOnlyList<InvestmentFeeDto>? Fees = null, decimal FeesThisYear = 0);
 
 public sealed record GainsTaxDto(decimal ShortTermGain, decimal LongTermGain, decimal ShortTermTax, decimal LongTermTax, decimal MissouriTax, decimal Total, decimal OrdinaryMarginalRate, IReadOnlyList<string> Steps);
 
@@ -76,7 +83,9 @@ public sealed record MarketSyncResultDto(string Ticker, int PricesAdded, int Div
 
 public sealed record LotImportResultDto(string AccountName, int HoldingsCreated, int LotsImported, int LotsAlreadyPresent, int PricesRecorded, IReadOnlyList<string> Tickers, IReadOnlyList<string> Skipped, IReadOnlyList<string> Warnings,
     /// <summary>Prices and dividends fetched straight after the import, so the figures are populated without a second click.</summary>
-    int PricesFetched = 0, int DividendsFetched = 0, IReadOnlyList<string>? FetchErrors = null);
+    int PricesFetched = 0, int DividendsFetched = 0, IReadOnlyList<string>? FetchErrors = null,
+    /// <summary>Charges the statement listed, recorded against their holdings.</summary>
+    int FeesRecorded = 0);
 
 // ---- Assets (ACC-4a) --------------------------------------------------------------------------
 

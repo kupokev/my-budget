@@ -89,7 +89,7 @@ else
                     <tr class="holding-row @(open == p.Holding.Id ? "editing" : "")">
                         <td class="indent">
                             <button class="link tree" type="button" title="@($"{p.Holding.Name}\nTax lots")" @onclick="() => ToggleLots(p.Holding.Id)">
-                                <span class="caret">@(lotsOpen ? "▾" : "▸")</span><strong>@p.Holding.Ticker</strong>
+                                <span class="caret">@(lotsOpen ? "▾" : "▸")</span><strong>@p.Holding.Ticker</strong>@if (p.Holding.PricedFromStatement) { <span class="muted" title="A plan-only fund: no market quotes it, so its price comes from the statement."> plan</span> }
                             </button>
                         </td>
                         <td class="money">@p.Shares.ToString("0.####")</td><td class="money" title="@Fmt.Date(p.PriceDate)">@Fmt.Money(p.Price)</td>
@@ -157,20 +157,61 @@ else
                                     <thead><tr><th>Ex-date</th><th class="money">Per share</th><th class="money">Shares held</th><th class="money">Amount</th><th>DRIP</th><th></th></tr></thead>
                                     <tbody>@foreach (var dv in p.Dividends) { <tr><td>@Fmt.Date(dv.ExDate) <span class="muted">@(dv.Source == DataSource.Fetched ? "" : "manual")</span></td><td class="money">@dv.PerShare.ToString("N4")</td><td class="money">@dv.SharesHeld.ToString("0.####")</td><td><Money Value="dv.Amount" /></td><td>@(dv.Reinvested ? "reinvested" : "cash")</td><td><button class="secondary" type="button" @onclick="() => RemoveDividend(dv)">✕</button></td></tr> }</tbody>
                                 </table>
-                                <div class="row">
-                                    <div class="field"><label>Ex-date</label><input type="date" @bind="newDividend.ExDate" /></div>
-                                    <div class="field"><label>Per share</label><input type="number" step="0.0001" class="narrow-money" @bind="newDividend.PerShare" /></div>
-                                    <div class="field"><label>&nbsp;</label><button class="secondary" type="button" @onclick="() => AddDividend(p.Holding.Id)">Add dividend</button></div>
-                                    <div class="field"><label>Price today</label><input type="number" step="0.01" class="narrow-money" @bind="manualPrice" /></div>
-                                    <div class="field"><label>&nbsp;</label><button class="secondary" type="button" @onclick="() => SetPrice(p.Holding.Ticker)">Set price</button></div>
-                                    @if (p.Holding.IsCashEquivalent)
-                                    {
-                                        @* A sweep balance changes without a new export, so it can be typed here. *@
-                                        <div class="field"><label>Cash balance</label><input type="number" step="0.01" class="narrow-money" @bind="cashBalance" placeholder="@p.Shares.ToString("0.00")" /></div>
-                                        <div class="field"><label>As of</label><OptionalDate @bind-Value="cashAsOf" Empty="today" /></div>
-                                        <div class="field"><label>&nbsp;</label><button class="secondary" type="button" @onclick="() => SetCashBalance(p)">Set balance</button></div>
-                                    }
-                                </div>
+                                @* Each action gets its own box and says what it does. These were one long
+                                   row under the Dividends heading, so entering a price looked like part
+                                   of recording a dividend. *@
+                                <fieldset class="group">
+                                    <legend>Record a dividend</legend>
+                                    <div class="row">
+                                        <div class="field"><label>Ex-date</label><input type="date" @bind="newDividend.ExDate" /></div>
+                                        <div class="field"><label>Per share</label><input type="number" step="0.0001" class="narrow-money" @bind="newDividend.PerShare" /></div>
+                                        <div class="field"><label>&nbsp;</label><button class="secondary" type="button" @onclick="() => AddDividend(p.Holding.Id)">Add dividend</button></div>
+                                    </div>
+                                </fieldset>
+
+                                @if (p.Holding.IsCashEquivalent)
+                                {
+                                    <fieldset class="group">
+                                        <legend>Cash balance</legend>
+                                        <p class="muted">A sweep is a balance, not a position: set it to what the account says and the difference is recorded for you.</p>
+                                        <div class="row">
+                                            <div class="field"><label>Balance</label><input type="number" step="0.01" class="narrow-money" @bind="cashBalance" placeholder="@p.Shares.ToString("0.00")" /></div>
+                                            <div class="field"><label>As of</label><OptionalDate @bind-Value="cashAsOf" Empty="today" /></div>
+                                            <div class="field"><label>&nbsp;</label><button class="secondary" type="button" @onclick="() => SetCashBalance(p)">Set balance</button></div>
+                                        </div>
+                                    </fieldset>
+                                }
+                                else
+                                {
+                                    <fieldset class="group">
+                                        <legend>Price for @p.Holding.Ticker</legend>
+                                        <p class="muted">
+                                            @if (p.Holding.PricedFromStatement)
+                                            {
+                                                <text>No market quotes this fund, so its price only changes when you enter it or import a fresh statement. Last @Fmt.Money(p.Price) on @Fmt.Date(p.PriceDate).</text>
+                                            }
+                                            else
+                                            {
+                                                <text>Normally fetched; type one to override or to fill a gap. Last @Fmt.Money(p.Price) on @Fmt.Date(p.PriceDate).</text>
+                                            }
+                                        </p>
+                                        <div class="row">
+                                            <div class="field"><label>Price today</label><input type="number" step="0.01" class="narrow-money" @bind="manualPrice" /></div>
+                                            <div class="field"><label>&nbsp;</label><button class="secondary" type="button" @onclick="() => SetPrice(p.Holding.Ticker)">Set price</button></div>
+                                        </div>
+                                    </fieldset>
+                                }
+                                @if (p.Fees is { Count: > 0 } fees)
+                                {
+                                    @* What the plan charges to hold this. Worth watching: it is the one
+                                       cost that comes straight out of the balance without an invoice. *@
+                                    <h3>Fees <span class="muted">@Fmt.Money(p.FeesThisYear) so far this year</span></h3>
+                                    <table class="compact">
+                                        <thead><tr><th>Date</th><th class="money">Amount</th><th>What</th></tr></thead>
+                                        <tbody>@foreach (var f in fees) { <tr><td>@Fmt.Date(f.Date)</td><td class="money">@Fmt.Money(f.Amount)</td><td class="muted">@f.Description</td></tr> }</tbody>
+                                    </table>
+                                }
+
                                 <h3>Open lots</h3>
                                 <table class="compact">
                                     <thead><tr><th>Acquired</th><th class="money">Shares left</th><th class="money">Cost / share</th><th></th></tr></thead>

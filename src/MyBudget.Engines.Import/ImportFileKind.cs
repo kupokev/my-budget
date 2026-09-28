@@ -12,9 +12,11 @@ public static class ImportFileKind
 {
     public static ImportKind Detect(string fileName, string content)
     {
-        // OFX/QFX are always statements; they have no notion of a tax lot.
-        if (fileName.EndsWith(".ofx", StringComparison.OrdinalIgnoreCase)
-            || fileName.EndsWith(".qfx", StringComparison.OrdinalIgnoreCase)) return ImportKind.Statement;
+        // An OFX file is a bank statement unless it carries investment blocks: a 401(k) or brokerage
+        // download has purchases and positions instead of <STMTTRN> lines, and belongs with the lots.
+        if (OfxStatementParser.LooksLikeOfx(content) || fileName.EndsWith(".ofx", StringComparison.OrdinalIgnoreCase)
+            || fileName.EndsWith(".qfx", StringComparison.OrdinalIgnoreCase))
+            return InvestmentOfxParser.LooksLikeInvestmentOfx(content) ? ImportKind.TaxLots : ImportKind.Statement;
 
         var rows = CsvStatementParser.ReadRows(content);
         if (rows.Count == 0) return ImportKind.Statement;

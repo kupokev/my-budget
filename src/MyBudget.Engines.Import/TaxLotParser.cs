@@ -1,9 +1,19 @@
 namespace MyBudget.Engines.Import;
 
 /// <summary>One open lot from a brokerage "tax lots" export: what to turn into a Buy trade.</summary>
-public sealed record ParsedLot(string Ticker, string? Description, decimal Quantity, decimal UnitCost, DateOnly Acquired, decimal? Price, DateOnly? PriceDate, string? AccountName, string? AccountNumber, bool IsCashEquivalent = false);
+public sealed record ParsedLot(string Ticker, string? Description, decimal Quantity, decimal UnitCost, DateOnly Acquired, decimal? Price, DateOnly? PriceDate, string? AccountName, string? AccountNumber, bool IsCashEquivalent = false, bool PricedFromStatement = false);
 
-public sealed record LotParseResult(IReadOnlyList<ParsedLot> Lots, IReadOnlyList<string> Skipped, IReadOnlyList<string> Warnings);
+/// <summary>A charge the statement lists against a holding.</summary>
+public sealed record ParsedFee(string Ticker, DateOnly Date, decimal Amount, string? Description);
+
+/// <summary>What a statement says is held right now, as opposed to the rows that got it there.</summary>
+public sealed record ParsedPosition(string Ticker, decimal Units, DateOnly AsOf);
+
+public sealed record LotParseResult(IReadOnlyList<ParsedLot> Lots, IReadOnlyList<string> Skipped, IReadOnlyList<string> Warnings,
+    /// <summary>Holdings the statement reports directly. Empty for a tax-lot export, which lists only lots.</summary>
+    IReadOnlyList<ParsedPosition>? Positions = null,
+    /// <summary>Charges the statement lists. Recorded rather than noted, so plan costs can be totalled.</summary>
+    IReadOnlyList<ParsedFee>? Fees = null);
 
 /// <summary>
 /// Reads a tax-lot export (J.P. Morgan / Chase layout: Ticker, Quantity, Unit Cost, Acquisition Date, Price, Pricing Date …).
