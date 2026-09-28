@@ -12,6 +12,14 @@ public class Holding
     public int AccountId { get; set; }
     public Account? Account { get; set; }
     public bool Drip { get; set; }
+
+    /// <summary>
+    /// A money-market fund or a broker's cash sweep: it holds at $1.00 and has no market quote. Some,
+    /// like Chase's "QACDS", are internal codes no provider has ever heard of, so asking for a price
+    /// only ever returns a 404. Its price comes from the statement instead.
+    /// </summary>
+    public bool IsCashEquivalent { get; set; }
+
     public bool IsActive { get; set; } = true;
     public string? Notes { get; set; }
     public List<Trade> Trades { get; set; } = [];

@@ -14,6 +14,10 @@ public sealed class InvestmentService(BudgetDbContext db, IMarketDataProvider ma
     {
         var h = await db.Holdings.Include(x => x.Trades).Include(x => x.Dividends).FirstOrDefaultAsync(x => x.Id == holdingId, ct)
             ?? throw new KeyNotFoundException("Holding not found.");
+        // Nothing to fetch for cash: it holds at $1.00 and the statement already priced it. Asking
+        // anyway produced a 404 on every sync for tickers that are not tickers at all.
+        if (h.IsCashEquivalent) return new MarketSyncResultDto(h.Ticker, 0, 0, 0, null, null);
+
         var firstTrade = h.Trades.Where(t => t.Kind != TradeKind.Sell).MinBy(t => t.Date)?.Date;
         var from = firstTrade ?? DateOnly.FromDateTime(DateTime.Today).AddYears(-1);
         MarketData data;
@@ -169,11 +173,43 @@ public sealed class InvestmentService(BudgetDbContext db, IMarketDataProvider ma
                 h = new Holding { Ticker = group.Key, Name = group.First().Description, AccountId = accountId };
                 db.Holdings.Add(h); holdings.Add(h); created++;
             }
-            foreach (var lot in group)
+            // Set on every import, not only on creation, so a holding first seen before this was
+            // understood gets corrected the next time its statement comes through.
+            if (group.Any(l => l.IsCashEquivalent)) h.IsCashEquivalent = true;
+
+            if (h.IsCashEquivalent)
             {
-                if (h.Trades.Any(t => t.Kind != TradeKind.Sell && t.Date == lot.Acquired && t.Shares == lot.Quantity && t.Price == lot.UnitCost)) { present++; continue; }
-                h.Trades.Add(new Trade { Date = lot.Acquired, Kind = TradeKind.Buy, Shares = lot.Quantity, Price = lot.UnitCost, Notes = "from tax-lot import" });
-                imported++;
+                // A sweep line is a balance, not a lot. Every statement restates the same pot, so
+                // appending it would stack last month's cash on top of this month's. Record the
+                // difference instead: the position ends up at the stated balance, and the history of
+                // how it moved survives.
+                var stated = group.Sum(l => l.Quantity);
+                var asOf = group.Max(l => l.PriceDate ?? l.Acquired);
+                var held = MyBudget.Engines.Investments.Portfolio.SharesHeldOn(h.Trades, asOf);
+                var delta = stated - held;
+
+                if (delta == 0) { present++; }
+                else
+                {
+                    h.Trades.Add(new Trade
+                    {
+                        Date = asOf,
+                        Kind = delta > 0 ? TradeKind.Buy : TradeKind.Sell,
+                        Shares = Math.Abs(delta),
+                        Price = 1m,
+                        Notes = $"cash balance {stated:N2} from statement {asOf:yyyy-MM-dd}",
+                    });
+                    imported++;
+                }
+            }
+            else
+            {
+                foreach (var lot in group)
+                {
+                    if (h.Trades.Any(t => t.Kind != TradeKind.Sell && t.Date == lot.Acquired && t.Shares == lot.Quantity && t.Price == lot.UnitCost)) { present++; continue; }
+                    h.Trades.Add(new Trade { Date = lot.Acquired, Kind = TradeKind.Buy, Shares = lot.Quantity, Price = lot.UnitCost, Notes = "from tax-lot import" });
+                    imported++;
+                }
             }
             var priced = group.FirstOrDefault(l => l.Price is not null);
             if (priced?.Price is { } px)

@@ -27,7 +27,7 @@ public class RealStatementTests
     }
 
     [Fact]
-    public void Tax_lot_export_becomes_one_lot_per_row_and_skips_cash()
+    public void Tax_lot_export_becomes_one_lot_per_row_including_the_cash_sweep()
     {
         const string csv = "Account name,Account number,Account type,Sub account,Asset Class,Asset Strategy,Asset Strategy Detail,Description,Ticker,CUSIP,Quantity,Base CCY,Local CCY,Price,PriceInd,Local Price,Today's Price Change,Price Change %,Pricing Date,Value,Today's Value Change,Value Change %,Local Value,Cost,Orig Cost (Base),Orig Cost (Local),Cost Source,Local Cost,Unrealized G/L Amt.,Orig. $ Gain/Loss (Base),Orig. $ Gain/Loss (Local),Local Unrealized G/L Amt.,Unrealized Gain/Loss (%),Orig. % Gain/Loss (Base),Orig. % Gain/Loss (Local),Local Unrealized Gain/Loss (%),Disallowed Loss (Base),Disallowed Loss (Local),Acquisition Date,Adj Date,Acquisition exchange,Unit Cost,Local Unit Cost,Tax term\n" +
             "\"Traditional IRA\",\"...4077\",\"Brokerage\",\"\",\"Equity\",\"US Small Cap\",\"\",\"INSTALLED BUILDING PRODUCTS INC\",\"IBP\",\"45780R101\",\"25\",\"USD\",\"\",\"200.23\",\"false\",\"\",\"3.94\",\"2.01\",\"09/25/2026 08:00:00\",\"5,005.75\",\"98.5\",\"2.01\",\"\",\"4,862.88\",\"4,862.88\",\"\",\"\",\"\",\"142.87\",\"142.87\",\"\",\"\",\"2.94\",\"2.94\",\"\",\"\",\"\",\"\",\"09/25/2026\",\"\",\"0\",\"194.52\",\"\",\"Short\"\n" +
@@ -35,7 +35,8 @@ public class RealStatementTests
             "\"Traditional IRA\",\"...4077\",\"Brokerage\",\"\",\"Cash & Money Market Funds\",\"Money Market Funds\",\"\",\"CHASE IRA DEPOSIT SWEEP JPMORGAN CHASE BANK NA\",\"QDERQ\",\"\",\"11,012.76\",\"USD\",\"\",\"1\",\"false\",\"\",\"0\",\"0\",\"09/25/2026 08:00:00\",\"11,012.76\",\"0\",\"0\",\"\",\"11,012.76\",\"11,012.76\",\"\",\"\",\"\",\"0\",\"0\",\"\",\"\",\"0\",\"0\",\"\",\"\",\"\",\"\",\"\",\"\",\"\",\"1\",\"\",\"Short\"\n" +
             "\nFOOTNOTES\nP,\"This order is pending settlement.\"\n";
         var r = TaxLotParser.Parse(csv);
-        Assert.Equal(2, r.Lots.Count);
+        // Three, not two: the sweep used to be dropped, which left the account total short by its value.
+        Assert.Equal(3, r.Lots.Count);
         var ibp = r.Lots.Single(l => l.Ticker == "IBP");
         Assert.Equal(25m, ibp.Quantity);
         Assert.Equal(194.52m, ibp.UnitCost);
@@ -45,8 +46,11 @@ public class RealStatementTests
         var qyld = r.Lots.Single(l => l.Ticker == "QYLD");
         Assert.Equal(1_145m, qyld.Quantity);                   // "1,145" with the thousands separator
         Assert.Equal(new DateOnly(2026, 1, 16), qyld.Acquired);
-        Assert.Single(r.Skipped);
-        Assert.Contains("SWEEP", r.Skipped[0]);
+        var sweep = r.Lots.Single(l => l.Ticker == "QDERQ");
+        Assert.Equal(11_012.76m, sweep.Quantity);
+        Assert.Equal(1m, sweep.UnitCost);
+        Assert.Equal(new DateOnly(2026, 9, 25), sweep.Acquired);   // dated from the statement; it has none of its own
+        Assert.Empty(r.Skipped);
         Assert.Empty(r.Warnings);
     }
 }

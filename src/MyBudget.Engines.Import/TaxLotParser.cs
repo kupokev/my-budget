@@ -1,7 +1,7 @@
 namespace MyBudget.Engines.Import;
 
 /// <summary>One open lot from a brokerage "tax lots" export: what to turn into a Buy trade.</summary>
-public sealed record ParsedLot(string Ticker, string? Description, decimal Quantity, decimal UnitCost, DateOnly Acquired, decimal? Price, DateOnly? PriceDate, string? AccountName, string? AccountNumber);
+public sealed record ParsedLot(string Ticker, string? Description, decimal Quantity, decimal UnitCost, DateOnly Acquired, decimal? Price, DateOnly? PriceDate, string? AccountName, string? AccountNumber, bool IsCashEquivalent = false);
 
 public sealed record LotParseResult(IReadOnlyList<ParsedLot> Lots, IReadOnlyList<string> Skipped, IReadOnlyList<string> Warnings);
 
@@ -32,17 +32,31 @@ public static class TaxLotParser
             string Cell(int i) => i >= 0 && i < row.Count ? row[i].Trim() : "";
             var t = Cell(ticker).ToUpperInvariant();
             var assetClass = Cell(cls);
-            if (string.IsNullOrEmpty(t) || assetClass.Contains("Cash", StringComparison.OrdinalIgnoreCase) || assetClass.Contains("Money Market", StringComparison.OrdinalIgnoreCase))
+            if (string.IsNullOrEmpty(t))
             {
-                if (!string.IsNullOrEmpty(Cell(desc))) skipped.Add($"{(t.Length > 0 ? t + " " : "")}{Cell(desc)} ({(string.IsNullOrEmpty(assetClass) ? "no ticker" : assetClass)})");
+                if (!string.IsNullOrEmpty(Cell(desc))) skipped.Add($"{Cell(desc)} (no ticker)");
                 continue;
             }
+
+            // Money-market funds and the cash sweep are not tax lots — they hold at $1 and carry no
+            // acquisition date — but they are real money, and leaving them out made the account total
+            // read short by exactly their value. They come in as holdings priced from the file, dated
+            // from the statement, so the account adds up. Short/long term is meaningless at a $1 NAV.
+            var isCashLike = assetClass.Contains("Cash", StringComparison.OrdinalIgnoreCase)
+                          || assetClass.Contains("Money Market", StringComparison.OrdinalIgnoreCase);
+
             if (!CsvStatementParser.TryMoney(Cell(qty), out var q) || q == 0) { warnings.Add($"Row {r + 1} ({t}): unreadable quantity '{Cell(qty)}'."); continue; }
             if (!CsvStatementParser.TryMoney(Cell(unit), out var u)) { warnings.Add($"Row {r + 1} ({t}): unreadable unit cost '{Cell(unit)}'."); continue; }
-            if (!CsvStatementParser.TryDate(Cell(acq), null, out var a)) { warnings.Add($"Row {r + 1} ({t}): unreadable acquisition date '{Cell(acq)}'."); continue; }
+
             decimal? p = CsvStatementParser.TryMoney(Cell(price), out var pv) ? pv : null;
             DateOnly? pd = CsvStatementParser.TryDate(Cell(priceDate).Split(' ')[0], null, out var pdv) ? pdv : null;
-            lots.Add(new ParsedLot(t, Cell(desc), q, u, a, p, pd, Cell(acctName), Cell(acctNo)));
+
+            if (!CsvStatementParser.TryDate(Cell(acq), null, out var a))
+            {
+                if (isCashLike && pd is { } priced) a = priced;
+                else { warnings.Add($"Row {r + 1} ({t}): unreadable acquisition date '{Cell(acq)}'."); continue; }
+            }
+            lots.Add(new ParsedLot(t, Cell(desc), q, u, a, p, pd, Cell(acctName), Cell(acctNo), isCashLike));
         }
         return new(lots, skipped, warnings);
     }
