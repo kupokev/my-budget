@@ -121,6 +121,16 @@ public sealed class BudgetLineDto
     public DateOnly? EndDate { get; set; }
     public string? Notes { get; set; }
     public bool IsActive { get; set; } = true;
+
+    /// <summary>
+    /// What this line costs per month, from <c>SinkingFund.MonthlyAccrual</c> — an annual bill divided
+    /// across the year, a one-off spread over the months until it is due. Server-computed and ignored
+    /// on write, so every screen shows the same number without repeating the formula.
+    /// </summary>
+    public decimal MonthlyAccrual { get; set; }
+
+    /// <summary>How <see cref="MonthlyAccrual"/> was arrived at, for showing the working.</summary>
+    public string? MonthlyAccrualFormula { get; set; }
 }
 
 /// <summary>One line in one month: the actual plus optional per-month overrides (null = use the line's default).</summary>

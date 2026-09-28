@@ -36,6 +36,7 @@ public sealed class ApiClient(HttpClient http)
     public Task<LabelDto> SaveLabelAsync(LabelDto l) => l.Id == 0 ? Post("api/labels", l) : Put($"api/labels/{l.Id}", l);
     public Task DeleteLabelAsync(int id) => Delete($"api/labels/{id}");
     public Task<CategoryDto> SaveCategoryAsync(CategoryDto c) => c.Id == 0 ? Post("api/categories", c) : Put($"api/categories/{c.Id}", c);
+    public Task DeleteCategoryAsync(int id) => Delete($"api/categories/{id}");
     public Task<List<BudgetLineDto>> GetBudgetLinesAsync() => Get<List<BudgetLineDto>>("api/budget");
     public Task<BudgetLineDto> SaveBudgetLineAsync(BudgetLineDto b) => b.Id == 0 ? Post("api/budget", b) : Put($"api/budget/{b.Id}", b);
     public Task DeleteBudgetLineAsync(int id) => Delete($"api/budget/{id}");
@@ -252,7 +253,31 @@ public sealed class ApiClient(HttpClient http)
     {
         if (r.IsSuccessStatusCode) return;
         var body = await r.Content.ReadAsStringAsync();
-        throw new ApiException((int)r.StatusCode, string.IsNullOrWhiteSpace(body) ? r.ReasonPhrase ?? "Request failed" : body);
+        throw new ApiException((int)r.StatusCode, Readable(body) ?? r.ReasonPhrase ?? "Request failed");
+    }
+
+    /// <summary>
+    /// Minimal APIs return failures as a ProblemDetails document. Showing the raw JSON in the error
+    /// banner buries the one sentence that was written for the reader, so pull it back out.
+    /// </summary>
+    private static string? Readable(string body)
+    {
+        if (string.IsNullOrWhiteSpace(body)) return null;
+        if (!body.TrimStart().StartsWith('{')) return body;
+
+        try
+        {
+            using var doc = JsonDocument.Parse(body);
+            foreach (var field in (ReadOnlySpan<string>)["detail", "title"])
+                if (doc.RootElement.TryGetProperty(field, out var v) && v.ValueKind == JsonValueKind.String)
+                {
+                    var text = v.GetString();
+                    if (!string.IsNullOrWhiteSpace(text)) return text;
+                }
+        }
+        catch (JsonException) { /* not a problem document; show it as it came */ }
+
+        return body;
     }
 }
 

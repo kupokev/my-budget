@@ -218,8 +218,8 @@ else
                             <div class="field"><label>@(editing.Frequency == BudgetFrequency.OneOff ? "Due date" : "A known due date")</label><InputDate @bind-Value="editing.AnchorDueDate" /></div>
                         }
                     }
-                    <div class="field"><label>Starts</label><InputDate @bind-Value="editing.StartDate" /></div>
-                    <div class="field"><label>Ends <span class="muted">(last month owed)</span></label><InputDate @bind-Value="editing.EndDate" /></div>
+                    <div class="field"><label>Starts</label><OptionalDate @bind-Value="editing.StartDate" Empty="from the beginning" /></div>
+                    <div class="field"><label>Ends <span class="muted">(last month owed)</span></label><OptionalDate @bind-Value="editing.EndDate" Empty="no end" /></div>
                 </fieldset>
                 <fieldset class="group">
                     <legend>How it's paid</legend>

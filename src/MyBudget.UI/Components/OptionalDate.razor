@@ -1,0 +1,41 @@
+@*
+   A date that is allowed to be empty.
+
+   WebKitGTK paints today's date as a grey hint inside an empty date input and gives no way to clear
+   one that has been set. Both read as "this field has a value" when it does not. So an empty optional
+   date does not render an input at all — it says what empty means and offers to set one. The input
+   only exists while there is a date to show, and Clear takes it away again.
+*@
+<span class="optional-date">
+    @if (Value is null)
+    {
+        <span class="muted">@(string.IsNullOrWhiteSpace(Empty) ? "not set" : Empty)</span>
+        <button type="button" class="link" @onclick="Begin">Set a date</button>
+    }
+    else
+    {
+        <InputDate TValue="DateOnly?" Value="Value" ValueChanged="Set" ValueExpression="() => Value" />
+        <button type="button" class="link" title="@ClearTitle" @onclick="() => Set(null)">Clear</button>
+    }
+</span>
+
+@code {
+    [Parameter] public DateOnly? Value { get; set; }
+    [Parameter] public EventCallback<DateOnly?> ValueChanged { get; set; }
+
+    /// <summary>What an empty value means here, e.g. "no end", shown in place of the input.</summary>
+    [Parameter] public string? Empty { get; set; }
+
+    [Parameter] public string ClearTitle { get; set; } = "Leave this date empty";
+
+    /// <summary>Where the picker starts once the user asks for a date. Never a value the field took on its own.</summary>
+    [Parameter] public DateOnly? Suggested { get; set; }
+
+    private Task Begin() => Set(Suggested ?? DateOnly.FromDateTime(DateTime.Today));
+
+    private Task Set(DateOnly? value)
+    {
+        Value = value;
+        return ValueChanged.InvokeAsync(value);
+    }
+}

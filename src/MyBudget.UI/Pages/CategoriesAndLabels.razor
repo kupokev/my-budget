@@ -16,15 +16,15 @@ else
         <table class="compact">
             <thead><tr><th>Name</th><th>Budget lines</th><th class="money">Planned / month</th><th class="center">Can go on a card</th><th class="center">Active</th><th></th></tr></thead>
             <tbody>
-            @foreach (var c in categories.OrderBy(c => !c.IsActive).ThenBy(c => c.Name))
+            @foreach (var c in categories)
             {
-                <tr class="@(c.IsActive ? "" : "muted")">
-                    <td><input type="text" @bind="c.Name" /></td>
-                    <td>@budgetLines.Count(b => b.CategoryId == c.Id)</td>
+                <tr @key="c.Id" class="@(c.IsActive ? "" : "muted")">
+                    <td><input type="text" @bind="c.Name" @bind:after="() => AutoSave(c)" /></td>
+                    <td>@LineCountFor(c.Id)</td>
                     <td class="money">@Fmt.Money(PlannedFor(c.Id))</td>
-                    <td class="center"><input type="checkbox" @bind="c.IsCardEligible" /></td>
-                    <td class="center"><input type="checkbox" @bind="c.IsActive" /></td>
-                    <td><button class="secondary" type="button" @onclick="() => Save(c)">Save</button></td>
+                    <td class="center"><input type="checkbox" @bind="c.IsCardEligible" @bind:after="() => AutoSave(c)" /></td>
+                    <td class="center"><input type="checkbox" @bind="c.IsActive" @bind:after="() => AutoSave(c)" /></td>
+                    <td class="actions"><button class="link danger" type="button" title="Delete" @onclick="() => DeleteCategory(c)">✕</button></td>
                 </tr>
             }
             </tbody>
@@ -39,19 +39,19 @@ else
 
     <section class="panel">
         <h2>Labels</h2>
-        <p class="muted">Where a purchase happened, next to the category that says what kind it was: "General merchandise" at <em>Amazon</em> vs at <em>Costco</em>, or Travel at <em>IHG</em> vs <em>Hilton</em>. A card can pay a different rate per label, and a categorization rule can apply one automatically on import.</p>
+        <p class="muted">Where a purchase happened, next to the category that says what kind it was: "General merchandise" at <em>Amazon</em> vs at <em>Costco</em>, or Travel at <em>IHG</em> vs <em>Hilton</em>. Two labels can share a name under different categories — Gas under Automotive is the pump, Gas under Utilities is the bill. A card can pay a different rate per label, and a categorization rule can apply one automatically on import.</p>
         <table class="compact">
-            <thead><tr><th>Name</th><th>Usual category</th><th class="money">Planned / month</th><th>Transactions</th><th class="center">Active</th><th></th></tr></thead>
+            <thead><tr><th>Name</th><th>Category</th><th class="money">Planned / month</th><th>Transactions</th><th class="center">Active</th><th></th></tr></thead>
             <tbody>
-            @foreach (var l in labels.OrderBy(l => !l.IsActive).ThenBy(l => l.Name))
+            @foreach (var l in labels)
             {
-                <tr class="@(l.IsActive ? "" : "muted")">
-                    <td><input type="text" @bind="l.Name" /></td>
-                    <td><select @bind="l.CategoryId"><option value="">—</option>@foreach (var c in categories.Where(c => c.IsActive)) { <option value="@c.Id">@c.Name</option> }</select></td>
+                <tr @key="l.Id" class="@(l.IsActive ? "" : "muted")">
+                    <td><input type="text" @bind="l.Name" @bind:after="() => AutoSaveLabel(l)" /></td>
+                    <td><select @bind="l.CategoryId" @bind:after="() => AutoSaveLabel(l)"><option value="">—</option>@foreach (var c in categories.Where(c => c.IsActive)) { <option value="@c.Id">@c.Name</option> }</select></td>
                     <td class="money">@Fmt.Money(PlannedForLabel(l.Id))</td>
                     <td class="muted">@(labelCounts.TryGetValue(l.Id, out var n) ? n.ToString() : "0")</td>
-                    <td class="center"><input type="checkbox" @bind="l.IsActive" /></td>
-                    <td class="actions"><button class="secondary" type="button" @onclick="() => SaveLabel(l)">Save</button> <button class="link danger" type="button" title="Delete" @onclick="() => DeleteLabel(l)">✕</button></td>
+                    <td class="center"><input type="checkbox" @bind="l.IsActive" @bind:after="() => AutoSaveLabel(l)" /></td>
+                    <td class="actions"><button class="link danger" type="button" title="Delete" @onclick="() => DeleteLabel(l)">✕</button></td>
                 </tr>
             }
             </tbody>
@@ -73,35 +73,108 @@ else
     private Dictionary<int, int> labelCounts = [];
     private string newName = "";
 
-    /// <summary>Planned monthly spend for a category, read back from its variable budget lines.</summary>
-    private decimal PlannedFor(int categoryId)
-        => budgetLines?.Where(b => b.IsActive && b.CategoryId == categoryId && b.Frequency == MyBudget.Domain.BudgetFrequency.Variable).Sum(b => b.ProjectedAmount) ?? 0m;
+    /// <summary>
+    /// The category a budget line counts towards: its own if it has one, otherwise the usual category
+    /// of its label. Without the second half a line tagged only with a label would go uncounted, and
+    /// the category figures are meant to be the roll-up of the labels beneath them.
+    /// </summary>
+    private int? EffectiveCategory(BudgetLineDto b)
+        => b.CategoryId ?? (b.LabelId is { } labelId ? labels?.FirstOrDefault(l => l.Id == labelId)?.CategoryId : null);
 
+    /// <summary>
+    /// Planned spend for a category: every active budget line under it, on the same basis as the label
+    /// figures below. This used to count only Variable lines, so a monthly bill like water showed
+    /// against its label but left its category reading zero.
+    /// </summary>
+    private decimal PlannedFor(int categoryId)
+        => budgetLines?.Where(b => b.IsActive && EffectiveCategory(b) == categoryId).Sum(b => b.MonthlyAccrual) ?? 0m;
+
+    private int LineCountFor(int categoryId)
+        => budgetLines?.Count(b => b.IsActive && EffectiveCategory(b) == categoryId) ?? 0;
+
+    /// <summary>
+    /// Per month, not the raw amount: an annual bill counts as a twelfth here. The figure comes from
+    /// the API, which gets it from the ledger engine, so this column and the category one above cannot
+    /// drift apart or from the rest of the app.
+    /// </summary>
     private decimal PlannedForLabel(int labelId)
-        => budgetLines?.Where(b => b.IsActive && b.LabelId == labelId).Sum(b => b.ProjectedAmount) ?? 0m;
+        => budgetLines?.Where(b => b.IsActive && b.LabelId == labelId).Sum(b => b.MonthlyAccrual) ?? 0m;
     private string? saved, error;
 
     protected override async Task OnInitializedAsync()
     {
         try { categories = await Api.GetCategoriesAsync(); budgetLines = await Api.GetBudgetLinesAsync(); labels = await Api.GetLabelsAsync();
             labelCounts = (await Api.GetTransactionsAsync()).Where(t => t.LabelId is not null).GroupBy(t => t.LabelId!.Value).ToDictionary(g => g.Key, g => g.Count());
+            Reorder(); Remember();
         }
         catch (Exception ex) { error = ex.Message; }
     }
 
-    private async Task Save(CategoryDto c)
+    // Rows save themselves when a field loses focus (or a box is ticked), so there is no Save button.
+    // Two things make that bearable: an unchanged row is not sent at all, and the list is not
+    // re-sorted afterwards — a row that jumped to a new position the moment you renamed it would move
+    // out from under the cursor. Order settles on the next load.
+    private readonly Dictionary<int, string> savedCategories = [];
+    private readonly Dictionary<int, string> savedLabels = [];
+
+    private static string Snapshot(CategoryDto c) => $"{c.Name}|{c.IsActive}|{c.IsCardEligible}";
+    private static string Snapshot(LabelDto l) => $"{l.Name}|{l.CategoryId}|{l.IsActive}";
+
+    private void Remember()
     {
-        if (string.IsNullOrWhiteSpace(c.Name)) return;
-        try { await Api.SaveCategoryAsync(c); saved = $"Saved {c.Name}"; categories = await Api.GetCategoriesAsync(); }
+        savedCategories.Clear();
+        foreach (var c in categories ?? []) savedCategories[c.Id] = Snapshot(c);
+        savedLabels.Clear();
+        foreach (var l in labels ?? []) savedLabels[l.Id] = Snapshot(l);
+    }
+
+    /// <summary>Active first, then by name. Applied on load and after add or delete, never on a rename.</summary>
+    private void Reorder()
+    {
+        categories = categories?.OrderBy(c => !c.IsActive).ThenBy(c => c.Name).ToList();
+        labels = labels?.OrderBy(l => !l.IsActive).ThenBy(l => l.Name).ToList();
+    }
+
+    private async Task AutoSave(CategoryDto c)
+    {
+        // A blanked name is a slip, not an instruction to save nothing: put the last good one back.
+        if (string.IsNullOrWhiteSpace(c.Name))
+        {
+            if (savedCategories.TryGetValue(c.Id, out var previous)) c.Name = previous.Split('|')[0];
+            return;
+        }
+        if (savedCategories.TryGetValue(c.Id, out var unchanged) && unchanged == Snapshot(c)) return;
+
+        try
+        {
+            await Api.SaveCategoryAsync(c);
+            savedCategories[c.Id] = Snapshot(c);
+            saved = $"Saved {c.Name}";
+        }
         catch (Exception ex) { error = ex.Message; }
     }
 
-    private async Task SaveLabel(LabelDto l)
+    private async Task AutoSaveLabel(LabelDto l)
     {
-        if (string.IsNullOrWhiteSpace(l.Name)) return;
-        try { await Api.SaveLabelAsync(l); saved = $"Saved {l.Name}"; labels = await Api.GetLabelsAsync();
-            labelCounts = (await Api.GetTransactionsAsync()).Where(t => t.LabelId is not null).GroupBy(t => t.LabelId!.Value).ToDictionary(g => g.Key, g => g.Count());
+        if (string.IsNullOrWhiteSpace(l.Name))
+        {
+            if (savedLabels.TryGetValue(l.Id, out var previous)) l.Name = previous.Split('|')[0];
+            return;
         }
+        if (savedLabels.TryGetValue(l.Id, out var unchanged) && unchanged == Snapshot(l)) return;
+
+        try
+        {
+            await Api.SaveLabelAsync(l);
+            savedLabels[l.Id] = Snapshot(l);
+            saved = $"Saved {l.Name}";
+        }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task DeleteCategory(CategoryDto c)
+    {
+        try { if (c.Id != 0) await Api.DeleteCategoryAsync(c.Id); saved = null; categories = await Api.GetCategoriesAsync(); Reorder(); Remember(); }
         catch (Exception ex) { error = ex.Message; }
     }
 
@@ -109,7 +182,7 @@ else
 
     private async Task DeleteLabel(LabelDto l)
     {
-        try { if (l.Id != 0) await Api.DeleteLabelAsync(l.Id); labels = await Api.GetLabelsAsync(); }
+        try { if (l.Id != 0) await Api.DeleteLabelAsync(l.Id); labels = await Api.GetLabelsAsync(); Reorder(); Remember(); }
         catch (Exception ex) { error = ex.Message; }
     }
 
@@ -117,13 +190,14 @@ else
     {
         try { await Api.SaveLabelAsync(new LabelDto { Name = newLabel.Trim() }); newLabel = ""; labels = await Api.GetLabelsAsync();
             labelCounts = (await Api.GetTransactionsAsync()).Where(t => t.LabelId is not null).GroupBy(t => t.LabelId!.Value).ToDictionary(g => g.Key, g => g.Count());
+            Reorder(); Remember();
         }
         catch (Exception ex) { error = ex.Message; }
     }
 
     private async Task Add()
     {
-        try { await Api.SaveCategoryAsync(new CategoryDto { Name = newName.Trim() }); newName = ""; categories = await Api.GetCategoriesAsync(); }
+        try { await Api.SaveCategoryAsync(new CategoryDto { Name = newName.Trim() }); newName = ""; categories = await Api.GetCategoriesAsync(); Reorder(); Remember(); }
         catch (Exception ex) { error = ex.Message; }
     }
 }

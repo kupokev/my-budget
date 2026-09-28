@@ -192,7 +192,7 @@ else
                     <legend>Terms</legend>
                     <div class="field"><label>APR %</label><InputNumber @bind-Value="editing.Apr" step="0.01" /></div>
                     <div class="field"><label>Promo APR %</label><InputNumber @bind-Value="editing.PromoApr" step="0.01" /></div>
-                    <div class="field"><label>Promo expires</label><InputDate @bind-Value="editing.PromoAprExpires" /></div>
+                    <div class="field"><label>Promo expires</label><OptionalDate @bind-Value="editing.PromoAprExpires" Empty="no promo" /></div>
                     <div class="field"><label>Credit limit</label><InputNumber @bind-Value="editing.CreditLimit" step="0.01" /></div>
                     <div class="field"><label>Annual fee</label><InputNumber @bind-Value="editing.AnnualFee" step="0.01" /></div>
                     <div class="field"><label>Fee posts in month (1–12)</label><InputNumber @bind-Value="editing.AnnualFeeMonth" /></div>

@@ -27,6 +27,34 @@ public static class BudgetEndpoints
             await db.SaveChangesAsync();
             return Results.Ok(c.ToDto());
         });
+        // Refused rather than cascaded when anything still points at it: nulling a category out of
+        // historical transactions or budget lines would quietly rewrite what was already recorded.
+        // Retiring it (IsActive = false) is the way to take one out of circulation and keep history.
+        cats.MapDelete("/{id:int}", async (int id, BudgetDbContext db) =>
+        {
+            var c = await db.Categories.FindAsync(id);
+            if (c is null) return Results.NotFound();
+
+            var used = new Dictionary<string, int>
+            {
+                ["budget lines"] = await db.BudgetLines.CountAsync(x => x.CategoryId == id),
+                ["transactions"] = await db.Transactions.CountAsync(x => x.CategoryId == id),
+                ["labels"] = await db.Labels.CountAsync(x => x.CategoryId == id),
+                ["import rules"] = await db.CategoryRules.CountAsync(x => x.CategoryId == id),
+                ["card earn rules"] = await db.EarnRules.CountAsync(x => x.CategoryId == id),
+                ["goals"] = await db.Goals.CountAsync(x => x.CategoryId == id),
+            };
+
+            var blocking = used.Where(kv => kv.Value > 0).Select(kv => $"{kv.Value} {kv.Key}").ToList();
+            if (blocking.Count > 0)
+                return Results.Problem(
+                    $"\"{c.Name}\" is still used by {string.Join(", ", blocking)}. Move those across first, or untick Active to retire it and keep the history.",
+                    statusCode: StatusCodes.Status409Conflict);
+
+            db.Categories.Remove(c);
+            await db.SaveChangesAsync();
+            return Results.NoContent();
+        });
 
         var labels = api.MapGroup("/labels");
         labels.MapGet("/", async (BudgetDbContext db) => (await db.Labels.OrderBy(l => l.Name).ToListAsync()).Select(ToDto));

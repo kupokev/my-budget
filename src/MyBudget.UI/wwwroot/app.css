@@ -433,3 +433,7 @@ tr.lots-row > td { background: color-mix(in srgb, var(--fg) 4%, transparent); pa
 .status-line .detail { display: block; margin-top: 4px; color: var(--fg-muted); font-size: 12px; word-break: break-word; }
 .tool-list { columns: 2; margin: 8px 0 0; padding-left: 18px; color: var(--fg-muted); font-size: 12px; }
 .tool-list li { break-inside: avoid; margin-bottom: 2px; }
+
+/* An optional date plus its Clear button, kept on one line. */
+.optional-date { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.optional-date button.link:disabled { opacity: .35; cursor: default; }

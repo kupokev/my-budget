@@ -66,7 +66,7 @@ else
                     <div class="field"><label>Type</label><InputSelect @bind-Value="editing.Type">
                         @foreach (var t in Enum.GetValues<IncomeSourceType>()) { <option value="@t">@Fmt.Words(t)</option> }
                     </InputSelect></div>
-                    <div class="field"><label>Employment ended <span class="muted">(blank = still employed)</span></label><InputDate @bind-Value="editing.EndDate" /></div>
+                    <div class="field"><label>Employment ended <span class="muted">(blank = still employed)</span></label><OptionalDate @bind-Value="editing.EndDate" Empty="still employed" /></div>
                     <div class="field"><label class="inline"><InputCheckbox @bind-Value="editing.IsActive" /> Active</label></div>
                 </div>
                 <div class="field"><label>Notes</label><InputTextArea @bind-Value="editing.Notes" rows="2" /></div>
@@ -130,7 +130,7 @@ else
                             <td><InputNumber @bind-Value="d.AmountPerCheck" step="0.01" class="narrow-money" /></td>
                             <td><InputNumber @bind-Value="d.PercentOfGross" step="0.5" class="narrow-money" /></td>
                             <td><InputDate @bind-Value="d.EffectiveDate" /></td>
-                            <td><InputDate @bind-Value="d.EndDate" /></td>
+                            <td><OptionalDate @bind-Value="d.EndDate" /></td>
                             <td class="actions"><button class="link danger" type="button" title="Remove election" @onclick="() => editing.Deductions.Remove(d)">✕</button></td>
                         </tr>
                     }

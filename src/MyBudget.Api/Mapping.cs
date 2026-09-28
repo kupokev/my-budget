@@ -1,6 +1,7 @@
 using MyBudget.Contracts;
 using MyBudget.Domain;
 
+using MyBudget.Engines.Ledger;
 namespace MyBudget.Api;
 
 /// <summary>Entity ↔ DTO copies. Deliberately boring so every field is visible.</summary>
@@ -57,14 +58,24 @@ internal static class Mapping
 
     public static CategoryDto ToDto(this Category c) => new() { Id = c.Id, Name = c.Name, IsActive = c.IsActive, IsCardEligible = c.IsCardEligible };
 
-    public static BudgetLineDto ToDto(this BudgetLine b) => new()
+    /// <param name="asOf">
+    /// The month the accrual is worked out for; only a one-off line, which spreads over the months
+    /// until it is due, is sensitive to it. Defaults to today.
+    /// </param>
+    public static BudgetLineDto ToDto(this BudgetLine b, DateOnly? asOf = null)
     {
-        Id = b.Id, Name = b.Name, CategoryId = b.CategoryId, LabelId = b.LabelId, AccountNumber = b.AccountNumber, Frequency = b.Frequency, DueDay = b.DueDay,
-        AnchorDueDate = b.AnchorDueDate, IsAutopay = b.IsAutopay, ProjectedAmount = b.ProjectedAmount,
-        PaymentMethod = b.PaymentMethod, PaymentAccountId = b.PaymentAccountId, PaymentCardId = b.PaymentCardId,
-        FundingAccountId = b.FundingAccountId, BankAutopayDiscount = b.BankAutopayDiscount, IsCardEligible = b.IsCardEligible,
-        StartDate = b.StartDate, EndDate = b.EndDate, Notes = b.Notes, IsActive = b.IsActive,
-    };
+        // One place computes what a line costs per month: the engine. Screens read the number.
+        var accrual = SinkingFund.MonthlyAccrual(b, asOf ?? DateOnly.FromDateTime(DateTime.Today));
+        return new()
+        {
+            Id = b.Id, Name = b.Name, CategoryId = b.CategoryId, LabelId = b.LabelId, AccountNumber = b.AccountNumber, Frequency = b.Frequency, DueDay = b.DueDay,
+            AnchorDueDate = b.AnchorDueDate, IsAutopay = b.IsAutopay, ProjectedAmount = b.ProjectedAmount,
+            PaymentMethod = b.PaymentMethod, PaymentAccountId = b.PaymentAccountId, PaymentCardId = b.PaymentCardId,
+            FundingAccountId = b.FundingAccountId, BankAutopayDiscount = b.BankAutopayDiscount, IsCardEligible = b.IsCardEligible,
+            StartDate = b.StartDate, EndDate = b.EndDate, Notes = b.Notes, IsActive = b.IsActive,
+            MonthlyAccrual = accrual.Monthly, MonthlyAccrualFormula = accrual.Formula,
+        };
+    }
 
     public static void Apply(this BudgetLine b, BudgetLineDto d)
     {
