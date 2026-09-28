@@ -54,13 +54,13 @@ else
                     <legend>What actually happened</legend>
                     <div class="field"><label>Amount paid</label>
                         <input type="number" step="0.01" @bind="monthEdit.ActualAmount" @bind:event="oninput" @onkeydown="OnMonthKey" @ref="actualInput" placeholder="0.00" /></div>
-                    <div class="field"><label>Paid on</label><input type="date" @bind="monthEdit.PaidOn" @onkeydown="OnMonthKey" /></div>
+                    <div class="field"><label>Paid on</label><OptionalDate @bind-Value="monthEdit.PaidOn" Suggested="monthEdit.DefaultDueDate ?? monthEdit.Period" Empty="not paid yet" @onkeydown="OnMonthKey" /></div>
                 </fieldset>
                 <fieldset class="group">
                     <legend>Only if this month is different</legend>
                     <div class="field"><label>Expected amount</label>
                         <input type="number" step="0.01" @bind="monthEdit.ProjectedAmount" @bind:event="oninput" @onkeydown="OnMonthKey" placeholder="@monthEdit.DefaultProjected.ToString("0.00")" /></div>
-                    <div class="field"><label>Due date</label><input type="date" @bind="monthEdit.DueDate" @onkeydown="OnMonthKey" /></div>
+                    <div class="field"><label>Due date</label><OptionalDate @bind-Value="monthEdit.DueDate" Suggested="monthEdit.DefaultDueDate ?? monthEdit.Period" Empty="use the usual" @onkeydown="OnMonthKey" /></div>
                 </fieldset>
                 <div class="field notes"><label>Notes</label><input type="text" @bind="monthEdit.Notes" @bind:event="oninput" @onkeydown="OnMonthKey" placeholder="e.g. paid late, split payment" /></div>
             </div>

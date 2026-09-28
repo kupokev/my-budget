@@ -14,7 +14,7 @@
     }
     else
     {
-        <InputDate TValue="DateOnly?" Value="Value" ValueChanged="Set" ValueExpression="() => Value" />
+        <InputDate TValue="DateOnly?" Value="Value" ValueChanged="Set" ValueExpression="() => Value" @attributes="Attributes" />
         <button type="button" class="link" title="@ClearTitle" @onclick="() => Set(null)">Clear</button>
     }
 </span>
@@ -27,6 +27,9 @@
     [Parameter] public string? Empty { get; set; }
 
     [Parameter] public string ClearTitle { get; set; } = "Leave this date empty";
+
+    /// <summary>Anything else the caller puts on the tag, such as an @onkeydown handler, reaches the input.</summary>
+    [Parameter(CaptureUnmatchedValues = true)] public IReadOnlyDictionary<string, object>? Attributes { get; set; }
 
     /// <summary>Where the picker starts once the user asks for a date. Never a value the field took on its own.</summary>
     [Parameter] public DateOnly? Suggested { get; set; }
