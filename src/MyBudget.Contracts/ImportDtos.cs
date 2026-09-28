@@ -171,3 +171,6 @@ public sealed record NetWorthLineDto(string Name, string Kind, decimal Balance, 
 public sealed record NetWorthPointDto(DateOnly Period, decimal Assets, decimal Cards, decimal Loans, decimal Total);
 
 public sealed record NetWorthDto(DateOnly AsOf, decimal Assets, decimal Cards, decimal Loans, decimal Total, IReadOnlyList<NetWorthLineDto> Lines, IReadOnlyList<NetWorthPointDto> History, string Formula);
+
+/// <summary>Which importer a chosen file is for: "Statement" or "TaxLots".</summary>
+public sealed record ImportKindDto(string Kind);

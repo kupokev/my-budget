@@ -11,8 +11,10 @@
 else
 {
     <section class="panel">
+        <p class="muted">Statements and brokerage tax-lot exports both go here. The file decides which
+        is which — pick where it came from, choose the file, and the right importer runs.</p>
         <div class="row">
-            <div class="field"><label>This statement belongs to</label>
+            <div class="field"><label>This file belongs to</label>
                 <select @bind="source">
                     <option value="">—</option>
                     <optgroup label="Bank accounts">@foreach (var a in accounts.Where(a => a.IsActive)) { <option value="account:@a.Id">@Fmt.Label(a.Name, a.AccountNumber)</option> }</optgroup>
@@ -24,6 +26,18 @@ else
         </div>
         @if (busy) { <p class="muted">Reading…</p> }
     </section>
+
+    @if (lotResult is { } lr)
+    {
+        <section class="panel">
+            <h2>@fileName · tax lots</h2>
+            <p>@lr.HoldingsCreated new holdings, @lr.LotsImported lots imported, @lr.LotsAlreadyPresent already there, @lr.PricesRecorded prices recorded into @lr.AccountName: @string.Join(", ", lr.Tickers).</p>
+            <p class="muted">Then fetched @lr.PricesFetched more prices and @lr.DividendsFetched dividends, so the figures are populated without a second click. See them on <a href="investments">Investments</a>.</p>
+            @if (lr.FetchErrors is { Count: > 0 } fe) { <ul class="warnings">@foreach (var fx in fe) { <li>@fx</li> }</ul> }
+            @if (lr.Skipped.Count > 0) { <p class="muted">Skipped: @string.Join("; ", lr.Skipped)</p> }
+            <Warnings Items="lr.Warnings" />
+        </section>
+    }
 
     @if (preview is { } pv)
     {
@@ -99,6 +113,8 @@ else
     private string fileName = "";
     private bool busy, hideDupes = true;
     private ImportPreviewDto? preview;
+    private LotImportResultDto? lotResult;
+    private string kind = "Statement";
     private ImportResultDto? result;
     private string? error;
 
@@ -120,15 +136,37 @@ else
         return parts[0] == "account" ? (id, null) : (null, id);
     }
 
+    /// <summary>
+    /// One upload box for both kinds of file. The API is asked what the file is rather than guessing
+    /// from the account, because a brokerage account hands you both cash statements and lot exports.
+    /// </summary>
     private async Task OnFile(InputFileChangeEventArgs e)
     {
-        error = null; result = null; preview = null;
+        error = null; result = null; preview = null; lotResult = null;
         var (accountId, cardId) = Source();
         if (accountId is null && cardId is null) { error = "Pick the account or card first."; return; }
         busy = true;
         try
         {
             fileName = e.File.Name;
+
+            await using (var probe = e.File.OpenReadStream(20 * 1024 * 1024))
+            {
+                kind = (await Api.DetectImportKindAsync(fileName, probe)).Kind;
+            }
+
+            if (kind == "TaxLots")
+            {
+                if (accountId is null)
+                {
+                    error = "Tax lots belong to an investment account, not a card.";
+                    return;
+                }
+                await using var lotStream = e.File.OpenReadStream(20 * 1024 * 1024);
+                lotResult = await Api.ImportLotsAsync(fileName, lotStream, accountId.Value);
+                return;
+            }
+
             await using var stream = e.File.OpenReadStream(20 * 1024 * 1024);
             preview = await Api.PreviewImportAsync(fileName, stream, accountId, cardId, profile);
         }

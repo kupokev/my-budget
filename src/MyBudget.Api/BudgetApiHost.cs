@@ -1,4 +1,6 @@
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Diagnostics;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -80,6 +82,22 @@ public static class BudgetApiHost
 
     public static WebApplication MapBudgetApi(this WebApplication app, string? apiKey)
     {
+        // An unhandled exception otherwise returns 500 with an empty body, and the screen can only say
+        // "Internal Server Error" — which is what a bug looks like from the outside: something failed
+        // and nothing says what. The API is on loopback and the only reader is the person running it,
+        // so the message goes in the response where it can actually be read. The log keeps the trace.
+        app.UseExceptionHandler(handler => handler.Run(async context =>
+        {
+            var failure = context.Features.Get<IExceptionHandlerFeature>()?.Error;
+            context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+            await context.Response.WriteAsJsonAsync(new ProblemDetails
+            {
+                Title = "Something went wrong",
+                Detail = failure?.Message ?? "No details were available.",
+                Status = StatusCodes.Status500InternalServerError,
+            });
+        }));
+
         app.UseApiKey(apiKey, allowAnonymousPaths: ["/health"]);
 
         app.MapGet("/health", (DatabaseOptions db, IHostEnvironment env) =>

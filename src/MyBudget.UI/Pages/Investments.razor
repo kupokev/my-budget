@@ -16,21 +16,8 @@ else
         <span class="year-nav"><button class="secondary" type="button" @onclick="() => ChangeYear(year - 1)">‹</button><strong>@year</strong><button class="secondary" type="button" @onclick="() => ChangeYear(year + 1)">›</button></span>
         <span class="muted">Prices and dividends from Yahoo Finance's free chart data; anything it misses can be typed in.</span>
     </div>
-    <details class="panel">
-        <summary><strong>Import tax lots</strong> <span class="muted">from a brokerage "tax lots" export: one buy per lot with its acquisition date and unit cost</span></summary>
-        <div class="row" style="margin-top:8px">
-            <div class="field"><label>Into account</label><select @bind="lotAccountId">@foreach (var a in accounts.Where(a => a.IsActive)) { <option value="@a.Id">@Fmt.Label(a.Name, a.AccountNumber) (@MyBudget.Domain.AccountTypes.Display(a.Type))</option> }</select></div>
-            <div class="field"><label>File</label><InputFile OnChange="OnLotsFile" accept=".csv" /></div>
-        </div>
-        @if (lotResult is { } lr)
-        {
-            <p>@lr.HoldingsCreated new holdings, @lr.LotsImported lots imported, @lr.LotsAlreadyPresent already there, @lr.PricesRecorded prices recorded into @lr.AccountName: @string.Join(", ", lr.Tickers).</p>
-            <p class="muted">Then fetched @lr.PricesFetched more prices and @lr.DividendsFetched dividends, so the figures are populated without a second click.</p>
-            @if (lr.FetchErrors is { Count: > 0 } fe) { <ul class="warnings">@foreach (var e in fe) { <li>@e</li> }</ul> }
-            @if (lr.Skipped.Count > 0) { <p class="muted">Skipped: @string.Join("; ", lr.Skipped)</p> }
-            <Warnings Items="lr.Warnings" />
-        }
-    </details>
+    @* One upload box for every file: Import works out whether it is a statement or a lot export. *@
+    <p class="muted">Tax lots and statements both import on <a href="import">Import</a>.</p>
     <Warnings Items="portfolio.Warnings" />
     @if (syncResults is { Count: > 0 })
     {
@@ -216,8 +203,6 @@ else
     private DividendDto newDividend = new() { ExDate = DateOnly.FromDateTime(DateTime.Today) };
     private decimal manualPrice;
     private bool syncing;
-    private int lotAccountId;
-    private LotImportResultDto? lotResult;
     private List<MarketSyncResultDto>? syncResults;
     private string? error;
 
@@ -259,7 +244,6 @@ else
         try
         {
             accounts ??= await Api.GetAccountsAsync();
-            if (lotAccountId == 0) lotAccountId = accounts.FirstOrDefault(a => a.Type is AccountType.Brokerage or AccountType.TraditionalIra or AccountType.RothIra)?.Id ?? accounts.FirstOrDefault()?.Id ?? 0;
             portfolio = await Api.GetPortfolioAsync(year);
         }
         catch (Exception ex) { error = ex.Message; }
@@ -277,18 +261,6 @@ else
     private async Task DeleteHolding()
     {
         try { await Api.DeleteHoldingAsync(editing!.Id); editing = null; await Load(); }
-        catch (Exception ex) { error = ex.Message; }
-    }
-
-    private async Task OnLotsFile(InputFileChangeEventArgs e)
-    {
-        error = null; lotResult = null;
-        try
-        {
-            await using var stream = e.File.OpenReadStream(20 * 1024 * 1024);
-            lotResult = await Api.ImportLotsAsync(e.File.Name, stream, lotAccountId);
-            await Load();
-        }
         catch (Exception ex) { error = ex.Message; }
     }
 

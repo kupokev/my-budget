@@ -30,7 +30,11 @@ public sealed class ImportService(BudgetDbContext db)
         var rules = await db.CategoryRules.Include(r => r.Category).Include(r => r.BudgetLine).Where(r => r.IsActive).OrderBy(r => r.Priority).ToListAsync();
         var categories = await db.Categories.Where(c => c.IsActive).ToListAsync();
         var lines = await db.BudgetLines.Where(b => b.IsActive).ToListAsync();
-        var cardsByLast4 = (await db.Cards.Where(c => c.IsActive && c.AccountNumber != null && c.AccountNumber.Length >= 4).ToListAsync()).ToDictionary(c => c.AccountNumber![^4..], c => c.Name);
+        // Grouped, not keyed: two cards can share their last four digits — a "…81007" and a "…01007"
+        // both end 1007 — and ToDictionary threw on the collision, failing the whole import.
+        var cardsByLast4 = (await db.Cards.Where(c => c.IsActive && c.AccountNumber != null && c.AccountNumber.Length >= 4).ToListAsync())
+            .GroupBy(c => c.AccountNumber![^4..])
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<string>)g.Select(c => c.Name).OrderBy(n => n).ToList());
 
         var rows = new List<ImportRowDto>();
         var seen = new Dictionary<string, int>();
@@ -63,7 +67,7 @@ public sealed class ImportService(BudgetDbContext db)
             rows.Count(r => !r.IsDuplicate), rows.Count(r => r.IsDuplicate), rows.MinBy(r => r.Date)?.Date, rows.MaxBy(r => r.Date)?.Date, parsed.Warnings);
     }
 
-    public static void Suggest(ImportRowDto row, List<CategoryRule> rules, List<Category> categories, List<BudgetLine> lines, IReadOnlyDictionary<string, string>? cardsByLast4 = null)
+    public static void Suggest(ImportRowDto row, List<CategoryRule> rules, List<Category> categories, List<BudgetLine> lines, IReadOnlyDictionary<string, IReadOnlyList<string>>? cardsByLast4 = null)
     {
         var text = $"{row.Description} {row.Merchant} {row.Memo}";
         // "Payment to Chase card ending in 9039" → the card whose number ends in 9039: a card payment, i.e. a transfer.
@@ -71,9 +75,21 @@ public sealed class ImportService(BudgetDbContext db)
         if (ending.Success)
         {
             var last4 = ending.Groups[1].Value;
-            if (cardsByLast4 is not null && cardsByLast4.TryGetValue(last4, out var cardName))
+            if (cardsByLast4 is not null && cardsByLast4.TryGetValue(last4, out var matches) && matches.Count > 0)
             {
-                row.IsTransfer = true; row.Merchant = $"Payment to {cardName}"; row.SuggestionSource = $"card payment ({cardName})";
+                row.IsTransfer = true;
+                if (matches.Count == 1)
+                {
+                    row.Merchant = $"Payment to {matches[0]}";
+                    row.SuggestionSource = $"card payment ({matches[0]})";
+                }
+                else
+                {
+                    // Naming one of them would be a guess, and putting a payment against the wrong card
+                    // is worse than leaving it to be picked. It is still certainly a card payment.
+                    row.Merchant = $"Payment to card …{last4}";
+                    row.SuggestionSource = $"card payment; {matches.Count} cards end in {last4}: {string.Join(", ", matches)}";
+                }
                 return;
             }
             if (row.Description.Contains("card", StringComparison.OrdinalIgnoreCase))

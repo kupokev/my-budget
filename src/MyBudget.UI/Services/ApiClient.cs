@@ -153,6 +153,16 @@ public sealed class ApiClient(HttpClient http)
         await ThrowIfFailed(r);
         return (await r.Content.ReadFromJsonAsync<LotImportResultDto>(Json))!;
     }
+    /// <summary>Asks the API which importer a file is for, so one upload box can serve both.</summary>
+    public async Task<ImportKindDto> DetectImportKindAsync(string fileName, Stream file)
+    {
+        using var form = new MultipartFormDataContent();
+        form.Add(new StreamContent(file), "file", fileName);
+        var r = await http.PostAsync("api/import/detect", form);
+        await ThrowIfFailed(r);
+        return (await r.Content.ReadFromJsonAsync<ImportKindDto>(Json))!;
+    }
+
     public Task<List<AssetDto>> GetAssetsAsync() => Get<List<AssetDto>>("api/assets");
     public Task<AssetDto> SaveAssetAsync(AssetDto a) => a.Id == 0 ? Post("api/assets", a) : Put($"api/assets/{a.Id}", a);
     public Task DeleteAssetAsync(int id) => Delete($"api/assets/{id}");

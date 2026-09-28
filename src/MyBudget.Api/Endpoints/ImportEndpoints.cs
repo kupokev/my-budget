@@ -29,6 +29,19 @@ public static class ImportEndpoints
             return await PaycheckEndpoints.Guarded(() => svc.PreviewAsync(file.FileName, content, accountId, cardId, profile == "auto" ? null : profile));
         });
 
+        // Says which importer a file is for, so one upload box can serve both without the UI having to
+        // know what a tax-lot export looks like.
+        g.MapPost("/detect", async (HttpRequest request) =>
+        {
+            var form = await request.ReadFormAsync();
+            var file = form.Files.GetFile("file");
+            if (file is null || file.Length == 0) return Results.Problem("No file uploaded.", statusCode: 400);
+            if (file.Length > 20 * 1024 * 1024) return Results.Problem("File larger than 20 MB.", statusCode: 400);
+            using var reader = new StreamReader(file.OpenReadStream());
+            var content = await reader.ReadToEndAsync();
+            return Results.Ok(new ImportKindDto(ImportFileKind.Detect(file.FileName, content).ToString()));
+        });
+
         g.MapPost("/commit", async (ImportCommitRequest req, ImportService svc) => await PaycheckEndpoints.Guarded(() => svc.CommitAsync(req)));
 
         g.MapGet("/batches", async (BudgetDbContext db) =>
