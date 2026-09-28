@@ -6,8 +6,8 @@
 
 ## Design
 
-- **Transport:** Ollama `/api/chat` with `tools`, `stream:false`, low temperature. Configured by
-  `Ai:Enabled`, `Ai:BaseUrl`, `Ai:Model`, `Ai:MaxToolRounds`; off by default.
+- **Transport:** Ollama `/api/chat` with `tools`, `stream:false`, low temperature. Configured on
+  **Admin → Settings**, stored in the `AppSettings` row; off by default.
 - **Tools (`AiTools.Catalog`):** `spend_by_category`, `account_balances`, `upcoming_bills`,
   `transfer_needs`, `bill_status`, `rewards_progress`, `hsa_plan`, `goals_progress`, `net_worth`,
   `portfolio`. Each is a thin wrapper over the same internal function the corresponding page

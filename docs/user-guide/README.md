@@ -176,5 +176,5 @@ if you might want it back (**Admin → Backup**).
   shows the set-aside percent, the tax breakdown with steps, and the remaining quarterly amounts.
 - **Accounts → Rainy-day fund.** Months of expenses covered by the accounts you marked.
 - **Reports → Home & vehicles.** Record valuations by hand; they feed net worth.
-- **Assistant.** Off until Ai:Enabled is set with your Ollama address and a tool-calling model. It
-  only calls the listed functions and shows what it looked at under each answer.
+- **Assistant.** Off until you turn it on under **Admin → Settings** with your Ollama address and a
+  tool-calling model. It only calls the listed functions and shows what it looked at under each answer.

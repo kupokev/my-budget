@@ -84,7 +84,7 @@ else
 
         <section class="panel grow compact-panel">
             <h2>This month in plain English</h2>
-        @if (!d.AiEnabled) { <p class="muted">Local AI is off. Turn it on in the API's appsettings (Ai:Enabled, Ai:BaseUrl, Ai:Model) to get a narrative built from the same numbers above.</p> }
+        @if (!d.AiEnabled) { <p class="muted">Local AI is off. Turn it on under <a href="settings">Admin → Settings</a> and point it at your Ollama server to get a narrative built from the same numbers above.</p> }
         else
         {
             <div class="toolbar"><button type="button" @onclick="Summarize" disabled="@summarizing">@(summarizing ? "Asking the model…" : "Write this month's summary")</button></div>

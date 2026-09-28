@@ -357,8 +357,8 @@ public sealed class AiService(HttpClient http, AiOptionsProvider optionsProvider
 
 /// <summary>
 /// Reads the AI connection details out of the database rather than configuration, so they can be
-/// changed from the Settings page while the app is running. Configuration is still the fallback for
-/// the standalone API, where an appsettings file is the natural place for them.
+/// changed from the Settings page while the app is running. Configuration is only a fallback for the
+/// very first run, before the settings row exists — there is no appsettings file any more (ADR-0011).
 /// </summary>
 public sealed class AiOptionsProvider(BudgetDbContext db, AiOptions configured)
 {
