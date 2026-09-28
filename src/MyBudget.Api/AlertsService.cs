@@ -95,7 +95,12 @@ public sealed class AlertsService(BudgetDbContext db, InvestmentService investme
         var variable = lines.Where(b => b.Frequency == BudgetFrequency.Variable).Sum(b => SinkingFund.MonthlyAccrual(b, today).Monthly);
         var monthly = Math.Round(dated + variable, 2);
         var marked = await db.Accounts.Include(a => a.Balances).Include(a => a.Transactions).Where(a => a.IsActive && a.IsRainyDayFund).ToListAsync();
-        var balance = marked.Sum(a => BalanceMath.Of(a, today).Balance);
+
+        // A brokerage marked as the fund is worth what it holds, not what was typed against it — which
+        // was nothing, so a fund of real money read as zero. Same rule the accounts list and the
+        // net-worth report use.
+        var byHoldings = await HoldingValues.ByAccountAsync(db, today);
+        var balance = marked.Sum(a => byHoldings.TryGetValue(a.Id, out var valued) ? valued.Value : BalanceMath.Of(a, today).Balance);
         var months = monthly == 0 ? 0 : Math.Round(balance / monthly, 1);
         var low = 3 * monthly; var comfort = Math.Round(low * 1.25m, 2); var high = 6 * monthly;
         var status = marked.Count == 0 || balance < low ? "Low" : balance < comfort ? "Marginal" : "Healthy";

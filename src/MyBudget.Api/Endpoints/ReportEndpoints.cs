@@ -83,24 +83,16 @@ public static class ReportEndpoints
 
         var lines = new List<NetWorthLineDto>();
         decimal assets = 0, cardDebt = 0, loanDebt = 0;
-        // Brokerage accounts with holdings are valued from the holdings (shares × latest price) instead of a typed snapshot.
-        var holdings = await db.Holdings.Include(h => h.Trades).Where(h => h.IsActive).ToListAsync();
+        // An account with holdings is worth what it holds, not what was last typed against it.
+        var byHoldings = await HoldingValues.ByAccountAsync(db, asOf);
         var valuedAccounts = new HashSet<int>();
-        foreach (var grp in holdings.GroupBy(h => h.AccountId))
+        foreach (var (accountId, valued) in byHoldings)
         {
-            decimal value = 0; DateOnly? priced = null; var any = false;
-            foreach (var h in grp)
-            {
-                var shares = MyBudget.Engines.Investments.Portfolio.SharesHeldOn(h.Trades, asOf);
-                if (shares <= 0) continue;
-                var price = await db.Prices.Where(p => p.Ticker == h.Ticker && p.Date <= asOf).OrderByDescending(p => p.Date).FirstOrDefaultAsync();
-                if (price is null) continue;
-                any = true; value += Math.Round(shares * price.Price, 2); priced = priced is null || price.Date > priced ? price.Date : priced;
-            }
-            if (!any) continue;
-            var acct = accounts.FirstOrDefault(a => a.Id == grp.Key);
+            var acct = accounts.FirstOrDefault(a => a.Id == accountId);
             if (acct is null) continue;
-            valuedAccounts.Add(acct.Id); assets += value; lines.Add(new(acct.Name + " (holdings)", "investments", value, priced));
+            valuedAccounts.Add(acct.Id);
+            assets += valued.Value;
+            lines.Add(new(acct.Name + " (holdings)", "investments", valued.Value, valued.PricedAsOf));
         }
         foreach (var a in accounts.Where(a => !valuedAccounts.Contains(a.Id))) { var cur = BalanceMath.Of(a, asOf); assets += cur.Balance; lines.Add(new(a.Name, "account", cur.Balance, cur.SnapshotAsOf)); }
         foreach (var asset in await db.Assets.Include(x => x.Values).Where(x => x.IsActive).ToListAsync())

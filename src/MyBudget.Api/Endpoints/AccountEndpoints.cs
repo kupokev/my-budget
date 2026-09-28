@@ -18,6 +18,18 @@ public static class AccountEndpoints
             var outflow = await MonthlyOutflow(db, today);
             foreach (var a in accounts)
                 if (outflow.TryGetValue(a.Id, out var o)) { a.ThisMonthOutflow = o.Total; a.ThisMonthOutflowDetail = o.Detail; }
+
+            // An investment account holds securities rather than a typed balance, so it read as "—"
+            // here while the Wealth screens showed it in full. Same rule as the net-worth report.
+            var byHoldings = await HoldingValues.ByAccountAsync(db, today);
+            foreach (var a in accounts)
+                if (byHoldings.TryGetValue(a.Id, out var valued))
+                {
+                    a.LatestBalance = valued.Value;
+                    a.LatestBalanceAsOf = valued.PricedAsOf;
+                    a.BalanceDetail = $"holdings valued {(valued.PricedAsOf is { } d ? $"at prices to {d:yyyy-MM-dd}" : "at the latest prices")}";
+                }
+
             return accounts;
         });
 

@@ -48,11 +48,7 @@ public sealed class AiTools(BudgetDbContext db, PaycheckService paychecks, Inves
         object result = name switch
         {
             "spend_by_category" => await SpendingEndpoints.Summary(db, Int("year", today.Year), Int("month", today.Month)),
-            "account_balances" => new
-            {
-                accounts = (await db.Accounts.Include(a => a.Balances).Include(a => a.Transactions).Where(a => a.IsActive).ToListAsync()).Select(a => { var c = BalanceMath.Of(a, today); return new { a.Name, a.Type, balance = c.Balance, detail = c.Detail }; }),
-                cards = (await db.Cards.Include(c => c.Balances).Where(c => c.IsActive).ToListAsync()).Select(c => new { c.Name, balance = c.Balances.OrderByDescending(b => b.AsOf).FirstOrDefault()?.Balance, asOf = c.Balances.OrderByDescending(b => b.AsOf).FirstOrDefault()?.AsOf }),
-            },
+            "account_balances" => await AccountBalancesAsync(today),
             "upcoming_bills" => await BudgetEndpoints.Upcoming(db, today, Math.Clamp(Int("days", 14), 1, 90)),
             "transfer_needs" => await ViewEndpoints.Needs(db, today),
             "bill_status" => await BudgetStatus(Int("year", today.Year), Int("month", today.Month)),
@@ -75,6 +71,34 @@ public sealed class AiTools(BudgetDbContext db, PaycheckService paychecks, Inves
             var p = b.Periods.FirstOrDefault(x => x.Period == period);
             return new { b.Name, projected = p?.ProjectedAmount ?? b.ProjectedAmount, actual = p?.ActualAmount, dueDay = b.DueDay, paidVia = b.PaymentMethod.ToString() };
         });
+    }
+
+    /// <summary>
+    /// What the model is told about balances. Investment accounts are valued from their holdings:
+    /// they carry no typed balance, so without this the assistant would report an account holding six
+    /// figures as zero and narrate it as fact.
+    /// </summary>
+    private async Task<object> AccountBalancesAsync(DateOnly today)
+    {
+        var held = await HoldingValues.ByAccountAsync(db, today);
+        var accounts = await db.Accounts.Include(a => a.Balances).Include(a => a.Transactions).Where(a => a.IsActive).ToListAsync();
+        var cards = await db.Cards.Include(c => c.Balances).Where(c => c.IsActive).ToListAsync();
+
+        return new
+        {
+            accounts = accounts.Select(a =>
+            {
+                if (held.TryGetValue(a.Id, out var valued))
+                    return new { a.Name, a.Type, balance = valued.Value, detail = $"holdings valued to {valued.PricedAsOf:yyyy-MM-dd}" };
+                var current = BalanceMath.Of(a, today);
+                return new { a.Name, a.Type, balance = current.Balance, detail = current.Detail };
+            }),
+            cards = cards.Select(c =>
+            {
+                var latest = c.Balances.OrderByDescending(b => b.AsOf).FirstOrDefault();
+                return new { c.Name, balance = latest?.Balance, asOf = latest?.AsOf };
+            }),
+        };
     }
 
     private static object Slim(RewardsReportDto r) => new

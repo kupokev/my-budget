@@ -95,7 +95,9 @@ public static class GoalEndpoints
             {
                 var ids = (goal.AccountIds ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(int.Parse).ToList();
                 var accounts = await db.Accounts.Include(a => a.Balances).Include(a => a.Transactions).Where(a => ids.Contains(a.Id)).ToListAsync();
-                var sum = accounts.Sum(a => BalanceMath.Of(a, today).Balance);
+                // An investment account is worth what it holds; without this a goal tracking one reads zero.
+                var held = await HoldingValues.ByAccountAsync(db, today);
+                var sum = accounts.Sum(a => held.TryGetValue(a.Id, out var valued) ? valued.Value : BalanceMath.Of(a, today).Balance);
                 return (sum, $"current balances of {string.Join(", ", accounts.Select(a => a.Name))}");
             }
             case GoalMetric.AccountTypeContributions:
