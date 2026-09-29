@@ -183,9 +183,10 @@ else
 
     @if (editing is not null)
     {
-        <section class="panel">
-            <h2>@(editing.Id == 0 ? "New line" : editing.Name)</h2>
-            <EditForm Model="editing" OnValidSubmit="Save" class="form">
+        @* Over the page, not appended below a long table where it opens out of view. *@
+        <Modal Title="@(editing.Id == 0 ? "New line" : editing.Name)" OnClose="() => editing = null">
+            <ChildContent>
+            <EditForm Model="editing" OnValidSubmit="Save" class="form" id="budget-form">
                 <DataAnnotationsValidator />
                 <fieldset class="group">
                     <legend>Budget line</legend>
@@ -259,13 +260,14 @@ else
                     </div>
                 </fieldset>
                 <div class="field full"><label>Notes</label><InputTextArea @bind-Value="editing.Notes" rows="2" /></div>
-                <div class="actions-row">
-                    @if (editing.Id != 0) { <button class="link danger" type="button" @onclick="DeleteEditing">Delete line</button> }
-                    <button class="secondary" type="button" @onclick="() => editing = null">Cancel</button>
-                    <button type="submit">Save</button>
-                </div>
             </EditForm>
-        </section>
+            </ChildContent>
+            <Footer>
+                @if (editing.Id != 0) { <button class="link danger" type="button" @onclick="DeleteEditing">Delete line</button> }
+                <button class="secondary" type="button" @onclick="() => editing = null">Cancel</button>
+                <button type="submit" form="budget-form">Save</button>
+            </Footer>
+        </Modal>
     }
 
 }

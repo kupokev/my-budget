@@ -1,6 +1,6 @@
 @* A centered dialog over a dimmed page. Esc or the backdrop closes it. *@
 <div class="modal-backdrop" @onclick="Close" @onkeydown="OnKey" tabindex="-1" @ref="root">
-    <div class="modal" @onclick:stopPropagation="true">
+    <div class="modal @(Wide ? "wide" : "")" @onclick:stopPropagation="true">
         <div class="modal-head"><strong>@Title</strong> @if (!string.IsNullOrEmpty(Subtitle)) { <span class="muted">@Subtitle</span> } <button class="link push-right" type="button" title="Close" @onclick="Close">✕</button></div>
         <div class="modal-body">@ChildContent</div>
         @if (Footer is not null) { <div class="actions-row modal-foot">@Footer</div> }
@@ -12,6 +12,9 @@
     [Parameter] public string? Subtitle { get; set; }
     [Parameter] public RenderFragment? ChildContent { get; set; }
     [Parameter] public RenderFragment? Footer { get; set; }
+    /// <summary>For editors that carry tables of their own, which 720px squeezes into unreadable columns.</summary>
+    [Parameter] public bool Wide { get; set; }
+
     [Parameter] public EventCallback OnClose { get; set; }
     private ElementReference root;
 

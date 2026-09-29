@@ -324,6 +324,7 @@ table.tx td.center { text-align: center; }
 /* modal */
 .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: flex; align-items: center; justify-content: center; z-index: 50; outline: none; }
 .modal { background: var(--bg-panel); color: var(--fg); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 12px 40px rgba(0,0,0,.5); width: min(720px, calc(100vw - 48px)); max-height: calc(100vh - 48px); display: flex; flex-direction: column; }
+.modal.wide { width: min(1100px, calc(100vw - 48px)); }
 .modal-head { display: flex; align-items: baseline; gap: 10px; padding: 12px 16px; border-bottom: 2px solid var(--accent-soft); }
 .modal-head strong { font-size: 15px; }
 .modal-body { padding: 14px 16px; overflow: auto; }
@@ -332,7 +333,12 @@ table.tx td.center { text-align: center; }
 .small-text { font-size: 12px; }
 /* in a dialog the grid is narrow: checkboxes go on their own line under the fields */
 .modal .form .checks { grid-column: 1 / -1; grid-row: auto; justify-self: start; flex-direction: column; gap: 8px; padding: 6px 0 0; white-space: normal; }
-.modal .form fieldset.group { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+.modal .form fieldset.group { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+/* A field that needs the room — a full name next to a short one — takes two of the three. */
+.form .field.span2 { grid-column: span 2; }
+.form .field.full { grid-column: 1 / -1; }
+/* Number inputs are sized by the column here, not by the 130px default that forces a wider grid. */
+.modal .form fieldset.group input[type=number] { width: 100%; }
 
 .tip-box .indent { padding-left: 10px; }
 

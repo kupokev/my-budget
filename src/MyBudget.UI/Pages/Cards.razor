@@ -177,13 +177,15 @@ else
 
     @if (editing is not null)
     {
-        <section class="panel">
-            <h2>@(editing.Id == 0 ? "New card" : editing.Name)</h2>
-            <EditForm Model="editing" OnValidSubmit="Save" class="form">
+        @* Over the page rather than appended to the bottom of it: an editor that opens below a long
+           table is off-screen at the moment it opens. *@
+        <Modal Title="@(editing.Id == 0 ? "New card" : editing.Display)" OnClose="() => editing = null">
+            <ChildContent>
+            <EditForm Model="editing" OnValidSubmit="Save" class="form" id="card-form">
                 <DataAnnotationsValidator />
                 <fieldset class="group">
                     <legend>Card</legend>
-                    <div class="field"><label>Name</label><InputText @bind-Value="editing.Name" /><ValidationMessage For="() => editing.Name" /></div>
+                    <div class="field span2"><label>Name</label><InputText @bind-Value="editing.Name" /><ValidationMessage For="() => editing.Name" /></div>
                     <div class="field"><label>Short name <span class="muted">(for tables)</span></label><InputText @bind-Value="editing.Nickname" placeholder="e.g. Wells Fargo" /></div>
                     <div class="field"><label>Issuer</label><InputText @bind-Value="editing.Issuer" /></div>
                     <div class="field"><label>Network</label><InputText @bind-Value="editing.Network" /></div>
@@ -214,13 +216,14 @@ else
                     <div class="checks"><label class="inline"><InputCheckbox @bind-Value="editing.IsActive" /> Active</label></div>
                 </fieldset>
                 <div class="field full"><label>Notes</label><InputTextArea @bind-Value="editing.Notes" rows="2" /></div>
-                <div class="actions-row">
-                    @if (editing.Id != 0) { <button class="link danger" type="button" @onclick="DeleteEditing">Delete card</button> }
-                    <button class="secondary" type="button" @onclick="() => editing = null">Cancel</button>
-                    <button type="submit">Save</button>
-                </div>
             </EditForm>
-        </section>
+            </ChildContent>
+            <Footer>
+                @if (editing.Id != 0) { <button class="link danger" type="button" @onclick="DeleteEditing">Delete card</button> }
+                <button class="secondary" type="button" @onclick="() => editing = null">Cancel</button>
+                <button type="submit" form="card-form">Save</button>
+            </Footer>
+        </Modal>
     }
 }
 

@@ -57,9 +57,10 @@ else
 
     @if (editing is not null)
     {
-        <section class="panel">
-            <h2>@(editing.Id == 0 ? "New income source" : editing.Name)</h2>
-            <EditForm Model="editing" OnValidSubmit="Save">
+        @* Over the page, not appended below a long table where it opens out of view. *@
+        <Modal Title="@(editing.Id == 0 ? "New income source" : editing.Name)" Wide="true" OnClose="() => editing = null">
+            <ChildContent>
+            <EditForm Model="editing" OnValidSubmit="Save" id="income-form">
                 <DataAnnotationsValidator />
                 <div class="row">
                     <div class="field"><label>Name</label><InputText @bind-Value="editing.Name" /><ValidationMessage For="() => editing.Name" /></div>
@@ -188,13 +189,14 @@ else
                 </table>
                 <button class="secondary" type="button" @onclick="() => editing.Overrides.Add(new PaycheckOverrideDto { PayDate = today, GrossPercent = 50 })">Add odd check</button>
 
-                <div class="actions-row">
-                    @if (editing.Id != 0) { <button class="link danger" type="button" @onclick="DeleteEditing">Delete</button> }
-                    <button class="secondary" type="button" @onclick="() => editing = null">Cancel</button>
-                    <button type="submit">Save</button>
-                </div>
             </EditForm>
-        </section>
+            </ChildContent>
+            <Footer>
+                @if (editing.Id != 0) { <button class="link danger" type="button" @onclick="DeleteEditing">Delete</button> }
+                <button class="secondary" type="button" @onclick="() => editing = null">Cancel</button>
+                <button type="submit" form="income-form">Save</button>
+            </Footer>
+        </Modal>
     }
 }
 
