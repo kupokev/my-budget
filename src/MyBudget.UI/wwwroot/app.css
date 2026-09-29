@@ -488,3 +488,8 @@ fieldset.group.perk { margin-bottom: 14px; }
 .perk-use + .perk-use { border-top: 1px dashed var(--border); }
 .perk-use .grow { flex: 1 1 auto; min-width: 0; }
 .perk-use.new { margin-top: 8px; padding-top: 10px; border-top: 1px solid var(--border); }
+
+/* The offer to carry a categorisation across a merchant's other rows. Sits above the grid so it is
+   visible wherever you are in a long import. */
+.banner.spread { background: var(--accent-soft); border: 1px solid var(--accent); }
+.banner.spread .row { gap: 10px; align-items: center; }

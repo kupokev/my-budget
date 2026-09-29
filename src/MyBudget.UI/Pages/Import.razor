@@ -4,7 +4,7 @@
 
 <ErrorBanner @bind-Message="error" />
 
-@if (accounts is null || cards is null || profiles is null || categories is null || lines is null)
+@if (accounts is null || cards is null || profiles is null || categories is null || lines is null || labels is null)
 {
     <p class="muted">Loading…</p>
 }
@@ -51,21 +51,66 @@ else
             </div>
             <div class="scroll-x">
             <table class="grid">
-                <thead><tr><th>Date</th><th>Description</th><th>Merchant</th><th class="money">Amount</th><th>Category</th><th>Budget line</th><th>Transfer</th><th>Skip</th><th>Why</th></tr></thead>
+                <thead><tr><th>Date</th><th>Description</th><th>Merchant</th><th class="money">Amount</th><th>Budget line</th><th>Category</th><th>Label</th><th>Transfer</th><th>Skip</th></tr></thead>
                 <tbody>
                 @foreach (var r in pv.Rows.Where(r => !hideDupes || !r.IsDuplicate))
                 {
                     <tr class="@(r.IsDuplicate ? "muted" : "")">
                         <td>@Fmt.Date(r.Date)</td>
                         <td title="@r.Memo">@r.Description</td>
-                        <td class="muted">@r.Merchant</td>
+                        <td class="muted" title="@r.SuggestionSource">@r.Merchant</td>
                         <td><Money Value="r.Amount" Signed="true" /></td>
-                        <td>@if (!r.IsDuplicate) { <select @bind="r.CategoryId"><option value="">—</option>@foreach (var c in categories.Where(c => c.IsActive)) { <option value="@c.Id">@c.Name</option> }</select> }</td>
-                        <td>@if (!r.IsDuplicate) { <select @bind="r.BudgetLineId"><option value="">—</option>@foreach (var b in lines.Where(b => b.IsActive)) { <option value="@b.Id">@b.Name</option> }</select> }</td>
+                        @* The budget line leads: it already knows its category, and often its label.
+                           Picking one fills both in, and where the line has no label of its own the
+                           column offers the ones belonging to its category — Amazon or Costco under
+                           General Merchandise. *@
+                        <td>@if (!r.IsDuplicate) { <select @bind="r.BudgetLineId" @bind:after="() => LineChosen(r)"><option value="">—</option>@foreach (var b in lines.Where(b => b.IsActive)) { <option value="@b.Id">@b.Name</option> }</select> }</td>
+                        @{ var chosen = lines.FirstOrDefault(b => b.Id == r.BudgetLineId); }
+
+                        @* Where the budget line settles a field, it is shown rather than offered: an
+                           editable dropdown invites a row that disagrees with its own budget line. *@
+                        <td>
+                            @if (r.IsDuplicate) { }
+                            else if (chosen?.CategoryId is { } fromLine)
+                            {
+                                <span class="muted" title="From the budget line">@(categories.FirstOrDefault(c => c.Id == fromLine)?.Name)</span>
+                            }
+                            else
+                            {
+                                <select @bind="r.CategoryId" @bind:after='() => OfferToSpread(r, "category")'><option value="">—</option>@foreach (var c in categories.Where(c => c.IsActive)) { <option value="@c.Id">@c.Name</option> }</select>
+                            }
+                        </td>
+                        <td>
+                            @if (r.IsDuplicate) { }
+                            else if (chosen?.LabelId is { } lineLabel)
+                            {
+                                <span class="muted" title="From the budget line">@(labels.FirstOrDefault(l => l.Id == lineLabel)?.Name)</span>
+                            }
+                            else if (r.CategoryId is not null)
+                            {
+                                @* A label narrows a category, so without one there is nothing to narrow. *@
+                                <select @bind="r.LabelId" @bind:after='() => OfferToSpread(r, "label")'><option value="">—</option>@foreach (var l in LabelChoices.For(labels, r.CategoryId, r.LabelId)) { <option @key="l.Id" value="@l.Id">@l.Name</option> }</select>
+                            }
+                        </td>
                         <td>@if (!r.IsDuplicate) { <input type="checkbox" @bind="r.IsTransfer" /> }</td>
                         <td>@if (r.IsDuplicate) { <span class="muted">dup</span> } else { <input type="checkbox" @bind="r.Skip" /> }</td>
-                        <td class="muted">@r.SuggestionSource</td>
                     </tr>
+
+                    @if (spread is { } sp && ReferenceEquals(sp.Row, r))
+                    {
+                        @* Under the row you just changed. Scrolling back to a bar at the top costs you
+                           your place in a list of hundreds. *@
+                        <tr class="spread-row">
+                            <td colspan="9">
+                                <span class="row">
+                                    <span><strong>@sp.Merchant</strong> → @sp.What. Apply to the other @sp.Count row@(sp.Count == 1 ? "" : "s") from this merchant?</span>
+                                    <label class="inline"><input type="checkbox" @bind="spreadRemember" /> Remember for future imports</label>
+                                    <button type="button" @onclick="ApplySpread">Apply</button>
+                                    <button class="secondary" type="button" @onclick="() => spread = null">No</button>
+                                </span>
+                            </td>
+                        </tr>
+                    }
                 }
                 </tbody>
             </table>
@@ -112,7 +157,104 @@ else
     private string profile = "auto";
     private string fileName = "";
     private bool busy, hideDupes = true;
+    private List<LabelDto>? labels;
     private ImportPreviewDto? preview;
+
+    /// <summary>
+    /// A budget line already knows its category, and often its label. Choosing one fills both in, so
+    /// the common case is a single click; where the line has no label the column is left for you to
+    /// pick from that category's labels.
+    /// </summary>
+    private void LineChosen(ImportRowDto row)
+    {
+        if (lines?.FirstOrDefault(b => b.Id == row.BudgetLineId) is { } line)
+        {
+            row.CategoryId = line.CategoryId;
+            if (line.LabelId is not null) row.LabelId = line.LabelId;
+            else if (row.LabelId is { } current && labels?.FirstOrDefault(l => l.Id == current)?.CategoryId != line.CategoryId)
+                row.LabelId = null;      // a label from the old category would be wrong here
+        }
+
+        OfferToSpread(row, "budget line");
+    }
+
+    private sealed record Spread(ImportRowDto Row, string Merchant, string What, int Count, int? CategoryId, int? LabelId, int? BudgetLineId, string Field);
+    private Spread? spread;
+    private bool spreadRemember = true;
+
+    /// <summary>
+    /// After a row is categorised by hand, offers to carry it to the rest of that merchant's rows. The
+    /// offer is skipped when nothing else would change, so it appears only when it saves work.
+    /// </summary>
+    private void OfferToSpread(ImportRowDto row, string field)
+    {
+        spread = null;
+        if (preview is not { } pv || string.IsNullOrWhiteSpace(row.Merchant)) return;
+
+        var same = pv.Rows.Where(r => !r.IsDuplicate && !ReferenceEquals(r, row)
+                                      && string.Equals(r.Merchant, row.Merchant, StringComparison.OrdinalIgnoreCase)).ToList();
+        if (same.Count == 0) return;
+
+        var differ = field switch
+        {
+            "category" => same.Count(r => r.CategoryId != row.CategoryId),
+            "label" => same.Count(r => r.LabelId != row.LabelId),
+            _ => same.Count(r => r.BudgetLineId != row.BudgetLineId || r.CategoryId != row.CategoryId || r.LabelId != row.LabelId),
+        };
+        if (differ == 0) return;
+
+        var what = field switch
+        {
+            "category" => categories?.FirstOrDefault(c => c.Id == row.CategoryId)?.Name ?? "no category",
+            "label" => labels?.FirstOrDefault(l => l.Id == row.LabelId)?.Name ?? "no label",
+            _ => lines?.FirstOrDefault(b => b.Id == row.BudgetLineId)?.Name ?? "no budget line",
+        };
+
+        spread = new Spread(row, row.Merchant!, what, differ, row.CategoryId, row.LabelId, row.BudgetLineId, field);
+    }
+
+    /// <summary>
+    /// Applies the choice to every other row from that merchant, and optionally records a rule so the
+    /// next import arrives already categorised rather than repeating this.
+    /// </summary>
+    private async Task ApplySpread()
+    {
+        if (spread is not { } sp || preview is not { } pv) return;
+
+        foreach (var r in pv.Rows.Where(r => !r.IsDuplicate && string.Equals(r.Merchant, sp.Merchant, StringComparison.OrdinalIgnoreCase)))
+        {
+            switch (sp.Field)
+            {
+                case "category": r.CategoryId = sp.CategoryId; break;
+                case "label": r.LabelId = sp.LabelId; break;
+                default:
+                    // A budget line carries its category and label with it, so spreading it spreads all three.
+                    r.BudgetLineId = sp.BudgetLineId;
+                    r.CategoryId = sp.CategoryId;
+                    r.LabelId = sp.LabelId;
+                    break;
+            }
+        }
+
+        if (spreadRemember)
+        {
+            try
+            {
+                await Api.SaveCategoryRuleAsync(new CategoryRuleDto
+                {
+                    Pattern = sp.Merchant,
+                    Match = RuleMatch.Contains,
+                    CategoryId = sp.CategoryId,
+                    LabelId = sp.LabelId,
+                    BudgetLineId = sp.BudgetLineId,
+                    IsActive = true,
+                });
+            }
+            catch (Exception ex) { error = $"Rows updated, but the rule could not be saved: {ex.Message}"; }
+        }
+
+        spread = null;
+    }
     private LotImportResultDto? lotResult;
     private string kind = "Statement";
     private ImportResultDto? result;
@@ -123,7 +265,7 @@ else
         try
         {
             accounts = await Api.GetAccountsAsync(); cards = await Api.GetCardsAsync(); profiles = await Api.GetImportProfilesAsync();
-            categories = await Api.GetCategoriesAsync(); lines = await Api.GetBudgetLinesAsync(); batches = await Api.GetImportBatchesAsync();
+            categories = await Api.GetCategoriesAsync(); labels = await Api.GetLabelsAsync(); lines = await Api.GetBudgetLinesAsync(); batches = await Api.GetImportBatchesAsync();
         }
         catch (Exception ex) { error = ex.Message; }
     }
