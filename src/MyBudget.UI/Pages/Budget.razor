@@ -18,6 +18,12 @@ else
             <strong>@year</strong>
             <button class="secondary" type="button" title="Next year" @onclick="() => ChangeYear(year + 1)">›</button>
         </span>
+        <label class="inline">Sort
+            <select @bind="sort">
+                <option value="name">by name</option>
+                <option value="category">by category, then name</option>
+            </select>
+        </label>
         <details class="dropdown">
             <summary class="btn secondary">Columns ▾</summary>
             <div class="dropdown-menu">
@@ -89,7 +95,7 @@ else
             </tr>
         </thead>
         <tbody>
-        @foreach (var b in lines.Where(b => (showInactive || b.IsActive) && (categoryFilter is null || b.CategoryId == categoryFilter)))
+        @foreach (var b in Sorted(lines.Where(b => (showInactive || b.IsActive) && (categoryFilter is null || b.CategoryId == categoryFilter))))
         {
             var h = history.FirstOrDefault(x => x.BudgetLineId == b.Id);
             <tr class="@(b.IsActive ? "" : "muted")">
@@ -285,6 +291,22 @@ else
     private List<BudgetHistoryDto>? priorHistory;
     private int year = DateTime.Today.Year;
     private bool showInactive;
+    private string sort = "name";
+
+    /// <summary>
+    /// Name, or category then name. Uncategorised lines sort last rather than first under an empty
+    /// heading, and the name is always the tie-break so the order is stable either way.
+    /// </summary>
+    private IEnumerable<BudgetLineDto> Sorted(IEnumerable<BudgetLineDto> rows) => sort switch
+    {
+        "category" => rows
+            .OrderBy(b => b.CategoryId is null)
+            .ThenBy(b => CategoryName(b.CategoryId), StringComparer.OrdinalIgnoreCase)
+            .ThenBy(b => b.Name, StringComparer.OrdinalIgnoreCase),
+        _ => rows.OrderBy(b => b.Name, StringComparer.OrdinalIgnoreCase),
+    };
+
+    private string CategoryName(int? id) => categories?.FirstOrDefault(c => c.Id == id)?.Name ?? "";
     private readonly HashSet<string> shown = [];
     private BudgetLineDto? editing;
     private int? categoryFilter;
