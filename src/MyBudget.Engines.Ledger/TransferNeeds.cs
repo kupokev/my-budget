@@ -26,7 +26,7 @@ public static class TransferNeeds
                 var lines = g.Select(b =>
                 {
                     var a = SinkingFund.MonthlyAccrual(b, asOf, projectedThisMonth is not null && projectedThisMonth.TryGetValue(b.Id, out var o) ? o : null);
-                    return new Line(b.Id, b.Name, b.Frequency, b.ProjectedAmount, a.Monthly, a.Formula, b.PaymentMethod == PaymentMethodKind.Card);
+                    return new Line(b.Id, b.Name, b.Frequency, b.AmountFor(asOf), a.Monthly, a.Formula, b.PaymentMethod == PaymentMethodKind.Card);
                 }).OrderBy(l => l.LineName).ToList();
                 var monthly = SinkingFund.Round(lines.Sum(l => l.MonthlyAccrual));
                 var perCheck = SinkingFund.Round(monthly * 12m / paychecksPerYear);

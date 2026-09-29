@@ -90,6 +90,7 @@ internal static class Mapping
         {
             Id = b.Id, Name = b.Name, CategoryId = b.CategoryId, LabelId = b.LabelId, AccountNumber = b.AccountNumber, Frequency = b.Frequency, DueDay = b.DueDay,
             AnchorDueDate = b.AnchorDueDate, IsAutopay = b.IsAutopay, ProjectedAmount = b.ProjectedAmount,
+            Amounts = b.Amounts.OrderByDescending(a => a.FromPeriod).Select(a => new BudgetLineAmountDto { Id = a.Id, FromPeriod = a.FromPeriod, Amount = a.Amount, Notes = a.Notes }).ToList(),
             PaymentMethod = b.PaymentMethod, PaymentAccountId = b.PaymentAccountId, PaymentCardId = b.PaymentCardId,
             FundingAccountId = b.FundingAccountId, BankAutopayDiscount = b.BankAutopayDiscount, IsCardEligible = b.IsCardEligible,
             StartDate = b.StartDate, EndDate = b.EndDate, Notes = b.Notes, IsActive = b.IsActive,
@@ -101,6 +102,17 @@ internal static class Mapping
     {
         b.Name = d.Name.Trim(); b.CategoryId = d.CategoryId; b.LabelId = d.LabelId; b.AccountNumber = Clean(d.AccountNumber); b.Frequency = d.Frequency; b.DueDay = d.DueDay;
         b.AnchorDueDate = d.AnchorDueDate; b.IsAutopay = d.IsAutopay; b.ProjectedAmount = d.ProjectedAmount;
+
+        // Matched by month so a row is corrected rather than replaced, and any day is snapped to the first.
+        var wanted = d.Amounts.Select(a => new { Month = new DateOnly(a.FromPeriod.Year, a.FromPeriod.Month, 1), a.Amount, a.Notes }).ToList();
+        foreach (var gone in b.Amounts.Where(a => wanted.All(w => w.Month != a.FromPeriod)).ToList()) b.Amounts.Remove(gone);
+        foreach (var w in wanted)
+        {
+            var row = b.Amounts.FirstOrDefault(a => a.FromPeriod == w.Month);
+            if (row is null) { row = new BudgetLineAmount { FromPeriod = w.Month }; b.Amounts.Add(row); }
+            row.Amount = w.Amount;
+            row.Notes = w.Notes;
+        }
         b.PaymentMethod = d.PaymentMethod;
         b.PaymentAccountId = d.PaymentMethod == PaymentMethodKind.Account ? d.PaymentAccountId : null;
         b.PaymentCardId = d.PaymentMethod == PaymentMethodKind.Card ? d.PaymentCardId : null;

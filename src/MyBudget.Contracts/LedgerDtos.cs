@@ -142,6 +142,16 @@ public sealed class BudgetLineDto
     public DateOnly? AnchorDueDate { get; set; }
     public bool IsAutopay { get; set; }
     [Range(0, 10_000_000)] public decimal ProjectedAmount { get; set; }
+
+    /// <summary>What the amount was over time, when it has changed. Newest first.</summary>
+    public List<BudgetLineAmountDto> Amounts { get; set; } = [];
+
+    /// <summary>The amount in force for a month: the latest row on or before it, else the usual amount.</summary>
+    public decimal AmountFor(DateOnly period)
+    {
+        var month = new DateOnly(period.Year, period.Month, 1);
+        return Amounts.Where(a => a.FromPeriod <= month).OrderByDescending(a => a.FromPeriod).FirstOrDefault()?.Amount ?? ProjectedAmount;
+    }
     public PaymentMethodKind PaymentMethod { get; set; } = PaymentMethodKind.Account;
     public int? PaymentAccountId { get; set; }
     public int? PaymentCardId { get; set; }
@@ -165,6 +175,15 @@ public sealed class BudgetLineDto
 }
 
 /// <summary>One line in one month: the actual plus optional per-month overrides (null = use the line's default).</summary>
+public sealed class BudgetLineAmountDto
+{
+    public int Id { get; set; }
+    /// <summary>First month this amount applied; any day is snapped to the first.</summary>
+    public DateOnly FromPeriod { get; set; }
+    [Range(0, 10_000_000)] public decimal Amount { get; set; }
+    [StringLength(200)] public string? Notes { get; set; }
+}
+
 public sealed class BudgetPeriodDto
 {
     public int Id { get; set; }

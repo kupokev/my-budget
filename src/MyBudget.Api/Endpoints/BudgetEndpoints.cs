@@ -127,7 +127,7 @@ public static class BudgetEndpoints
         g.MapGet("/history", async (int? year, BudgetDbContext db, TimeProvider clock) =>
         {
             var y = year ?? clock.GetLocalNow().Year;
-            var lines = await db.BudgetLines.Include(b => b.Periods).OrderBy(b => b.Name).ToListAsync();
+            var lines = await db.BudgetLines.Include(b => b.Periods).Include(b => b.Amounts).OrderBy(b => b.Name).ToListAsync();
             var from = new DateOnly(y, 1, 1);
             var to = new DateOnly(y, 12, 31);
             return lines.Select(b =>
@@ -139,7 +139,7 @@ public static class BudgetEndpoints
                     var row = b.Periods.FirstOrDefault(p => p.Period == period);
                     var dueDefault = generated[period].Cast<DateOnly?>().FirstOrDefault();
                     var due = row?.DueDate ?? dueDefault;
-                    var projected = row?.ProjectedAmount ?? (dueDefault is not null ? b.ProjectedAmount : 0m);
+                    var projected = row?.ProjectedAmount ?? (dueDefault is not null ? b.AmountFor(period) : 0m);
                     var actual = row?.ActualAmount;
                     return new BudgetMonthDto(period, due, row?.DueDate is not null, projected, row?.ProjectedAmount is not null,
                         actual, actual is { } a ? a - projected : null, row?.PaidOn, row?.Notes);
@@ -197,7 +197,7 @@ public static class BudgetEndpoints
     internal static async Task<List<UpcomingLineDto>> Upcoming(BudgetDbContext db, DateOnly asOf, int days)
     {
         var to = asOf.AddDays(days);
-        var lines = await db.BudgetLines.Include(b => b.PaymentAccount).Include(b => b.PaymentCard).Include(b => b.FundingAccount).Include(b => b.Periods).Where(b => b.IsActive).ToListAsync();
+        var lines = await db.BudgetLines.Include(b => b.PaymentAccount).Include(b => b.PaymentCard).Include(b => b.FundingAccount).Include(b => b.Periods).Include(b => b.Amounts).Where(b => b.IsActive).ToListAsync();
         return lines
             .SelectMany(b => BudgetDueDates.Between(b, asOf, to, DueOverrides(b)).Select(d => new UpcomingLineDto(
                 b.Id, b.Name, d, b.Periods.FirstOrDefault(p => p.Period == new DateOnly(d.Year, d.Month, 1))?.ProjectedAmount ?? b.ProjectedAmount,

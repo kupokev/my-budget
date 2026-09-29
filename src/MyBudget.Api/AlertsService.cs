@@ -111,7 +111,7 @@ public sealed class AlertsService(BudgetDbContext db, InvestmentService investme
     /// <summary>ACC-5: monthly expenses = line accruals + planned variable spend; compare marked accounts to 3–6 months of that.</summary>
     public async Task<RainyDayDto> RainyDayAsync(DateOnly today)
     {
-        var lines = await db.BudgetLines.Include(b => b.Periods).Where(b => b.IsActive).ToListAsync();
+        var lines = await db.BudgetLines.Include(b => b.Periods).Include(b => b.Amounts).Where(b => b.IsActive).ToListAsync();
         var dated = lines.Where(b => b.Frequency != BudgetFrequency.Variable).Sum(b => SinkingFund.MonthlyAccrual(b, today).Monthly);
         var variable = lines.Where(b => b.Frequency == BudgetFrequency.Variable).Sum(b => SinkingFund.MonthlyAccrual(b, today).Monthly);
         var monthly = Math.Round(dated + variable, 2);

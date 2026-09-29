@@ -144,7 +144,7 @@ public static class AccountEndpoints
     {
         var start = new DateOnly(month.Year, month.Month, 1);
         var end = start.AddMonths(1).AddDays(-1);
-        var budgetLines = await db.BudgetLines.Include(b => b.Periods).Include(b => b.PaymentCard).Where(b => b.IsActive).ToListAsync();
+        var budgetLines = await db.BudgetLines.Include(b => b.Periods).Include(b => b.Amounts).Include(b => b.PaymentCard).Where(b => b.IsActive).ToListAsync();
         var byAccount = new Dictionary<int, List<(string Name, decimal Amount)>>();
         foreach (var b in budgetLines)
         {

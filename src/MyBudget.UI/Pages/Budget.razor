@@ -227,6 +227,22 @@ else
                     }
                     <div class="field"><label>Starts</label><OptionalDate @bind-Value="editing.StartDate" Empty="from the beginning" /></div>
                     <div class="field"><label>Ends <span class="muted">(last month owed)</span></label><OptionalDate @bind-Value="editing.EndDate" Empty="no end" /></div>
+                    <div class="field full">
+                        @* One amount would restate every month already budgeted at the old price. Rows
+                           here say what it cost from a month onward; a single odd month is still an
+                           override on the grid. *@
+                        <label>Amount changes <span class="muted">(the usual amount applies until a row takes over)</span></label>
+                        @foreach (var a in editing.Amounts.OrderBy(a => a.FromPeriod))
+                        {
+                            <span class="row" @key="a" style="margin-bottom:6px">
+                                <input type="month" value="@a.FromPeriod.ToString("yyyy-MM")" @onchange="e => SetAmountMonth(a, e)" />
+                                <InputNumber @bind-Value="a.Amount" step="0.01" class="narrow-money" />
+                                <InputText @bind-Value="a.Notes" class="grow" placeholder="why, e.g. membership went up" />
+                                <button class="link danger" type="button" @onclick="() => editing.Amounts.Remove(a)">✕</button>
+                            </span>
+                        }
+                        <button class="secondary" type="button" @onclick="AddAmountChange">Add an amount change</button>
+                    </div>
                 </fieldset>
                 <fieldset class="group">
                     <legend>How it's paid</legend>
@@ -291,6 +307,20 @@ else
     private List<BudgetHistoryDto>? priorHistory;
     private int year = DateTime.Today.Year;
     private bool showInactive;
+
+    /// <summary>Starts a new amount row at this month, or the month after the last change.</summary>
+    private void AddAmountChange()
+    {
+        if (editing is not { } e) return;
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var from = e.Amounts.Count > 0 ? e.Amounts.Max(a => a.FromPeriod).AddMonths(1) : new DateOnly(today.Year, today.Month, 1);
+        e.Amounts.Add(new BudgetLineAmountDto { FromPeriod = from, Amount = e.ProjectedAmount });
+    }
+
+    private void SetAmountMonth(BudgetLineAmountDto row, ChangeEventArgs e)
+    {
+        if (DateOnly.TryParse($"{e.Value}-01", out var month)) row.FromPeriod = month;
+    }
     private string sort = "name";
 
     /// <summary>

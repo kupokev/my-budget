@@ -33,6 +33,24 @@ public class BudgetLine
     public bool IsAutopay { get; set; }
     public decimal ProjectedAmount { get; set; }
 
+
+    /// <summary>
+    /// What the amount was over time, when it has changed. <see cref="ProjectedAmount"/> is the
+    /// fallback for months no row covers: a gym raises its fee mid-year, and editing one number would
+    /// restate every month already budgeted and reconciled at the old price.
+    /// </summary>
+    public List<BudgetLineAmount> Amounts { get; set; } = [];
+
+    /// <summary>
+    /// The amount in force for a month: the latest row starting on or before it, else the usual amount.
+    /// A single month's override lives on its <see cref="BudgetPeriod"/> and still wins over this.
+    /// </summary>
+    public decimal AmountFor(DateOnly period)
+    {
+        var month = new DateOnly(period.Year, period.Month, 1);
+        var row = Amounts.Where(a => a.FromPeriod <= month).OrderByDescending(a => a.FromPeriod).FirstOrDefault();
+        return row?.Amount ?? ProjectedAmount;
+    }
     /// <summary>What pays the line: a bank account or a card (BIL-2).</summary>
     public PaymentMethodKind PaymentMethod { get; set; } = PaymentMethodKind.Account;
     public int? PaymentAccountId { get; set; }
@@ -77,5 +95,22 @@ public class BudgetPeriod
     public decimal? ProjectedAmount { get; set; }
     public decimal? ActualAmount { get; set; }
     public DateOnly? PaidOn { get; set; }
+    public string? Notes { get; set; }
+}
+
+/// <summary>
+/// What a budget line cost from a given month onward, until another row supersedes it. A price rise is
+/// a new row; the months before it keep what they were actually budgeted at.
+/// </summary>
+public class BudgetLineAmount
+{
+    public int Id { get; set; }
+    public int BudgetLineId { get; set; }
+    public BudgetLine? BudgetLine { get; set; }
+
+    /// <summary>First month this amount applied, always the first of the month.</summary>
+    public DateOnly FromPeriod { get; set; }
+
+    public decimal Amount { get; set; }
     public string? Notes { get; set; }
 }

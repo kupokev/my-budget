@@ -30,7 +30,7 @@ public static class ViewEndpoints
     internal static async Task<TransferNeedsDto> Needs(BudgetDbContext db, DateOnly asOf)
     {
         var (perYear, source) = await IncomeEndpoints.PaychecksPerYear(db, asOf);
-        var lines = await db.BudgetLines.Include(b => b.Periods).ToListAsync();
+        var lines = await db.BudgetLines.Include(b => b.Periods).Include(b => b.Amounts).ToListAsync();
         var accounts = await db.Accounts.ToDictionaryAsync(a => a.Id);
         var monthStart = new DateOnly(asOf.Year, asOf.Month, 1);
         var monthEnd = monthStart.AddMonths(1).AddDays(-1);

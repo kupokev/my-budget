@@ -65,7 +65,7 @@ public sealed class AiTools(BudgetDbContext db, PaycheckService paychecks, Inves
     private async Task<object> BudgetStatus(int year, int month)
     {
         var period = new DateOnly(year, month, 1);
-        var lines = await db.BudgetLines.Include(b => b.Periods).Where(b => b.IsActive).OrderBy(b => b.Name).ToListAsync();
+        var lines = await db.BudgetLines.Include(b => b.Periods).Include(b => b.Amounts).Where(b => b.IsActive).OrderBy(b => b.Name).ToListAsync();
         return lines.Select(b =>
         {
             var p = b.Periods.FirstOrDefault(x => x.Period == period);

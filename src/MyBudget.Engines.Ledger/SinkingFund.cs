@@ -10,7 +10,8 @@ public static class SinkingFund
     /// <param name="projectedThisMonth">A per-month projected override for asOf's month; applies to monthly lines only.</param>
     public static Accrual MonthlyAccrual(BudgetLine line, DateOnly asOf, decimal? projectedThisMonth = null)
     {
-        var amount = line.ProjectedAmount;
+        // The amount in force that month, not whatever the line says today.
+        var amount = line.AmountFor(asOf);
         switch (line.Frequency)
         {
             case BudgetFrequency.Monthly:

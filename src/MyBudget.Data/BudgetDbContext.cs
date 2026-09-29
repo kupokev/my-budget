@@ -145,6 +145,8 @@ public sealed class BudgetDbContext(DbContextOptions<BudgetDbContext> options) :
             e.HasOne(x => x.Label).WithMany().HasForeignKey(x => x.LabelId).OnDelete(DeleteBehavior.Cascade);
         });
         mb.Entity<SpendThreshold>().Property(x => x.Description).HasMaxLength(200);
+        mb.Entity<BudgetLineAmount>().Property(x => x.Notes).HasMaxLength(200);
+        mb.Entity<BudgetLineAmount>().HasIndex(x => new { x.BudgetLineId, x.FromPeriod }).IsUnique();
         mb.Entity<CardFee>().Property(x => x.Notes).HasMaxLength(200);
         mb.Entity<CardFee>().HasIndex(x => new { x.CardId, x.FromYear }).IsUnique();
         mb.Entity<CardPerk>().Property(x => x.Description).HasMaxLength(200);
