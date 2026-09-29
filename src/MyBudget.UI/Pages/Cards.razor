@@ -11,44 +11,78 @@ else
 {
     <div class="toolbar"><button type="button" @onclick="() => Edit(new CardDto())">New card</button></div>
 
-    <table>
-        <thead><tr><th>Card</th><th class="money" title="Budget lines charged to this card, per month">Monthly line spend</th><th class="money" title="Actually charged this month, from transactions">Spent this month</th><th class="money">Last month</th><th class="money">Balance</th><th>As of</th><th class="money">Utilization</th><th>Stmt / due</th><th>Paid by</th><th></th></tr></thead>
-        <tbody>
-        @foreach (var s in summary)
-        {
-            <tr>
-                <td>
-                    <span class="tip">@s.CardName
-                        <span class="tip-box">
-                            <b>@s.CardName</b>
-                            @if (s.BudgetLines.Count == 0) { <span class="muted">No lines charged to this card</span> }
-                            else
-                            {
-                                <span>Budget lines on this card:</span>
-                                @foreach (var b in s.BudgetLines) { <span class="indent">· @b</span> }
-                                <span class="muted">@Fmt.Money(s.MonthlyBudgetSpend) a month</span>
-                            }
+    @* One table, not two over the same rows: what a card costs and how it is used answer the same
+       question. Short name in the column, everything that was its own thin column on a hover. *@
+    <section class="panel">
+        <h2>Cards · @DateTime.Today.Year</h2>
+        <p class="muted">Cost is the annual fee plus interest if the latest balance were carried all year at the card's APR (promo APR while it lasts). Value is points earned this year at your point value, plus reached thresholds, plus what you get for simply holding it. Worst first.</p>
+        <table>
+            <thead><tr>
+                <th>Card</th>
+                <th class="money" title="Annual fee plus a year's interest on the latest balance">Yearly cost</th>
+                <th class="money">Rewards YTD</th>
+                <th class="money">Thresholds</th>
+                <th class="money">Perks</th>
+                <th class="money">Net</th>
+                <th class="money">Balance</th>
+                <th class="money">Util.</th>
+                <th title="Statement closes / payment due">Stmt / due</th>
+                <th></th>
+            </tr></thead>
+            <tbody>
+            @foreach (var row in CostRows())
+            {
+                var u = row.Use;
+                <tr @key="row.CardId">
+                    <td>
+                        <span class="tip">@row.Name
+                            <span class="tip-box">
+                                <b>@row.FullName</b>
+                                <span class="tip-grid">
+                                    <span>Paid by</span><span>@(u?.PayingAccount ?? "—")</span>
+                                    <span>Balance as of</span><span>@(u?.LatestBalanceAsOf is { } d ? Fmt.Date(d) : "no balance recorded")</span>
+                                    <span>Est. interest / yr</span><span class="num">@(row.Interest > 0 ? Fmt.Money(row.Interest) : "—")</span>
+                                    <span>Annual fee</span><span class="num">@Fmt.Money(row.Fee)</span>
+                                    <span>Budget lines / mo</span><span class="num">@Fmt.Money(u?.MonthlyBudgetSpend ?? 0)</span>
+                                    <span>Spent this month</span><span class="num">@Fmt.Money(u?.SpentThisMonth ?? 0)</span>
+                                    <span>Last month</span><span class="num">@Fmt.Money(u?.SpentLastMonth ?? 0)</span>
+                                </span>
+                                @if (u is { BudgetLines.Count: > 0 })
+                                {
+                                    <span class="tip-note">@string.Join(", ", u.BudgetLines)</span>
+                                }
+                            </span>
                         </span>
-                    </span>
-                    <MaskedNumber Value="@cards.First(c => c.Id == s.CardId).AccountNumber" />
-                </td>
-                <td><Money Value="s.MonthlyBudgetSpend" /></td>
-                <td class="money"><a href="@($"transactions?card={s.CardId}")" title="See these on Transactions">@Fmt.Money(s.SpentThisMonth)</a></td>
-                <td class="money muted">@Fmt.Money(s.SpentLastMonth)</td>
-                <td class="money">@Fmt.Money(s.LatestBalance)</td>
-                <td>@Fmt.Date(s.LatestBalanceAsOf)</td>
-                <td class="money">@Fmt.Pct(s.Utilization)</td>
-                <td>@s.StatementDay / @s.DueDay</td>
-                <td>@(s.PayingAccount ?? "—")</td>
-                <td class="actions icons">
-                    <button class="link" type="button" title="Edit card" @onclick="() => Edit(cards.First(c => c.Id == s.CardId))">✎</button>
-                    <button class="link" type="button" title="Record a statement balance" @onclick="() => OpenBalance(s.CardId)">⇄</button>
-                    <button class="link" type="button" title="Earn rates and spend thresholds" @onclick="() => OpenRewards(s.CardId)">★</button>
-                </td>
-            </tr>
-        }
-        </tbody>
-    </table>
+                        <MaskedNumber Value="@row.AccountNumber" />
+                    </td>
+                    <td><Money Value="row.Cost" /></td>
+                    <td><Money Value="row.Value" /></td>
+                    <td class="money">@(row.Thresholds > 0 ? Fmt.Money(row.Thresholds) : "—")</td>
+                    <td class="money">@(row.Perks > 0 ? Fmt.Money(row.Perks) : "—")</td>
+                    @* The verdict was the net said twice; the colour carries it and the words are on hover. *@
+                    <td class="money @(row.Net < 0 ? "neg" : row.Net == 0 ? "muted" : "pos")" title="@($"{row.Verdict} — {row.Formula}")">@Fmt.Money(row.Net)</td>
+                    <td class="money">@Fmt.Money(u?.LatestBalance)</td>
+                    <td class="money">@Fmt.Pct(u?.Utilization)</td>
+                    <td>@(u is null ? "—" : $"{u.StatementDay} / {u.DueDay}")</td>
+                    <td class="actions icons">
+                        <button class="link" type="button" title="Edit card" @onclick="() => Edit(cards.First(c => c.Id == row.CardId))">✎</button>
+                        <button class="link" type="button" title="Record a statement balance" @onclick="() => OpenBalance(row.CardId)">⇄</button>
+                        <button class="link" type="button" title="Earn rates and spend thresholds" @onclick="() => OpenRewards(row.CardId)">★</button>
+                    </td>
+                </tr>
+            }
+            </tbody>
+            <tfoot><tr>
+                <th>All cards</th>
+                <th><Money Value="CostRows().Sum(r => r.Cost)" /></th>
+                <th><Money Value="CostRows().Sum(r => r.Value)" /></th>
+                <th><Money Value="CostRows().Sum(r => r.Thresholds)" /></th>
+                <th><Money Value="CostRows().Sum(r => r.Perks)" /></th>
+                <th><Money Value="CostRows().Sum(r => r.Net)" Signed="true" /></th>
+                <th colspan="4"></th>
+            </tr></tfoot>
+        </table>
+    </section>
 
     @if (rewardAlerts is { Count: > 0 })
     {
@@ -59,31 +93,6 @@ else
             </ul>
         </details>
     }
-
-    <section class="panel">
-        <h2>Yearly cost vs value · @DateTime.Today.Year</h2>
-        <p class="muted">Cost = annual fee + interest if the latest balance were carried all year at the card's APR (promo APR while it lasts). Value = points earned this year at your point value, plus reached threshold rewards, plus benefits you get for simply holding the card. Worst first.</p>
-        <table>
-            <thead><tr><th>Card</th><th class="money">Annual fee</th><th class="money">Est. interest / yr</th><th class="money">Yearly cost</th><th class="money">Rewards value YTD</th><th class="money">Thresholds</th><th class="money">Perks</th><th class="money">Net</th><th>Verdict</th></tr></thead>
-            <tbody>
-            @foreach (var row in CostRows())
-            {
-                <tr class="@(row.Net < 0 ? "" : "")" title="@row.Formula">
-                    <td>@row.Name</td>
-                    <td><Money Value="row.Fee" /></td>
-                    <td class="money">@(row.Interest > 0 ? Fmt.Money(row.Interest) : "—")</td>
-                    <td><Money Value="row.Cost" /></td>
-                    <td><Money Value="row.Value" /></td>
-                    <td class="money">@(row.Thresholds > 0 ? Fmt.Money(row.Thresholds) : "—")</td>
-                    <td class="money">@(row.Perks > 0 ? Fmt.Money(row.Perks) : "—")</td>
-                    <td><Money Value="row.Net" Signed="true" /></td>
-                    <td class="@(row.Net < 0 ? "neg" : row.Net == 0 ? "muted" : "pos")">@row.Verdict</td>
-                </tr>
-            }
-            </tbody>
-            <tfoot><tr><th>All cards</th><th><Money Value="CostRows().Sum(r => r.Fee)" /></th><th><Money Value="CostRows().Sum(r => r.Interest)" /></th><th><Money Value="CostRows().Sum(r => r.Cost)" /></th><th><Money Value="CostRows().Sum(r => r.Value)" /></th><th><Money Value="CostRows().Sum(r => r.Thresholds)" /></th><th><Money Value="CostRows().Sum(r => r.Perks)" /></th><th><Money Value="CostRows().Sum(r => r.Net)" Signed="true" /></th><th></th></tr></tfoot>
-        </table>
-    </section>
 
     @if (balanceFor is { } cid)
     {
@@ -240,7 +249,13 @@ else
     private RewardsReportDto? report;
     private List<AlertDto>? rewardAlerts;
 
-    private sealed record CostRow(string Name, decimal Fee, decimal Interest, decimal Cost, decimal Value, decimal Thresholds, decimal Perks, decimal Net, string Verdict, string Formula);
+    /// <summary>
+    /// One card, costs and usage together. They were two tables over the same seven rows, which meant
+    /// answering "is this card worth keeping?" by reading one table against the other.
+    /// </summary>
+    private sealed record CostRow(int CardId, string Name, string FullName, string? AccountNumber,
+        decimal Fee, decimal Interest, decimal Cost, decimal Value, decimal Thresholds, decimal Perks, decimal Net,
+        string Verdict, string Formula, CardSummaryDto? Use);
 
     private IEnumerable<CostRow> CostRows()
     {
@@ -259,7 +274,8 @@ else
             var net = value + thresholds + perks - cost;
             var verdict = cost == 0 && value == 0 && perks == 0 ? "free, unused" : net < 0 ? (value == 0 ? "costing you, no rewards recorded" : "costing more than it returns") : net == 0 ? "break-even" : "earning its keep";
             var formula = $"fee {c.AnnualFee:C} + {balance:C} × {apr:0.##}% = {cost:C} cost; {value:C} rewards" + (thresholds > 0 ? $" + {thresholds:C} thresholds" : "") + (perks > 0 ? $" + {perks:C} perks for holding it" : "") + $" → {net:C}";
-            return new CostRow(c.Display, c.AnnualFee, interest, cost, value, thresholds, perks, net, verdict, formula);
+            return new CostRow(c.Id, c.Display, c.Name, c.AccountNumber, c.AnnualFee, interest, cost, value, thresholds, perks, net,
+                verdict, formula, summary?.FirstOrDefault(x => x.CardId == c.Id));
         }).OrderBy(r => r.Net).ThenByDescending(r => r.Cost);
     }
     private CardBalanceDto newBalance = new();
