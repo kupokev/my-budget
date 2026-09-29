@@ -26,6 +26,26 @@ public class Card
     public decimal AnnualFee { get; set; }
     /// <summary>1–12; month the annual fee posts. Null when there is no fee.</summary>
     public int? AnnualFeeMonth { get; set; }
+
+    /// <summary>When the card was opened, so a waived first year can be told from a free card.</summary>
+    public DateOnly? OpenedOn { get; set; }
+
+    /// <summary>
+    /// What the fee was in past years, when it differed. <see cref="AnnualFee"/> is only a fallback for
+    /// years this does not cover: an issuer waives the first year and raises the fee later, and editing
+    /// a single number would rewrite what a card cost you in a year that has already been and gone.
+    /// </summary>
+    public List<CardFee> Fees { get; set; } = [];
+
+    /// <summary>
+    /// The fee charged in a year: the latest schedule row starting on or before it, or the plain
+    /// annual fee when no rows have been entered.
+    /// </summary>
+    public decimal FeeFor(int year)
+    {
+        var row = Fees.Where(f => f.FromYear <= year).OrderByDescending(f => f.FromYear).FirstOrDefault();
+        return row?.Amount ?? AnnualFee;
+    }
     /// <summary>
     /// Keep the annual fee as a budget line. Off by default: a fee is money you will spend, but no row
     /// should appear in someone's budget without them asking for it. Deleting the line turns this back
@@ -62,4 +82,22 @@ public class CardBalance
     public Card? Card { get; set; }
     public DateOnly AsOf { get; set; }
     public decimal Balance { get; set; }
+}
+
+/// <summary>
+/// The annual fee as it applied from a given year onward, until another row supersedes it. A waived
+/// first year is a row of zero; a rise is a new row. Years before the earliest row fall back to the
+/// card's current fee.
+/// </summary>
+public class CardFee
+{
+    public int Id { get; set; }
+    public int CardId { get; set; }
+    public Card? Card { get; set; }
+
+    /// <summary>First year this amount was charged.</summary>
+    public int FromYear { get; set; }
+
+    public decimal Amount { get; set; }
+    public string? Notes { get; set; }
 }

@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using MyBudget.Data;
 
@@ -10,9 +11,11 @@ using MyBudget.Data;
 namespace MyBudget.Data.Migrations
 {
     [DbContext(typeof(BudgetDbContext))]
-    partial class BudgetDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260929003041_EarnedPerks")]
+    partial class EarnedPerks
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.12");
@@ -340,9 +343,6 @@ namespace MyBudget.Data.Migrations
                     b.Property<string>("Notes")
                         .HasColumnType("TEXT");
 
-                    b.Property<DateOnly?>("OpenedOn")
-                        .HasColumnType("TEXT");
-
                     b.Property<int?>("PayingAccountId")
                         .HasColumnType("INTEGER");
 
@@ -393,34 +393,6 @@ namespace MyBudget.Data.Migrations
                         .IsUnique();
 
                     b.ToTable("CardBalances");
-                });
-
-            modelBuilder.Entity("MyBudget.Domain.CardFee", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
-
-                    b.Property<decimal>("Amount")
-                        .HasPrecision(14, 2)
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("CardId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("FromYear")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("Notes")
-                        .HasMaxLength(200)
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CardId", "FromYear")
-                        .IsUnique();
-
-                    b.ToTable("CardFee");
                 });
 
             modelBuilder.Entity("MyBudget.Domain.CardPerk", b =>
@@ -2170,17 +2142,6 @@ namespace MyBudget.Data.Migrations
                     b.Navigation("Card");
                 });
 
-            modelBuilder.Entity("MyBudget.Domain.CardFee", b =>
-                {
-                    b.HasOne("MyBudget.Domain.Card", "Card")
-                        .WithMany("Fees")
-                        .HasForeignKey("CardId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Card");
-                });
-
             modelBuilder.Entity("MyBudget.Domain.CardPerk", b =>
                 {
                     b.HasOne("MyBudget.Domain.Card", "Card")
@@ -2678,8 +2639,6 @@ namespace MyBudget.Data.Migrations
                     b.Navigation("Balances");
 
                     b.Navigation("EarnRules");
-
-                    b.Navigation("Fees");
 
                     b.Navigation("Perks");
 

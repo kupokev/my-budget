@@ -50,6 +50,27 @@ public sealed class AlertsService(BudgetDbContext db, InvestmentService investme
         foreach (var t in rewards.Thresholds.Where(t => !t.Reached && !t.OnPace && t.Remaining > 0 && t.YtdSpend > 0))
             alerts.Add(new("rewards", AlertSeverity.Info, $"{t.CardName}: {t.Description} needs {t.RequiredMonthly:C}/mo", $"YTD pace lands around {t.ProjectedYearEnd:C} of {t.Amount:C}", "rewards"));
 
+        // A periodic perk you forget is the clearest waste there is: the fee was paid either way, and a
+        // quarterly credit cannot be claimed late. Only worth saying while there is still time to use it.
+        foreach (var card in await db.Cards.Include(c => c.Perks).ThenInclude(p => p.Uses).Where(c => c.IsActive).ToListAsync())
+        {
+            foreach (var perk in card.Perks.Where(p => p.IsEarned && p.MaxUsesPerPeriod is > 0 && p.AppliesIn(today.Year)))
+            {
+                var (used, cap) = perk.UsesIn(today);
+                var left = (cap ?? 0) - used;
+                if (left <= 0) continue;
+
+                var window = perk.Period == PerkPeriod.Quarter
+                    ? (Label: $"Q{(today.Month - 1) / 3 + 1}", Ends: new DateOnly(today.Year, ((today.Month - 1) / 3 + 1) * 3, 1).AddMonths(1).AddDays(-1))
+                    : (Label: today.Year.ToString(), Ends: new DateOnly(today.Year, 12, 31));
+                var days = window.Ends.DayNumber - today.DayNumber;
+
+                alerts.Add(new("rewards", days <= 31 ? AlertSeverity.Warning : AlertSeverity.Info,
+                    $"{card.Nickname ?? card.Name}: {perk.Description} unused in {window.Label} — {left * perk.ValuePerUse:C} on the table",
+                    $"{days} days left to use it; it does not carry over.", "cards"));
+            }
+        }
+
         // ALT-4: HSA behind the straight-line pace to the target.
         if (hsa is { AnnualLimit: > 0 })
         {

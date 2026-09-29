@@ -109,8 +109,8 @@ else
             </div>
             </ChildContent>
             <Footer>
-                <button class="secondary" type="button" @onclick="() => edit = null">Cancel</button>
                 <button type="button" @onclick="SaveEdit">Save</button>
+                <button class="secondary" type="button" @onclick="() => edit = null">Cancel</button>
             </Footer>
         </Modal>
     }
@@ -171,8 +171,8 @@ else
             <div class="field"><label>Notes</label><input type="text" @bind="nt.Notes" /></div>
         </ChildContent>
         <Footer>
-            <button class="secondary" type="button" @onclick="() => create = null">Cancel</button>
             <button type="button" @onclick="SaveNew">Save</button>
+            <button class="secondary" type="button" @onclick="() => create = null">Cancel</button>
         </Footer>
     </Modal>
 }

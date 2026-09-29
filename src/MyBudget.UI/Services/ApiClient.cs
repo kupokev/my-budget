@@ -86,6 +86,10 @@ public sealed class ApiClient(HttpClient http)
     // Rewards (Phase 3)
     public Task<CardRewardsDto> GetCardRewardsAsync(int cardId) => Get<CardRewardsDto>($"api/cards/{cardId}/rewards");
     public Task<CardRewardsDto> SaveCardRewardsAsync(CardRewardsDto r) => Put($"api/cards/{r.CardId}/rewards", r);
+    public Task<CardPerkUseDto> LogPerkUseAsync(int perkId, DateOnly date, string? note)
+        => Post<CardPerkUseDto, CardPerkUseDto>($"api/perks/{perkId}/uses", new() { Date = date, Note = note });
+    public Task<CardPerkUseDto> UpdatePerkUseAsync(CardPerkUseDto use) => Put($"api/perks/uses/{use.Id}", use);
+    public Task RemovePerkUseAsync(int useId) => Delete($"api/perks/uses/{useId}");
     public Task<List<LoyaltyProgramDto>> GetLoyaltyProgramsAsync() => Get<List<LoyaltyProgramDto>>("api/loyalty-programs");
     public Task<LoyaltyProgramDto> SaveLoyaltyProgramAsync(LoyaltyProgramDto p) => p.Id == 0 ? Post("api/loyalty-programs", p) : Put($"api/loyalty-programs/{p.Id}", p);
     public Task DeleteLoyaltyProgramAsync(int id) => Delete($"api/loyalty-programs/{id}");

@@ -136,6 +136,7 @@ public sealed class BudgetDbContext(DbContextOptions<BudgetDbContext> options) :
             e.HasMany(x => x.EarnRules).WithOne(x => x.Card).HasForeignKey(x => x.CardId).OnDelete(DeleteBehavior.Cascade);
             e.HasMany(x => x.Thresholds).WithOne(x => x.Card).HasForeignKey(x => x.CardId).OnDelete(DeleteBehavior.Cascade);
             e.HasMany(x => x.Perks).WithOne(x => x.Card).HasForeignKey(x => x.CardId).OnDelete(DeleteBehavior.Cascade);
+            e.HasMany(x => x.Fees).WithOne(x => x.Card).HasForeignKey(x => x.CardId).OnDelete(DeleteBehavior.Cascade);
         });
         mb.Entity<EarnRule>(e =>
         {
@@ -144,7 +145,12 @@ public sealed class BudgetDbContext(DbContextOptions<BudgetDbContext> options) :
             e.HasOne(x => x.Label).WithMany().HasForeignKey(x => x.LabelId).OnDelete(DeleteBehavior.Cascade);
         });
         mb.Entity<SpendThreshold>().Property(x => x.Description).HasMaxLength(200);
+        mb.Entity<CardFee>().Property(x => x.Notes).HasMaxLength(200);
+        mb.Entity<CardFee>().HasIndex(x => new { x.CardId, x.FromYear }).IsUnique();
         mb.Entity<CardPerk>().Property(x => x.Description).HasMaxLength(200);
+        mb.Entity<CardPerk>().HasMany(x => x.Uses).WithOne(x => x.Perk).HasForeignKey(x => x.CardPerkId).OnDelete(DeleteBehavior.Cascade);
+        mb.Entity<CardPerkUse>().Property(x => x.Note).HasMaxLength(200);
+        mb.Entity<CardPerkUse>().HasIndex(x => new { x.CardPerkId, x.Date });
         mb.Entity<LoyaltyTier>().Property(x => x.Benefits).HasMaxLength(500);
         mb.Entity<LoyaltyProgram>(e =>
         {

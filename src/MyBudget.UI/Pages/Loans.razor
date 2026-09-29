@@ -116,8 +116,8 @@ else
             </ChildContent>
             <Footer>
                 @if (editing.Id != 0) { <button class="link danger" type="button" @onclick="DeleteEditing">Delete loan</button> }
-                <button class="secondary" type="button" @onclick="() => editing = null">Cancel</button>
                 <button type="submit" form="loans-form">Save</button>
+                <button class="secondary" type="button" @onclick="() => editing = null">Cancel</button>
             </Footer>
         </Modal>
     }

@@ -41,7 +41,8 @@ internal static class Mapping
         PromoApr = c.PromoApr, PromoAprExpires = c.PromoAprExpires, StatementDay = c.StatementDay, DueDay = c.DueDay,
         CreditLimit = c.CreditLimit, AnnualFee = c.AnnualFee, AnnualFeeMonth = c.AnnualFeeMonth,
         PayingAccountId = c.PayingAccountId, Notes = c.Notes, IsActive = c.IsActive,
-        BudgetAnnualFee = c.BudgetAnnualFee, FeeBudgetLineId = c.FeeBudgetLineId,
+        BudgetAnnualFee = c.BudgetAnnualFee, FeeBudgetLineId = c.FeeBudgetLineId, OpenedOn = c.OpenedOn,
+        Fees = c.Fees.OrderByDescending(f => f.FromYear).Select(f => new CardFeeDto { Id = f.Id, FromYear = f.FromYear, Amount = f.Amount, Notes = f.Notes }).ToList(),
         LatestBalance = c.Balances.OrderByDescending(b => b.AsOf).FirstOrDefault()?.Balance,
         LatestBalanceAsOf = c.Balances.OrderByDescending(b => b.AsOf).FirstOrDefault()?.AsOf,
         LoyaltyProgramId = c.LoyaltyProgramId,
@@ -54,6 +55,23 @@ internal static class Mapping
         c.CreditLimit = d.CreditLimit; c.AnnualFee = d.AnnualFee; c.AnnualFeeMonth = d.AnnualFeeMonth;
         c.PayingAccountId = d.PayingAccountId; c.Notes = d.Notes; c.IsActive = d.IsActive;
         c.BudgetAnnualFee = d.BudgetAnnualFee;   // the line itself is created or removed by CardFeeBudget
+        c.OpenedOn = d.OpenedOn;
+
+        // Matched by year rather than rebuilt, so a row is corrected instead of replaced.
+        foreach (var gone in c.Fees.Where(f => d.Fees.All(x => x.FromYear != f.FromYear)).ToList()) c.Fees.Remove(gone);
+        foreach (var x in d.Fees)
+        {
+            var fee = c.Fees.FirstOrDefault(f => f.FromYear == x.FromYear) ?? Add(c, x.FromYear);
+            fee.Amount = x.Amount;
+            fee.Notes = x.Notes;
+        }
+
+        static CardFee Add(Card card, int year)
+        {
+            var fee = new CardFee { FromYear = year };
+            card.Fees.Add(fee);
+            return fee;
+        }
     }
 
     public static CardBalanceDto ToDto(this CardBalance b) => new() { Id = b.Id, CardId = b.CardId, AsOf = b.AsOf, Balance = b.Balance };

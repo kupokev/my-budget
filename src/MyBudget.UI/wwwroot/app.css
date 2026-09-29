@@ -54,6 +54,12 @@ app { display: block; height: 100%; }
 
 h1 { font-size: 20px; margin: 0 0 16px; }
 h2 { font-size: 16px; margin: 20px 0 8px; }
+h3 { font-size: 14px; margin: 18px 0 6px; }
+
+/* Anything that follows a table sits on its bottom rule otherwise: an "Add row" button, the note
+   under it, the next heading. Space it off the table rather than per instance. */
+table + button, table + .btn, table + p, table + .row, table + .toolbar { margin-top: 10px; }
+table + h2, table + h3, button + h3, p + h3 { margin-top: 18px; }
 .muted { color: var(--fg-muted); }
 .money { font-family: var(--mono); text-align: right; font-variant-numeric: tabular-nums; }
 .big .money, p.big { color: var(--fg); }
@@ -472,3 +478,13 @@ tr.lots-row > td { background: color-mix(in srgb, var(--fg) 4%, transparent); pa
     position-try-fallbacks: flip-block, flip-inline, flip-block flip-inline;
   }
 }
+
+/* A benefit and its log: the settings grid, then a tally, then one line per use. Separated so the
+   uses read as belonging to the benefit above them rather than running into the next one. */
+fieldset.group.perk { margin-bottom: 14px; }
+.perk-uses { grid-column: 1 / -1; margin-top: 4px; padding-top: 10px; border-top: 1px solid var(--border); }
+.perk-tally { margin-bottom: 8px; }
+.perk-use { display: flex; align-items: center; gap: 8px; padding: 3px 0; }
+.perk-use + .perk-use { border-top: 1px dashed var(--border); }
+.perk-use .grow { flex: 1 1 auto; min-width: 0; }
+.perk-use.new { margin-top: 8px; padding-top: 10px; border-top: 1px solid var(--border); }

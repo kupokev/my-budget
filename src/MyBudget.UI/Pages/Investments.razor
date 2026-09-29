@@ -249,8 +249,8 @@ else
             <div class="field"><label>Notes</label><input type="text" @bind="h.Notes" /></div>
             <div class="actions-row">
                     @if (h.Id != 0) { <button class="link danger" type="button" @onclick="DeleteHolding">Delete</button> }
-                    <button class="secondary" type="button" @onclick="() => editing = null">Cancel</button>
                     <button type="button" @onclick="SaveHolding">Save</button>
+                    <button class="secondary" type="button" @onclick="() => editing = null">Cancel</button>
                 </div>
         </section>
     }

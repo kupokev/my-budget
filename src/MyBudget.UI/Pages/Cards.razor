@@ -1,5 +1,6 @@
 @page "/cards"
 @inject ApiClient Api
+@using MyBudget.Domain
 
 <ErrorBanner @bind-Message="error" />
 
@@ -68,6 +69,7 @@ else
                         <button class="link" type="button" title="Edit card" @onclick="() => Edit(cards.First(c => c.Id == row.CardId))">✎</button>
                         <button class="link" type="button" title="Record a statement balance" @onclick="() => OpenBalance(row.CardId)">⇄</button>
                         <button class="link" type="button" title="Earn rates and spend thresholds" @onclick="() => OpenRewards(row.CardId)">★</button>
+                        <button class="link" type="button" title="Benefits, and logging when you use one" @onclick="() => OpenBenefits(row.CardId)">🎁</button>
                     </td>
                 </tr>
             }
@@ -108,14 +110,91 @@ else
         </section>
     }
 
+    @* Benefits are what the card gives you for using it — bags, credits, reward nights — which has
+       nothing to do with how much you spend. Its own editor, so neither screen is a scroll. *@
+    @if (benefits is { } bf)
+    {
+        <Modal Title="@($"Benefits · {cards.First(c => c.Id == bf.CardId).Display}")" Subtitle="What the card gives you, and what you have actually used" Wide="true" OnClose="() => benefits = null">
+            <ChildContent>
+            <p class="muted">Most benefits have to be used: put what a single use is worth under
+            <strong>Each time used</strong> — a round-trip bag allowance at $90, a reward night at $120 —
+            and where it expires, set <strong>Resets</strong> to each quarter with a <strong>Max</strong> of 1.
+            It counts only once you log it, because a $50 credit you forget is a fee you paid for nothing.
+            <strong>Automatic / yr</strong> is for the rarer kind that arrives whether you act or not, like a
+            Global Entry credit; leave it at 0 otherwise.</p>
+            @* One block per benefit instead of rows that run into each other: its settings, then what
+               it has returned, then the times it was used. Each use stays editable — correcting a note
+               should not mean deleting the record of something that happened. *@
+            @foreach (var k in bf.Perks)
+            {
+                <fieldset class="group perk" @key="k">
+                    <legend>@(string.IsNullOrWhiteSpace(k.Description) ? "New benefit" : k.Description)</legend>
+
+                    <div class="field span2"><label>Benefit</label><input type="text" @bind="k.Description" placeholder="e.g. Checked bag, round trip" /></div>
+                    <div class="field"><label>Each time used</label><input type="number" step="1" class="narrow-money" @bind="k.ValuePerUse" /></div>
+                    <div class="field"><label>Resets</label><select @bind="k.Period">@foreach (var pp in Enum.GetValues<PerkPeriod>()) { <option value="@pp">@(pp == PerkPeriod.Quarter ? "each quarter" : "each year")</option> }</select></div>
+                    <div class="field"><label>Max per period</label><input type="number" class="narrow" placeholder="any" @bind="k.MaxUsesPerPeriod" /></div>
+                    <div class="field"><label>Automatic / yr</label><input type="number" step="1" class="narrow-money" @bind="k.AnnualValue" /></div>
+                    <div class="field"><label>From year</label><input type="number" class="narrow" placeholder="any" @bind="k.StartYear" /></div>
+                    <div class="field"><label>Until year</label><input type="number" class="narrow" placeholder="any" @bind="k.EndYear" /></div>
+                    <div class="field span2"><label>Notes</label><input type="text" @bind="k.Notes" /></div>
+                    <div class="field"><label>&nbsp;</label><button class="link danger" type="button" @onclick="() => bf.Perks.Remove(k)">Remove benefit</button></div>
+
+                    @if (k.ValuePerUse > 0 && k.Id != 0)
+                    {
+                        <div class="perk-uses">
+                            <div class="perk-tally">
+                                <strong>@Fmt.Money(k.ValueThisYear)</strong> this year
+                                <span class="muted">· @(k.Period == PerkPeriod.Quarter ? "this quarter" : "this year"): @k.UsedThisPeriod@(k.MaxUsesPerPeriod is { } cap ? $" of {cap}" : "") used</span>
+                            </div>
+
+                            @foreach (var u in k.Uses)
+                            {
+                                <div class="perk-use" @key="u.Id">
+                                    <input type="date" @bind="u.Date" @bind:after="() => SavePerkUse(u)" />
+                                    <input type="text" class="grow" placeholder="note, e.g. STL–ATL round trip" @bind="u.Note" @bind:after="() => SavePerkUse(u)" />
+                                    <button class="link danger" type="button" title="Remove this use" @onclick="() => RemovePerkUse(u)">✕</button>
+                                </div>
+                            }
+
+                            <div class="perk-use new">
+                                <input type="date" @bind="perkUseDate" />
+                                <input type="text" class="grow" placeholder="note, e.g. STL–ATL round trip" @bind="perkUseNote" />
+                                <button class="secondary" type="button" @onclick="() => LogPerkUse(k)">Log a use</button>
+                            </div>
+                        </div>
+                    }
+                </fieldset>
+            }
+
+            <button class="secondary" type="button" @onclick="() => bf.Perks.Add(new CardPerkDto())">Add benefit</button>
+            <p class="muted">A new benefit has to be saved before you can log a use against it.</p>
+            </ChildContent>
+            <Footer>
+                <span class="muted push-left">A benefit counts once it is logged, so the card's net value reflects what you really got.</span>
+                <button type="button" @onclick="SaveBenefits">Save benefits</button>
+                <button class="secondary" type="button" @onclick="() => benefits = null">Close</button>
+            </Footer>
+        </Modal>
+    }
+
     @if (rewards is { } rw)
     {
-        <section class="panel">
-            <h3>Rewards · @cards.First(c => c.Id == rw.CardId).Name</h3>
+        @* What spending on the card earns: rates and thresholds, both driven by how much goes on it.
+           What the card *gives* you — bags, credits, reward nights — is a different thing and has its
+           own editor; mixing them made one long screen about two unrelated mechanics. *@
+        <Modal Title="@($"Rewards · {cards.First(c => c.Id == rw.CardId).Display}")" Subtitle="What spending on this card earns" Wide="true" OnClose="() => rewards = null">
+            <ChildContent>
             <div class="row">
                 <div class="field"><label>Loyalty program</label><select @bind="rw.LoyaltyProgramId"><option value="">— (cash back / other)</option>@foreach (var p in programs ?? []) { <option value="@p.Id">@p.Name</option> }</select></div>
                 <div class="field"><label>Point value ¢ <span class="muted">(blank = program's)</span></label><input type="number" step="0.01" class="narrow" @bind="rw.PointValueCents" /></div>
+                <span class="tabs">
+                    <button type="button" class="@(rewardsTab == "earn" ? "" : "secondary")" @onclick='() => rewardsTab = "earn"'>Earn rates (@rw.EarnRules.Count)</button>
+                    <button type="button" class="@(rewardsTab == "thresholds" ? "" : "secondary")" @onclick='() => rewardsTab = "thresholds"'>Thresholds (@rw.Thresholds.Count)</button>
+                </span>
             </div>
+            @if (rewardsTab == "earn")
+            {
             <h4>Earn rules <span class="muted">(no category = everything else; a label narrows it to where you shopped, and beats a category-only rule)</span></h4>
             <table class="compact">
                 <thead><tr><th>Category</th><th>Label</th><th>Points / $</th><th>Annual cap</th><th>From year</th><th>Until year</th><th>Notes</th><th></th></tr></thead>
@@ -137,25 +216,9 @@ else
             </table>
             <button class="secondary" type="button" @onclick="() => rw.EarnRules.Add(new EarnRuleDto())">Add earn rule</button>
             <h4>Spend thresholds</h4>
-            <h3>Just for holding the card</h3>
-            <p class="muted">Benefits with no spend threshold and no loyalty program behind them: a TSA PreCheck or Global Entry credit, a travel credit, free bags. Worth what it saves you in a year, counted against the annual fee.</p>
-            <table class="compact">
-                <thead><tr><th>Benefit</th><th class="money">Worth / year</th><th>From year</th><th>Until year</th><th>Notes</th><th></th></tr></thead>
-                <tbody>
-                @foreach (var k in rw.Perks)
-                {
-                    <tr>
-                        <td><input type="text" @bind="k.Description" /></td>
-                        <td><input type="number" step="1" class="narrow-money" @bind="k.AnnualValue" /></td>
-                        <td><input type="number" class="narrow" placeholder="any" @bind="k.StartYear" /></td>
-                        <td><input type="number" class="narrow" placeholder="any" @bind="k.EndYear" /></td>
-                        <td><input type="text" @bind="k.Notes" /></td>
-                        <td><button class="secondary" type="button" @onclick="() => rw.Perks.Remove(k)">✕</button></td>
-                    </tr>
-                }
-                </tbody>
-            </table>
-            <button class="secondary" type="button" @onclick="() => rw.Perks.Add(new CardPerkDto())">Add benefit</button>
+            }
+            @if (rewardsTab == "thresholds")
+            {
             <h3>Spend thresholds</h3>
             <table class="compact">
                 <thead><tr><th>Calendar-year spend</th><th>Reward</th><th>Description</th><th>Worth $</th><th>Tier (status)</th><th>From year</th><th>Until year</th><th></th></tr></thead>
@@ -176,12 +239,14 @@ else
                 </tbody>
             </table>
             <button class="secondary" type="button" @onclick="() => rw.Thresholds.Add(new SpendThresholdDto())">Add threshold</button>
-            <div class="actions-row">
-                    <span class="muted push-left">A status threshold also needs a matching card-spend path on the program. Holding this card can also grant status in a program it isn't tied to: add a <em>hold card</em> path there. <a href="loyalty-programs">Admin → Loyalty programs</a>.</span>
-                    <button class="secondary" type="button" @onclick="() => rewards = null">Close</button>
-                    <button type="button" @onclick="SaveRewards">Save rewards</button>
-                </div>
-        </section>
+            }
+            </ChildContent>
+            <Footer>
+                <span class="muted push-left">A status threshold also needs a matching card-spend path on the program. Holding this card can also grant status in a program it isn't tied to: add a <em>hold card</em> path there. <a href="loyalty-programs">Admin → Loyalty programs</a>.</span>
+                <button type="button" @onclick="SaveRewards">Save rewards</button>
+                <button class="secondary" type="button" @onclick="() => rewards = null">Close</button>
+            </Footer>
+        </Modal>
     }
 
     @if (editing is not null)
@@ -208,6 +273,7 @@ else
                     <div class="field"><label>Credit limit</label><InputNumber @bind-Value="editing.CreditLimit" step="0.01" /></div>
                     <div class="field"><label>Annual fee</label><InputNumber @bind-Value="editing.AnnualFee" step="0.01" /></div>
                     <div class="field"><label>Fee posts in month (1–12)</label><InputNumber @bind-Value="editing.AnnualFeeMonth" /></div>
+                    <div class="field"><label>Opened</label><OptionalDate @bind-Value="editing.OpenedOn" Empty="not recorded" /></div>
                     <div class="field">
                         <label>Fee in the budget</label>
                         <label class="inline"><InputCheckbox @bind-Value="editing.BudgetAnnualFee" /> Keep a budget line</label>
@@ -224,13 +290,31 @@ else
                     </InputSelect></div>
                     <div class="checks"><label class="inline"><InputCheckbox @bind-Value="editing.IsActive" /> Active</label></div>
                 </fieldset>
+                <fieldset class="group">
+                    <legend>Fee by year</legend>
+                    @* Editing the fee alone would rewrite what the card cost in a year already gone —
+                       a waived first year, or a rise. Rows here override it for the years they cover. *@
+                    <p class="field full muted">The fee above applies unless a row below covers the year. A waived
+                    first year is a row of 0; a rise is a row from the year it changed. Leave empty if it has never changed.</p>
+                    @foreach (var f in editing.Fees.OrderBy(f => f.FromYear))
+                    {
+                        <div class="field" @key="f"><label>From year</label><InputNumber @bind-Value="f.FromYear" /></div>
+                        <div class="field"><label>Fee that year on</label><InputNumber @bind-Value="f.Amount" step="0.01" /></div>
+                        <div class="field"><label>Why</label><InputText @bind-Value="f.Notes" placeholder="e.g. waived, first year" /></div>
+                        <div class="field"><label>&nbsp;</label><button class="link danger" type="button" @onclick="() => editing.Fees.Remove(f)">Remove</button></div>
+                    }
+                    <div class="field full">
+                        <button class="secondary" type="button" @onclick="AddFeeYear">Add a fee change</button>
+                    </div>
+                </fieldset>
+
                 <div class="field full"><label>Notes</label><InputTextArea @bind-Value="editing.Notes" rows="2" /></div>
             </EditForm>
             </ChildContent>
             <Footer>
                 @if (editing.Id != 0) { <button class="link danger" type="button" @onclick="DeleteEditing">Delete card</button> }
-                <button class="secondary" type="button" @onclick="() => editing = null">Cancel</button>
                 <button type="submit" form="card-form">Save</button>
+                <button class="secondary" type="button" @onclick="() => editing = null">Cancel</button>
             </Footer>
         </Modal>
     }
@@ -246,6 +330,49 @@ else
     private List<CategoryDto>? categories;
     private List<LabelDto>? labels;
     private CardRewardsDto? rewards;
+    private string rewardsTab = "earn";
+    private CardRewardsDto? benefits;
+    private DateOnly perkUseDate = DateOnly.FromDateTime(DateTime.Today);
+    private string? perkUseNote;
+
+    /// <summary>
+    /// Records that a benefit was actually used. An earned perk is worth nothing until this happens —
+    /// counting it regardless is what made a card look worth its fee when it was not.
+    /// </summary>
+    private async Task LogPerkUse(CardPerkDto perk)
+    {
+        try
+        {
+            await Api.LogPerkUseAsync(perk.Id, perkUseDate, string.IsNullOrWhiteSpace(perkUseNote) ? null : perkUseNote.Trim());
+            perkUseNote = null;
+            await ReloadRewards(perk);
+        }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    /// <summary>Corrects a logged use in place; a mistyped note should not cost you the record.</summary>
+    private async Task SavePerkUse(CardPerkUseDto use)
+    {
+        try { await Api.UpdatePerkUseAsync(use); await ReloadRewards(null); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task RemovePerkUse(CardPerkUseDto use)
+    {
+        try
+        {
+            await Api.RemovePerkUseAsync(use.Id);
+            await ReloadRewards(null);
+        }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task ReloadRewards(CardPerkDto? _)
+    {
+        if (benefits is not { } bf) return;
+        benefits = await Api.GetCardRewardsAsync(bf.CardId);
+        report = await Api.GetRewardsReportAsync(DateTime.Today.Year);   // net value moves with a logged use
+    }
     private RewardsReportDto? report;
     private List<AlertDto>? rewardAlerts;
 
@@ -270,11 +397,12 @@ else
             var value = e?.YtdDollars ?? 0m;
             var thresholds = e?.ThresholdRewardsValue ?? 0m;
             var perks = e?.PerksValue ?? 0m;
-            var cost = c.AnnualFee + interest;
+            var fee = c.FeeFor(DateTime.Today.Year);   // what it cost that year, not what it costs now
+            var cost = fee + interest;
             var net = value + thresholds + perks - cost;
             var verdict = cost == 0 && value == 0 && perks == 0 ? "free, unused" : net < 0 ? (value == 0 ? "costing you, no rewards recorded" : "costing more than it returns") : net == 0 ? "break-even" : "earning its keep";
-            var formula = $"fee {c.AnnualFee:C} + {balance:C} × {apr:0.##}% = {cost:C} cost; {value:C} rewards" + (thresholds > 0 ? $" + {thresholds:C} thresholds" : "") + (perks > 0 ? $" + {perks:C} perks for holding it" : "") + $" → {net:C}";
-            return new CostRow(c.Id, c.Display, c.Name, c.AccountNumber, c.AnnualFee, interest, cost, value, thresholds, perks, net,
+            var formula = $"fee {fee:C} + {balance:C} × {apr:0.##}% = {cost:C} cost; {value:C} rewards" + (thresholds > 0 ? $" + {thresholds:C} thresholds" : "") + (perks > 0 ? $" + {perks:C} perks for holding it" : "") + $" → {net:C}";
+            return new CostRow(c.Id, c.Display, c.Name, c.AccountNumber, fee, interest, cost, value, thresholds, perks, net,
                 verdict, formula, summary?.FirstOrDefault(x => x.CardId == c.Id));
         }).OrderBy(r => r.Net).ThenByDescending(r => r.Cost);
     }
@@ -301,8 +429,25 @@ else
 
     private async Task OpenRewards(int cardId)
     {
-        editing = null; balanceFor = null;
+        editing = null; balanceFor = null; benefits = null;
         try { rewards = await Api.GetCardRewardsAsync(cardId); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    /// <summary>
+    /// Benefits share the card's rewards record on the wire, but not the screen: what a card earns from
+    /// spending and what it hands you for using it are different questions asked at different times.
+    /// </summary>
+    private async Task OpenBenefits(int cardId)
+    {
+        editing = null; balanceFor = null; rewards = null;
+        try { benefits = await Api.GetCardRewardsAsync(cardId); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task SaveBenefits()
+    {
+        try { benefits = await Api.SaveCardRewardsAsync(benefits!); await Load(); }
         catch (Exception ex) { error = ex.Message; }
     }
 
@@ -310,6 +455,16 @@ else
     {
         try { rewards = await Api.SaveCardRewardsAsync(rewards!); await Load(); }
         catch (Exception ex) { error = ex.Message; }
+    }
+
+    /// <summary>Starts a new fee row at the year after the last one, or the year the card was opened.</summary>
+    private void AddFeeYear()
+    {
+        if (editing is not { } e) return;
+        var next = e.Fees.Count > 0
+            ? e.Fees.Max(f => f.FromYear) + 1
+            : e.OpenedOn?.Year ?? DateTime.Today.Year;
+        e.Fees.Add(new CardFeeDto { FromYear = next, Amount = e.AnnualFee });
     }
 
     private void Edit(CardDto c)
@@ -320,6 +475,7 @@ else
             Id = c.Id, Name = c.Name, Nickname = c.Nickname, Issuer = c.Issuer, Network = c.Network, AccountNumber = c.AccountNumber, Apr = c.Apr, PromoApr = c.PromoApr,
             PromoAprExpires = c.PromoAprExpires, StatementDay = c.StatementDay, DueDay = c.DueDay, CreditLimit = c.CreditLimit,
             AnnualFee = c.AnnualFee, AnnualFeeMonth = c.AnnualFeeMonth, PayingAccountId = c.PayingAccountId, Notes = c.Notes, IsActive = c.IsActive,
+            OpenedOn = c.OpenedOn, Fees = c.Fees.Select(f => new CardFeeDto { Id = f.Id, FromYear = f.FromYear, Amount = f.Amount, Notes = f.Notes }).ToList(),
             BudgetAnnualFee = c.BudgetAnnualFee, FeeBudgetLineId = c.FeeBudgetLineId,
         };
     }

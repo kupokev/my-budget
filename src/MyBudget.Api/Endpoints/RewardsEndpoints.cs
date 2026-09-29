@@ -13,17 +13,64 @@ public static class RewardsEndpoints
     {
         // ---- Card rewards setup (RWD-1) ----
         api.MapGet("/cards/{id:int}/rewards", async (int id, BudgetDbContext db) =>
-            await db.Cards.Include(c => c.EarnRules).Include(c => c.Thresholds).Include(c => c.Perks).FirstOrDefaultAsync(c => c.Id == id) is { } c ? Results.Ok(ToRewardsDto(c)) : Results.NotFound());
+            await db.Cards.Include(c => c.EarnRules).Include(c => c.Thresholds).Include(c => c.Perks).ThenInclude(p => p.Uses).FirstOrDefaultAsync(c => c.Id == id) is { } c ? Results.Ok(ToRewardsDto(c)) : Results.NotFound());
+
+        // Logging a use is the whole point of an earned perk: it is worth nothing until it happens.
+        api.MapPost("/perks/{perkId:int}/uses", async (int perkId, CardPerkUseDto dto, BudgetDbContext db) =>
+        {
+            var perk = await db.Set<CardPerk>().Include(p => p.Uses).FirstOrDefaultAsync(p => p.Id == perkId);
+            if (perk is null) return Results.NotFound();
+
+            var use = new CardPerkUse { CardPerkId = perkId, Date = dto.Date, Note = dto.Note };
+            perk.Uses.Add(use);
+            await db.SaveChangesAsync();
+            return Results.Ok(new CardPerkUseDto { Id = use.Id, CardPerkId = perkId, Date = use.Date, Note = use.Note });
+        });
+
+        // A logged use is a record of something that happened; getting the note or the date wrong
+        // should be a correction, not a delete and a retype.
+        api.MapPut("/perks/uses/{useId:int}", async (int useId, CardPerkUseDto dto, BudgetDbContext db) =>
+        {
+            var use = await db.Set<CardPerkUse>().FindAsync(useId);
+            if (use is null) return Results.NotFound();
+            use.Date = dto.Date;
+            use.Note = string.IsNullOrWhiteSpace(dto.Note) ? null : dto.Note.Trim();
+            await db.SaveChangesAsync();
+            return Results.Ok(new CardPerkUseDto { Id = use.Id, CardPerkId = use.CardPerkId, Date = use.Date, Note = use.Note });
+        });
+
+        api.MapDelete("/perks/uses/{useId:int}", async (int useId, BudgetDbContext db) =>
+        {
+            var use = await db.Set<CardPerkUse>().FindAsync(useId);
+            if (use is null) return Results.NotFound();
+            db.Remove(use);
+            await db.SaveChangesAsync();
+            return Results.NoContent();
+        });
 
         api.MapPut("/cards/{id:int}/rewards", async (int id, CardRewardsDto dto, BudgetDbContext db) =>
         {
-            var c = await db.Cards.Include(x => x.EarnRules).Include(x => x.Thresholds).Include(x => x.Perks).FirstOrDefaultAsync(x => x.Id == id);
+            var c = await db.Cards.Include(x => x.EarnRules).Include(x => x.Thresholds).Include(x => x.Perks).ThenInclude(p => p.Uses).FirstOrDefaultAsync(x => x.Id == id);
             if (c is null) return Results.NotFound();
             c.LoyaltyProgramId = dto.LoyaltyProgramId; c.PointValueCents = dto.PointValueCents;
             c.EarnRules.Clear();
             c.EarnRules.AddRange(dto.EarnRules.Select(r => new EarnRule { CategoryId = r.CategoryId, LabelId = r.LabelId, PointsPerDollar = r.PointsPerDollar, AnnualSpendCap = r.AnnualSpendCap, StartYear = r.StartYear, EndYear = r.EndYear, Notes = r.Notes }));
-            c.Perks.Clear();
-            c.Perks.AddRange(dto.Perks.Where(x => !string.IsNullOrWhiteSpace(x.Description)).Select(x => new CardPerk { Description = x.Description.Trim(), AnnualValue = x.AnnualValue, StartYear = x.StartYear, EndYear = x.EndYear, Notes = x.Notes }));
+            // Matched by id rather than cleared and rebuilt: a perk carries the log of when it was
+            // used, and rewriting the row on every save would throw that history away.
+            var kept = dto.Perks.Where(x => !string.IsNullOrWhiteSpace(x.Description)).ToList();
+            foreach (var gone in c.Perks.Where(p => p.Id != 0 && kept.All(k => k.Id != p.Id)).ToList()) c.Perks.Remove(gone);
+
+            foreach (var x in kept)
+            {
+                var perk = c.Perks.FirstOrDefault(p => p.Id == x.Id && x.Id != 0);
+                if (perk is null) { perk = new CardPerk { Description = "" }; c.Perks.Add(perk); }
+                perk.Description = x.Description.Trim();
+                perk.AnnualValue = x.AnnualValue;
+                perk.ValuePerUse = x.ValuePerUse;
+                perk.Period = x.Period;
+                perk.MaxUsesPerPeriod = x.MaxUsesPerPeriod;
+                perk.StartYear = x.StartYear; perk.EndYear = x.EndYear; perk.Notes = x.Notes;
+            }
             c.Thresholds.Clear();
             c.Thresholds.AddRange(dto.Thresholds.Where(t => !string.IsNullOrWhiteSpace(t.Description)).Select(t => new SpendThreshold { Amount = t.Amount, RewardKind = t.RewardKind, Description = t.Description.Trim(), ValueDollars = t.ValueDollars, TierName = t.TierName, StartYear = t.StartYear, EndYear = t.EndYear }));
             await db.SaveChangesAsync();
@@ -73,7 +120,7 @@ public static class RewardsEndpoints
 
     internal static async Task<RewardsReportDto> Report(BudgetDbContext db, int year, DateOnly asOf, bool carryCurrentTier = true)
     {
-        var cards = await db.Cards.Include(c => c.EarnRules).ThenInclude(r => r.Category).Include(c => c.EarnRules).ThenInclude(r => r.Label).Include(c => c.Thresholds).Include(c => c.Perks).Include(c => c.LoyaltyProgram).Where(c => c.IsActive).ToListAsync();
+        var cards = await db.Cards.Include(c => c.EarnRules).ThenInclude(r => r.Category).Include(c => c.EarnRules).ThenInclude(r => r.Label).Include(c => c.Thresholds).Include(c => c.Perks).ThenInclude(p => p.Uses).Include(c => c.Fees).Include(c => c.LoyaltyProgram).Where(c => c.IsActive).ToListAsync();
         var programs = await Programs(db).Where(p => p.IsActive).ToListAsync();
         var spend = await CardSpendFor(db, year);
         var categories = await db.Categories.ToListAsync();
@@ -113,7 +160,15 @@ public static class RewardsEndpoints
         CardId = c.Id, LoyaltyProgramId = c.LoyaltyProgramId, PointValueCents = c.PointValueCents,
         EarnRules = c.EarnRules.OrderBy(r => r.CategoryId is null).ThenByDescending(r => r.PointsPerDollar).Select(r => new EarnRuleDto { Id = r.Id, CategoryId = r.CategoryId, LabelId = r.LabelId, PointsPerDollar = r.PointsPerDollar, AnnualSpendCap = r.AnnualSpendCap, StartYear = r.StartYear, EndYear = r.EndYear, Notes = r.Notes }).ToList(),
         Thresholds = c.Thresholds.OrderBy(t => t.Amount).Select(t => new SpendThresholdDto { Id = t.Id, Amount = t.Amount, RewardKind = t.RewardKind, Description = t.Description, ValueDollars = t.ValueDollars, TierName = t.TierName, StartYear = t.StartYear, EndYear = t.EndYear }).ToList(),
-        Perks = c.Perks.OrderByDescending(x => x.AnnualValue).Select(x => new CardPerkDto { Id = x.Id, Description = x.Description, AnnualValue = x.AnnualValue, StartYear = x.StartYear, EndYear = x.EndYear, Notes = x.Notes }).ToList(),
+        Perks = c.Perks.OrderByDescending(x => x.ValueIn(DateOnly.FromDateTime(DateTime.Today).Year)).ThenBy(x => x.Description).Select(x => new CardPerkDto
+        {
+            Id = x.Id, Description = x.Description, AnnualValue = x.AnnualValue,
+            ValuePerUse = x.ValuePerUse, Period = x.Period, MaxUsesPerPeriod = x.MaxUsesPerPeriod,
+            StartYear = x.StartYear, EndYear = x.EndYear, Notes = x.Notes,
+            Uses = x.Uses.OrderByDescending(u => u.Date).Select(u => new CardPerkUseDto { Id = u.Id, CardPerkId = u.CardPerkId, Date = u.Date, Note = u.Note }).ToList(),
+            ValueThisYear = x.ValueIn(DateOnly.FromDateTime(DateTime.Today).Year),
+            UsedThisPeriod = x.UsesIn(DateOnly.FromDateTime(DateTime.Today)).Used,
+        }).ToList(),
     };
 
     private static LoyaltyProgramDto ToDto(LoyaltyProgram p) => new()

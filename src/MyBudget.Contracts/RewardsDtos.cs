@@ -35,10 +35,35 @@ public sealed class CardPerkDto
 {
     public int Id { get; set; }
     [Required, StringLength(200)] public string Description { get; set; } = "";
+    /// <summary>Worth over a year without doing anything. Zero for a perk you have to use.</summary>
     [Range(0, 100_000)] public decimal AnnualValue { get; set; }
+
+    /// <summary>What one use is worth — a checked bag, a reward night, a credit claimed.</summary>
+    [Range(0, 100_000)] public decimal ValuePerUse { get; set; }
+
+    public PerkPeriod Period { get; set; } = PerkPeriod.Year;
+
+    /// <summary>Uses that can count in a period; null means as many as you log.</summary>
+    [Range(1, 366)] public int? MaxUsesPerPeriod { get; set; }
+
     public int? StartYear { get; set; }
     public int? EndYear { get; set; }
     public string? Notes { get; set; }
+
+    /// <summary>Logged uses, newest first.</summary>
+    public List<CardPerkUseDto> Uses { get; set; } = [];
+
+    /// <summary>What it has actually returned this year, and where the current period stands.</summary>
+    public decimal ValueThisYear { get; set; }
+    public int UsedThisPeriod { get; set; }
+}
+
+public sealed class CardPerkUseDto
+{
+    public int Id { get; set; }
+    public int CardPerkId { get; set; }
+    public DateOnly Date { get; set; }
+    [StringLength(200)] public string? Note { get; set; }
 }
 
 /// <summary>Rewards side of a card, edited separately from the CC-1 basics.</summary>

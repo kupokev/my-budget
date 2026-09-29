@@ -133,14 +133,79 @@ public class CardPerk
     public int CardId { get; set; }
     public Card? Card { get; set; }
     public required string Description { get; set; }
-    /// <summary>What it is worth to you over a year.</summary>
+
+    /// <summary>
+    /// What it is worth over a year without doing anything — a credit that simply arrives. Leave it at
+    /// zero for a perk you have to use, and set <see cref="ValuePerUse"/> instead.
+    /// </summary>
     public decimal AnnualValue { get; set; }
+
+    /// <summary>
+    /// What one use is worth: a checked bag on a round trip, a night on points, a quarterly credit
+    /// claimed. A perk counted whether or not it was used flatters the card — a $50 credit you forget
+    /// to spend is a fee you paid for nothing — so these only count once they are logged.
+    /// </summary>
+    public decimal ValuePerUse { get; set; }
+
+    /// <summary>The window <see cref="MaxUsesPerPeriod"/> applies over.</summary>
+    public PerkPeriod Period { get; set; } = PerkPeriod.Year;
+
+    /// <summary>How many uses can count in a period; null means as many as you log.</summary>
+    public int? MaxUsesPerPeriod { get; set; }
+
     /// <summary>Years the perk was offered; null means always.</summary>
     public int? StartYear { get; set; }
     public int? EndYear { get; set; }
     public string? Notes { get; set; }
 
+    public List<CardPerkUse> Uses { get; set; } = [];
+
     public bool AppliesIn(int year) => (StartYear is null || year >= StartYear) && (EndYear is null || year <= EndYear);
+
+    /// <summary>True when the perk has to be used to be worth anything.</summary>
+    public bool IsEarned => ValuePerUse > 0;
+
+    /// <summary>
+    /// What the perk actually returned in a year: the flat value, plus each period's uses capped and
+    /// priced. A quarterly credit missed in Q1 cannot be claimed twice in Q2, which is why the cap is
+    /// applied per period rather than over the year.
+    /// </summary>
+    public decimal ValueIn(int year)
+    {
+        if (!AppliesIn(year)) return 0m;
+        if (!IsEarned) return AnnualValue;
+
+        var earned = 0m;
+        foreach (var period in Uses.Where(u => u.Date.Year == year).GroupBy(u => PeriodKey(u.Date)))
+        {
+            var counted = MaxUsesPerPeriod is { } cap ? Math.Min(cap, period.Count()) : period.Count();
+            earned += counted * ValuePerUse;
+        }
+        return AnnualValue + earned;
+    }
+
+    /// <summary>Uses that counted in the period containing <paramref name="on"/>, and the cap if any.</summary>
+    public (int Used, int? Cap) UsesIn(DateOnly on)
+    {
+        var key = PeriodKey(on);
+        var used = Uses.Count(u => u.Date.Year == on.Year && PeriodKey(u.Date) == key);
+        return (used, MaxUsesPerPeriod);
+    }
+
+    private int PeriodKey(DateOnly date) => Period == PerkPeriod.Quarter ? (date.Month - 1) / 3 : 0;
+}
+
+/// <summary>The window a perk's cap applies over.</summary>
+public enum PerkPeriod { Year, Quarter }
+
+/// <summary>One time a perk was actually used: a bag checked, a reward night taken, a credit claimed.</summary>
+public class CardPerkUse
+{
+    public int Id { get; set; }
+    public int CardPerkId { get; set; }
+    public CardPerk? Perk { get; set; }
+    public DateOnly Date { get; set; }
+    public string? Note { get; set; }
 }
 
 /// <summary>Actual spend on a card in a month, by category and label (RWD-3, RWD-5).

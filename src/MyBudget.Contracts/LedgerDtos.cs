@@ -72,6 +72,16 @@ public sealed class CardDto
     [Range(0, 100_000)] public decimal AnnualFee { get; set; }
     [Range(1, 12)] public int? AnnualFeeMonth { get; set; }
 
+    /// <summary>When the card was opened.</summary>
+    public DateOnly? OpenedOn { get; set; }
+
+    /// <summary>Past fees, where they differed from the current one. Newest first.</summary>
+    public List<CardFeeDto> Fees { get; set; } = [];
+
+    /// <summary>The fee charged in a year: the latest row starting on or before it, else the current fee.</summary>
+    public decimal FeeFor(int year)
+        => Fees.Where(f => f.FromYear <= year).OrderByDescending(f => f.FromYear).FirstOrDefault()?.Amount ?? AnnualFee;
+
     /// <summary>Keep the annual fee as a budget line. Deleting that line turns this back off.</summary>
     public bool BudgetAnnualFee { get; set; }
 
@@ -83,6 +93,14 @@ public sealed class CardDto
     public decimal? LatestBalance { get; set; }
     public DateOnly? LatestBalanceAsOf { get; set; }
     public int? LoyaltyProgramId { get; set; }
+}
+
+public sealed class CardFeeDto
+{
+    public int Id { get; set; }
+    [Range(1900, 2200)] public int FromYear { get; set; }
+    [Range(0, 100_000)] public decimal Amount { get; set; }
+    [StringLength(200)] public string? Notes { get; set; }
 }
 
 public sealed class CardBalanceDto

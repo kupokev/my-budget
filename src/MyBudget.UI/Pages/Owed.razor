@@ -107,8 +107,8 @@ else
             <button class="secondary" type="button" @onclick="() => e.Payments.Add(new ReceivablePaymentDto { Date = DateOnly.FromDateTime(DateTime.Today) })">Add payment</button>
             <div class="actions-row">
                     @if (e.Id != 0) { <button class="link danger" type="button" @onclick="Delete">Delete</button> }
-                    <button class="secondary" type="button" @onclick="() => editing = null">Cancel</button>
                     <button type="button" @onclick="Save">Save</button>
+                    <button class="secondary" type="button" @onclick="() => editing = null">Cancel</button>
                 </div>
         </section>
     }

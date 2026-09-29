@@ -13,7 +13,7 @@ public static class CardEndpoints
         var g = api.MapGroup("/cards");
 
         g.MapGet("/", async (BudgetDbContext db) =>
-            (await db.Cards.Include(c => c.Balances).OrderBy(c => c.Name).ToListAsync()).Select(c => c.ToDto()));
+            (await db.Cards.Include(c => c.Balances).Include(c => c.Fees).OrderBy(c => c.Name).ToListAsync()).Select(c => c.ToDto()));
 
         // CC-2: lines charged to each card, monthly spend from those lines, balance, utilization, paying account.
         g.MapGet("/summary", async (BudgetDbContext db, TimeProvider clock) =>
@@ -47,7 +47,7 @@ public static class CardEndpoints
         });
 
         g.MapGet("/{id:int}", async (int id, BudgetDbContext db) =>
-            await db.Cards.Include(c => c.Balances).FirstOrDefaultAsync(c => c.Id == id) is { } c ? Results.Ok(c.ToDto()) : Results.NotFound());
+            await db.Cards.Include(c => c.Balances).Include(c => c.Fees).FirstOrDefaultAsync(c => c.Id == id) is { } c ? Results.Ok(c.ToDto()) : Results.NotFound());
 
         g.MapPost("/", async (CardDto dto, BudgetDbContext db) =>
         {
@@ -63,7 +63,7 @@ public static class CardEndpoints
 
         g.MapPut("/{id:int}", async (int id, CardDto dto, BudgetDbContext db) =>
         {
-            var c = await db.Cards.Include(x => x.Balances).FirstOrDefaultAsync(x => x.Id == id);
+            var c = await db.Cards.Include(x => x.Balances).Include(x => x.Fees).FirstOrDefaultAsync(x => x.Id == id);
             if (c is null) return Results.NotFound();
             c.Apply(dto);
             try { await CardFeeBudget.SyncAsync(db, c); }

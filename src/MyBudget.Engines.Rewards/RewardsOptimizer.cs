@@ -190,7 +190,7 @@ public static class RewardsOptimizer
         }
         foreach (var (catId, amount) in remainingByCat.Where(kv => kv.Value > 0).OrderByDescending(kv => kv.Value))
         {
-            var best = cards.Where(c => c.EarnRules.Any(r => r.AppliesIn(input.Year))).OrderByDescending(c => CentsPerDollar(c, catId.CategoryId, catId.LabelId, input.Year)).ThenBy(c => c.AnnualFee).FirstOrDefault();
+            var best = cards.Where(c => c.EarnRules.Any(r => r.AppliesIn(input.Year))).OrderByDescending(c => CentsPerDollar(c, catId.CategoryId, catId.LabelId, input.Year)).ThenBy(c => c.FeeFor(input.Year)).FirstOrDefault();
             if (best is null) { routing.Add(new CategoryRouteDto(catId.CategoryId, catId.LabelId, CatName(catId), amount, null, "—", 0, 0, "no card with earn rules")); continue; }
             routing.Add(new CategoryRouteDto(catId.CategoryId, catId.LabelId, CatName(catId), amount, best.Id, best.Name, EarnRate(best, catId.CategoryId, catId.LabelId, input.Year), CentsPerDollar(best, catId.CategoryId, catId.LabelId, input.Year),
                 $"best value: {EarnRate(best, catId.CategoryId, catId.LabelId, input.Year):0.##}× at {PointValue(best):0.##}¢ = {CentsPerDollar(best, catId.CategoryId, catId.LabelId, input.Year):0.##}¢/$"));
@@ -286,10 +286,11 @@ public static class RewardsOptimizer
             var ytdPoints = months.Sum(m => m.Points);
             var ytdDollars = Round(ytdPoints * PointValue(c) / 100m);
             var rewardsValue = thresholds.Where(t => t.CardId == c.Id && t.Reached).Sum(t => c.Thresholds.First(x => x.Id == t.ThresholdId).ValueDollars ?? 0);
-            var perks = Round(c.Perks.Where(x => x.AppliesIn(year)).Sum(x => x.AnnualValue));
-            var net = Round(ytdDollars + rewardsValue + perks - c.AnnualFee);
-            list.Add(new CardEarningsDto(c.Id, c.Name, PointValue(c), months, ytdSpend, ytdPoints, ytdDollars, c.AnnualFee, rewardsValue, perks, net,
-                $"{ytdPoints:N0} pts × {PointValue(c):0.##}¢ = {ytdDollars:C}" + (rewardsValue > 0 ? $" + reached thresholds {rewardsValue:C}" : "") + (perks > 0 ? $" + perks {perks:C}" : "") + $" − annual fee {c.AnnualFee:C} = {net:C}"));
+            var perks = Round(c.Perks.Sum(x => x.ValueIn(year)));   // earned perks count only what was logged
+            var fee = c.FeeFor(year);   // the fee as it was that year, not as it is now
+            var net = Round(ytdDollars + rewardsValue + perks - fee);
+            list.Add(new CardEarningsDto(c.Id, c.Name, PointValue(c), months, ytdSpend, ytdPoints, ytdDollars, fee, rewardsValue, perks, net,
+                $"{ytdPoints:N0} pts × {PointValue(c):0.##}¢ = {ytdDollars:C}" + (rewardsValue > 0 ? $" + reached thresholds {rewardsValue:C}" : "") + (perks > 0 ? $" + perks {perks:C}" : "") + $" − annual fee {fee:C} = {net:C}"));
         }
         return list.OrderByDescending(e => e.NetValue).ToList();
     }

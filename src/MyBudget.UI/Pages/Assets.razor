@@ -173,8 +173,8 @@ else
                 }
             </ChildContent>
             <Footer>
-                <button class="secondary" type="button" @onclick="() => valueFor = null">Cancel</button>
                 <button type="button" @onclick="SaveValue">Save</button>
+                <button class="secondary" type="button" @onclick="() => valueFor = null">Cancel</button>
             </Footer>
         </Modal>
     }
@@ -192,8 +192,8 @@ else
             </ChildContent>
             <Footer>
                 @if (ae.Id != 0) { <button class="link danger push-left" type="button" @onclick="DeleteAsset">Delete</button> }
-                <button class="secondary" type="button" @onclick="() => edit = null">Cancel</button>
                 <button type="button" @onclick="SaveAsset">Save</button>
+                <button class="secondary" type="button" @onclick="() => edit = null">Cancel</button>
             </Footer>
         </Modal>
     }

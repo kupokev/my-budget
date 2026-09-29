@@ -61,6 +61,11 @@ A field added to a form is a design decision, not a drop. Before adding one:
   where there is one — and keep the full name for the editor and hovers.
 - **Say what empty means.** An optional date uses `<OptionalDate Empty="no end" />` rather than a bare
   picker; an optional number says what leaving it blank does.
+- **Close is the rightmost button.** In every modal footer the order is destructive action, then the
+  primary action, then Cancel/Close on the far right. Consistency beats the usual convention here:
+  knowing where the exit is without looking matters more than which button is emphasised.
+- **A record can be corrected.** Anything logged — a use, a balance, a note — is editable in place.
+  Making someone delete and retype a row to fix a typo destroys the record of something that happened.
 - **Look at it.** A screenshot of a form with a field wrapping into its neighbour is a bug report, and
   it should not take one.
 
