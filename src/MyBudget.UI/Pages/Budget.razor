@@ -203,7 +203,7 @@ else
                     </InputSelect></div>
                     <div class="field"><label>Label <span class="muted">(optional; budgets one merchant apart from its category)</span></label><InputSelect @bind-Value="editing.LabelId">
                         <option value="">—</option>
-                        @foreach (var l in labels.Where(l => l.IsActive)) { <option value="@l.Id">@l.Name</option> }
+                        @foreach (var l in LabelChoices.For(labels, editing.CategoryId, editing.LabelId)) { <option @key="l.Id" value="@l.Id">@l.Name</option> }
                     </InputSelect></div>
                     <div class="field"><label>Account / member #</label><InputText @bind-Value="editing.AccountNumber" /></div>
                 </fieldset>
@@ -307,6 +307,7 @@ else
     private List<BudgetHistoryDto>? priorHistory;
     private int year = DateTime.Today.Year;
     private bool showInactive;
+
 
     /// <summary>Starts a new amount row at this month, or the month after the last change.</summary>
     private void AddAmountChange()

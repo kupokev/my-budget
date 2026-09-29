@@ -38,7 +38,7 @@ else
                         <td><select @bind="r.Match">@foreach (var m in Enum.GetValues<RuleMatch>()) { <option value="@m">@Fmt.Words(m)</option> }</select></td>
                         <td><input type="text" @bind="r.Pattern" /></td>
                         <td><select @bind="r.CategoryId"><option value="">—</option>@foreach (var c in categories) { <option value="@c.Id">@c.Name</option> }</select></td>
-                        <td><select @bind="r.LabelId"><option value="">—</option>@foreach (var l in labels ?? []) { <option value="@l.Id">@l.Name</option> }</select></td>
+                        <td><select @bind="r.LabelId"><option value="">—</option>@foreach (var l in LabelChoices.For(labels, r.CategoryId, r.LabelId)) { <option @key="l.Id" value="@l.Id">@l.Name</option> }</select></td>
                         <td><select @bind="r.BudgetLineId"><option value="">—</option>@foreach (var b in lines) { <option value="@b.Id">@b.Name</option> }</select></td>
                         <td><input type="checkbox" @bind="r.MarkAsTransfer" /></td>
                         <td><input type="checkbox" @bind="r.IsActive" /></td>
@@ -93,7 +93,7 @@ else
                 <fieldset class="group">
                     <legend>File it under</legend>
                     <div class="field"><label>Category</label><select @bind="editDto.CategoryId"><option value="">—</option>@foreach (var c in categories) { <option value="@c.Id">@c.Name</option> }</select></div>
-                    <div class="field"><label>Label <span class="muted">(where)</span></label><select @bind="editDto.LabelId"><option value="">—</option>@foreach (var l in labels ?? []) { <option value="@l.Id">@l.Name</option> }</select></div>
+                    <div class="field"><label>Label <span class="muted">(where)</span></label><select @bind="editDto.LabelId"><option value="">—</option>@foreach (var l in LabelChoices.For(labels, editDto.CategoryId, editDto.LabelId)) { <option @key="l.Id" value="@l.Id">@l.Name</option> }</select></div>
                     <div class="field"><label>BudgetLine it pays</label><select @bind="editDto.BudgetLineId"><option value="">—</option>@foreach (var b in lines) { <option value="@b.Id">@b.Name</option> }</select></div>
                     @if (et.Amount > 0)
                     {
@@ -164,7 +164,7 @@ else
             {
                 <div class="row">
                     <div class="field"><label>Category</label><select @bind="nt.CategoryId"><option value="">—</option>@foreach (var c in categories!.Where(c => c.IsActive)) { <option value="@c.Id">@c.Name</option> }</select></div>
-                    <div class="field"><label>Label</label><select @bind="nt.LabelId"><option value="">—</option>@foreach (var l in labels ?? []) { <option value="@l.Id">@l.Name</option> }</select></div>
+                    <div class="field"><label>Label</label><select @bind="nt.LabelId"><option value="">—</option>@foreach (var l in LabelChoices.For(labels, nt.CategoryId, nt.LabelId)) { <option @key="l.Id" value="@l.Id">@l.Name</option> }</select></div>
                     <div class="field"><label>Budget line it pays</label><select @bind="nt.BudgetLineId"><option value="">—</option>@foreach (var b in lines!.Where(b => b.IsActive)) { <option value="@b.Id">@b.Name</option> }</select></div>
                 </div>
             }

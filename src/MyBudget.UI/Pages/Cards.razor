@@ -203,7 +203,7 @@ else
                 {
                     <tr>
                         <td><select @bind="r.CategoryId"><option value="">everything else</option>@foreach (var c in categories ?? []) { <option value="@c.Id">@c.Name</option> }</select></td>
-                        <td><select @bind="r.LabelId"><option value="">any</option>@foreach (var l in labels ?? []) { <option value="@l.Id">@l.Name</option> }</select></td>
+                        <td><select @bind="r.LabelId"><option value="">any</option>@foreach (var l in LabelChoices.For(labels, r.CategoryId, r.LabelId)) { <option @key="l.Id" value="@l.Id">@l.Name</option> }</select></td>
                         <td><input type="number" step="0.5" class="narrow" @bind="r.PointsPerDollar" /></td>
                         <td><input type="number" step="1" class="narrow-money" @bind="r.AnnualSpendCap" /></td>
                         <td><input type="number" class="narrow" placeholder="any" @bind="r.StartYear" /></td>
