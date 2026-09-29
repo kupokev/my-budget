@@ -139,7 +139,14 @@ public static class BudgetEndpoints
                     var row = b.Periods.FirstOrDefault(p => p.Period == period);
                     var dueDefault = generated[period].Cast<DateOnly?>().FirstOrDefault();
                     var due = row?.DueDate ?? dueDefault;
-                    var projected = row?.ProjectedAmount ?? (dueDefault is not null ? b.AmountFor(period) : 0m);
+                    // A variable line has no due dates — it is a monthly allowance, not a bill — so its
+                    // expected amount applies every month. Falling through to zero made every month
+                    // look over budget the moment a single dollar was spent.
+                    var applies = dueDefault is not null
+                                  || (b.Frequency == BudgetFrequency.Variable
+                                      && (b.StartDate is null || b.StartDate <= period.AddMonths(1).AddDays(-1))
+                                      && (b.EndDate is null || b.EndDate >= period));
+                    var projected = row?.ProjectedAmount ?? (applies ? b.AmountFor(period) : 0m);
                     var actual = row?.ActualAmount;
                     return new BudgetMonthDto(period, due, row?.DueDate is not null, projected, row?.ProjectedAmount is not null,
                         actual, actual is { } a ? a - projected : null, row?.PaidOn, row?.Notes);
