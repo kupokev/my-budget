@@ -29,6 +29,28 @@ how much it is.
 Switching from live to arrears in October? Keep the existing row and add a second one effective from
 the change, with the anchor date shifted and the lag set. History stays correct.
 
+## Where the deposit lands
+
+A cheque rarely arrives in one piece. Under **Where the deposit lands** you list the accounts payroll
+splits it into: a fixed amount for each of the first few, and one account marked **Remainder** that
+takes whatever is left.
+
+| Column | What it means |
+| --- | --- |
+| ↑ ↓ | Order the fixed amounts come off in |
+| Account | Where that slice lands |
+| Fixed amount | The dollar figure payroll sends there |
+| Remainder | Takes the balance of the cheque; only one row can have it |
+| Note | Why, if it is not obvious |
+| Active | Untick a split you have stopped rather than deleting the history |
+
+Order matters only when a cheque is smaller than usual: the fixed amounts are taken from the top, so
+the last one is the one that comes up short, and the remainder account gets nothing. The Paycheck
+screen says so rather than quietly balancing.
+
+Ticking **Remainder** on a row unticks it everywhere else — a split with two remainder rows would not
+add up. If no row has it, the screen warns you, because the split then covers less than the cheque.
+
 ## Deductions and withholding
 
 Pre-tax and post-tax deductions, each effective-dated, and your W-4 and Missouri equivalents.

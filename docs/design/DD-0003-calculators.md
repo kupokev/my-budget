@@ -103,3 +103,37 @@ your entered stubs, your 1099 income.
 The page is read-only against the database. It posts a `WhatIfRequest` and shows the response beside
 the baseline; nothing it holds is persisted. The real salary, elections and W-4 stay under
 Admin → Income sources, and both pages link to the other.
+
+
+## Direct-deposit splits, and matching deposits to a cheque (2026-09-29)
+
+A cheque does not arrive in one piece. Kevin's payroll sends fixed amounts to three accounts and the
+balance to a fourth, so "did I get paid what the estimate said?" cannot be answered from one account.
+
+`IncomeSource.DepositSplits` holds the split, effective-dated only by `IsActive` because payroll
+changes it wholesale rather than mid-history. `IncomeSource.SplitOf(net)` is the single source of truth
+for applying it: fixed amounts come off in `Order`, each capped at what is left, and the one row with
+`IsRemainder` takes the balance. A cheque smaller than usual therefore shorts the *last* fixed amount
+and leaves the remainder account with nothing, which the UI states rather than silently balancing. Only
+one row can be the remainder; the API enforces it on save, not just the UI.
+
+`PaycheckEstimateDto.Deposits` carries the expected per-account shares, built in `PaycheckService.ToDto`
+from the same method. `WithActualsAsync` then fills in `Received`/`MatchedCount` from transactions
+tagged to that income source within four days either side of the pay date — a window, because posting
+dates wander.
+
+Matching is per account, not per cheque. The money arrives in several accounts, usually from several
+institutions imported on different days, so an account with nothing tagged is reported as **not
+imported** rather than as a shortfall. Treating it as a shortfall would show a false alarm for every
+cheque until the last statement was in.
+
+`Transaction.IncomeSourceId` is what marks a deposit as pay. It is deliberately separate from
+`IsTransfer`: pay is neither spending nor a move between your own accounts, and a row carrying it has no
+category, label or budget line. `CategoryRule.IncomeSourceId` lets the marking be remembered, so the
+next statement arrives already tagged; `ImportService.Suggest` also recognises the wording payroll
+providers use, and refuses to guess the job when several are on file and nothing names one.
+
+
+Income has since moved to its own living spec, DD-0009, including the versioned allocation design
+that replaces the flat `DepositSplit` described above. This section stands as the record of the first
+cut; DD-0009 is authoritative.

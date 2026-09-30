@@ -29,6 +29,23 @@ Hover the merchant to see why something was pre-filled.
 Rows already imported are marked as duplicates and are not imported again. Matching is on the bank's
 own transaction id where there is one.
 
+## Pay coming in
+
+Money in is not spending, and a payroll deposit is not a transfer either. Rows with a positive amount
+get an **Income** column: pick the job and the row becomes pay, which clears the budget line, category
+and label — a deposit has none of those.
+
+Wording payroll uses ("PAYROLL", "DIRECT DEP", and similar) is recognised, so the column usually
+arrives already filled in. With more than one job on file and nothing in the description to tell them
+apart, it is left for you to pick rather than guessed at.
+
+Tagging one deposit offers to do the rest from the same merchant, and to remember it, so next month's
+statement arrives already marked. Ticking **Remember for future imports** writes the rule.
+
+What this buys you is the **Where it lands** table on [Paycheck](paycheck.md): once the deposits are
+tagged, it can add up what actually arrived across every account the cheque splits into and compare it
+to the estimate.
+
 ## Doing a merchant once
 
 Categorise one row and a bar appears **under that row**: *"Costco Gas → Fuel. Apply to the other 14

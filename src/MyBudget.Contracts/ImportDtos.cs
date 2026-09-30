@@ -22,6 +22,8 @@ public sealed class ImportRowDto
     public int? LabelId { get; set; }
     public int? BudgetLineId { get; set; }
     public bool IsTransfer { get; set; }
+    /// <summary>Set when this row is pay landing in an account rather than spending.</summary>
+    public int? IncomeSourceId { get; set; }
     /// <summary>Why the category/line/transfer flag was suggested (rule, source category, line name).</summary>
     public string? SuggestionSource { get; set; }
     public bool Skip { get; set; }
@@ -49,7 +51,7 @@ public sealed record ImportBatchDto(int Id, string FileName, ImportFormat Format
 public sealed record TransactionDto(int Id, int? AccountId, int? CardId, string SourceName, DateOnly Date, DateOnly? PostedDate, decimal Amount,
     string Description, string? Merchant, int? CategoryId, string? CategoryName, int? BudgetLineId, string? LineName, bool IsTransfer, string? Notes, bool IsManuallyCategorized,
     TransactionOrigin Origin, string? CounterpartyName, int? ReconciledWithId, string? ReconciledWithSummary, int? RepaymentFromPersonId, string? RepaymentFromPersonName,
-    int? LabelId, string? LabelName);
+    int? LabelId, string? LabelName, int? IncomeSourceId = null, string? IncomeSourceName = null);
 
 public sealed record ReconcileCandidateDto(TransactionDto Transaction, int DaysApart, decimal AmountDifference);
 
@@ -70,6 +72,8 @@ public sealed class TransactionCreateDto
     public int? LabelId { get; set; }
     public int? BudgetLineId { get; set; }
     public bool IsTransfer { get; set; }
+    /// <summary>Pay from this income source; makes the row a deposit rather than spending.</summary>
+    public int? IncomeSourceId { get; set; }
     /// <summary>The other account in a transfer; the mirror row is created there automatically.</summary>
     public int? CounterpartyAccountId { get; set; }
     public string? Notes { get; set; }
@@ -81,6 +85,7 @@ public sealed class TransactionUpdateDto
     public int? LabelId { get; set; }
     public int? BudgetLineId { get; set; }
     public bool IsTransfer { get; set; }
+    public int? IncomeSourceId { get; set; }
     public string? Notes { get; set; }
     /// <summary>Money in that repays what this person owes: creates (or removes) the payment on their ledger.</summary>
     public int? RepaymentFromPersonId { get; set; }
@@ -100,6 +105,8 @@ public sealed class CategoryRuleDto
     public int? LabelId { get; set; }
     public int? BudgetLineId { get; set; }
     public bool MarkAsTransfer { get; set; }
+    /// <summary>Tag matches as pay from this income source.</summary>
+    public int? IncomeSourceId { get; set; }
     public int Priority { get; set; } = 100;
     public bool IsActive { get; set; } = true;
 }

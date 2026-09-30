@@ -69,7 +69,7 @@ else
                     <td class="muted ellipsis" title="@t.SourceName">@t.SourceName</td>
                     <td class="ellipsis" title="@t.Description">@(t.Merchant ?? t.Description) @if (t.Origin == MyBudget.Domain.TransactionOrigin.Manual) { <span class="chip small">manual</span> }</td>
                     <td class="money"><Money Value="t.Amount" Signed="true" /></td>
-                    <td class="ellipsis">@(t.RepaymentFromPersonName is { } who ? $"Repayment · {who}" : t.CategoryName ?? (t.IsTransfer ? "" : "—"))</td>
+                    <td class="ellipsis">@(t.IncomeSourceName is { } job ? $"Pay · {job}" : t.RepaymentFromPersonName is { } who ? $"Repayment · {who}" : t.CategoryName ?? (t.IsTransfer ? "" : "—"))</td>
                     <td class="ellipsis muted">@t.LabelName</td>
                     <td class="ellipsis">@t.LineName</td>
                     <td class="center muted">@(t.IsTransfer ? "✓" : "")</td>
@@ -95,6 +95,12 @@ else
                     <div class="field"><label>Category</label><select @bind="editDto.CategoryId"><option value="">—</option>@foreach (var c in categories) { <option value="@c.Id">@c.Name</option> }</select></div>
                     <div class="field"><label>Label <span class="muted">(where)</span></label><select @bind="editDto.LabelId"><option value="">—</option>@foreach (var l in LabelChoices.For(labels, editDto.CategoryId, editDto.LabelId)) { <option @key="l.Id" value="@l.Id">@l.Name</option> }</select></div>
                     <div class="field"><label>BudgetLine it pays</label><select @bind="editDto.BudgetLineId"><option value="">—</option>@foreach (var b in lines) { <option value="@b.Id">@b.Name</option> }</select></div>
+                    @if (et.Amount > 0 && incomeSources.Count > 0)
+                    {
+                        @* Pay is neither spending nor a transfer; tagging it is what lets the Paycheck
+                           screen add up what landed across the accounts the cheque splits into. *@
+                        <div class="field"><label>Pay from <span class="muted">(makes this a payroll deposit)</span></label><select @bind="editDto.IncomeSourceId"><option value="">—</option>@foreach (var i in incomeSources) { <option value="@i.Id">@i.Name</option> }</select></div>
+                    }
                     @if (et.Amount > 0)
                     {
                         <div class="field"><label>Repayment from <span class="muted">(someone who owes you)</span></label><select @bind="editDto.RepaymentFromPersonId"><option value="">—</option>@foreach (var pp in people ?? []) { <option value="@pp.Id">@pp.Name</option> }</select></div>
@@ -193,6 +199,7 @@ else
     private List<PersonDto>? people;
     private List<LabelDto>? labels;
     private List<CategoryRuleDto> rules = [];
+    private List<IncomeSourceDto> incomeSources = [];
     private TransactionDto? edit;
     private TransactionUpdateDto editDto = new();
     private TransactionCreateDto? create;
@@ -201,7 +208,7 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        try { categories = await Api.GetCategoriesAsync(); lines = await Api.GetBudgetLinesAsync(); accounts = await Api.GetAccountsAsync(); cards = await Api.GetCardsAsync(); people = await Api.GetPeopleAsync(); labels = await Api.GetLabelsAsync(); }
+        try { categories = await Api.GetCategoriesAsync(); lines = await Api.GetBudgetLinesAsync(); accounts = await Api.GetAccountsAsync(); cards = await Api.GetCardsAsync(); people = await Api.GetPeopleAsync(); labels = await Api.GetLabelsAsync(); incomeSources = (await Api.GetIncomeSourcesAsync()).Where(i => i.IsActive).ToList(); }
         catch (Exception ex) { error = ex.Message; }
         await Load();
     }
@@ -246,7 +253,7 @@ else
         catch (Exception ex) { error = ex.Message; }
     }
 
-    private void StartEdit(TransactionDto t) { edit = t; editDto = new() { CategoryId = t.CategoryId, LabelId = t.LabelId, BudgetLineId = t.BudgetLineId, IsTransfer = t.IsTransfer, Notes = t.Notes, RepaymentFromPersonId = t.RepaymentFromPersonId }; }
+    private void StartEdit(TransactionDto t) { edit = t; editDto = new() { CategoryId = t.CategoryId, LabelId = t.LabelId, BudgetLineId = t.BudgetLineId, IsTransfer = t.IsTransfer, IncomeSourceId = t.IncomeSourceId, Notes = t.Notes, RepaymentFromPersonId = t.RepaymentFromPersonId }; }
 
     private async Task SaveEdit()
     {

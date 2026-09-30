@@ -209,6 +209,7 @@ public sealed class IncomeSourceDto
     public List<PayScheduleDto> PaySchedules { get; set; } = [];
     public List<DeductionElectionDto> Deductions { get; set; } = [];
     public List<WithholdingElectionDto> Withholdings { get; set; } = [];
+    public List<DepositSplitDto> DepositSplits { get; set; } = [];
     public List<PaycheckOverrideDto> Overrides { get; set; } = [];
 }
 
@@ -256,6 +257,20 @@ public sealed class SalaryRateDto
     public int IncomeSourceId { get; set; }
     [Range(0, 100_000_000)] public decimal AnnualAmount { get; set; }
     public DateOnly EffectiveDate { get; set; }
+}
+
+/// <summary>One account a paycheck lands in, and how much of it goes there.</summary>
+public sealed class DepositSplitDto
+{
+    public int Id { get; set; }
+    public int AccountId { get; set; }
+    /// <summary>A fixed amount per cheque; ignored when this is the remainder row.</summary>
+    [Range(0, 1_000_000)] public decimal? Amount { get; set; }
+    /// <summary>Takes what is left after the fixed amounts. Only one row should have this.</summary>
+    public bool IsRemainder { get; set; }
+    public int Order { get; set; }
+    public bool IsActive { get; set; } = true;
+    [StringLength(200)] public string? Notes { get; set; }
 }
 
 public sealed class PayScheduleDto

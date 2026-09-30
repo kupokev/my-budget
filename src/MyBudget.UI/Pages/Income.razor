@@ -122,6 +122,37 @@ else
                 </table>
                 <button class="secondary" type="button" @onclick="AddSchedule">Add schedule row</button>
 
+                <h3>Where the deposit lands <span class="muted">(direct-deposit split; the fixed amounts come off first, in order, and one account takes the rest)</span></h3>
+                <table class="compact">
+                    <thead><tr><th></th><th>Account</th><th class="money">Fixed amount</th><th class="center" title="Takes whatever is left after the fixed amounts">Remainder</th><th>Note</th><th class="center">Active</th><th></th></tr></thead>
+                    <tbody>
+                    @* @key on the object, not the id: unsaved rows all have Id 0 and would collapse into one. *@
+                    @foreach (var d in editing.DepositSplits)
+                    {
+                        <tr @key="d">
+                            <td class="actions">
+                                <button class="link" type="button" title="Move up" disabled="@(editing.DepositSplits.IndexOf(d) == 0)" @onclick="() => MoveSplit(d, -1)">↑</button>
+                                <button class="link" type="button" title="Move down" disabled="@(editing.DepositSplits.IndexOf(d) == editing.DepositSplits.Count - 1)" @onclick="() => MoveSplit(d, 1)">↓</button>
+                            </td>
+                            <td><InputSelect @bind-Value="d.AccountId">
+                                <option value="0">Pick an account</option>
+                                @foreach (var a in accounts ?? []) { <option value="@a.Id">@a.Name</option> }
+                            </InputSelect></td>
+                            <td>@if (!d.IsRemainder) { <InputNumber @bind-Value="d.Amount" step="0.01" class="narrow-money" /> } else { <span class="muted">balance of cheque</span> }</td>
+                            <td class="center"><input type="checkbox" checked="@d.IsRemainder" @onchange="e => SetRemainder(d, (bool)e.Value!)" /></td>
+                            <td><InputText @bind-Value="d.Notes" /></td>
+                            <td class="center"><InputCheckbox @bind-Value="d.IsActive" /></td>
+                            <td class="actions"><button class="link danger" type="button" title="Remove split" @onclick="() => editing.DepositSplits.Remove(d)">✕</button></td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+                <button class="secondary" type="button" @onclick="() => editing.DepositSplits.Add(new DepositSplitDto())">Add deposit account</button>
+                @if (editing.DepositSplits.Any(x => x.IsActive) && !editing.DepositSplits.Any(x => x.IsActive && x.IsRemainder))
+                {
+                    <p class="warn-text">No account is marked as the remainder, so the split won't add up to the whole cheque.</p>
+                }
+
                 <h3>Benefit elections <span class="muted">(per check, from a stub; use either an amount or a percent of gross)</span></h3>
                 <table class="compact">
                     <thead><tr><th>Name</th><th>Kind</th><th>Tax treatment</th><th class="money">Amount / check</th><th class="money">% of gross</th><th>Effective</th><th>Ends</th><th></th></tr></thead>
@@ -202,6 +233,7 @@ else
 
 @code {
     private List<IncomeSourceDto>? sources;
+    private List<AccountDto>? accounts;
     private PayCalendarDto? calendar;
     private IncomeSourceDto? editing;
     private int year = DateTime.Today.Year;
@@ -216,6 +248,7 @@ else
         try
         {
             sources = await Api.GetIncomeSourcesAsync();
+            accounts = await Api.GetAccountsAsync();
             calendar = await Api.GetPayCalendarAsync(year);
         }
         catch (Exception ex) { error = ex.Message; }
@@ -237,12 +270,34 @@ else
         {
             Id = d.Id, Name = d.Name, Kind = d.Kind, Treatment = d.Treatment, AmountPerCheck = d.AmountPerCheck, PercentOfGross = d.PercentOfGross, EffectiveDate = d.EffectiveDate, EndDate = d.EndDate,
         }).ToList(),
+        DepositSplits = s.DepositSplits.Select(d => new DepositSplitDto
+        {
+            Id = d.Id, AccountId = d.AccountId, Amount = d.Amount, IsRemainder = d.IsRemainder, Order = d.Order, IsActive = d.IsActive, Notes = d.Notes,
+        }).ToList(),
         Withholdings = s.Withholdings.Select(w => new WithholdingElectionDto
         {
             Id = w.Id, EffectiveDate = w.EffectiveDate, FederalStatus = w.FederalStatus, MultipleJobs = w.MultipleJobs, DependentCredits = w.DependentCredits, OtherIncome = w.OtherIncome,
             Deductions = w.Deductions, ExtraWithholding = w.ExtraWithholding, MissouriStatus = w.MissouriStatus, MissouriExtraWithholding = w.MissouriExtraWithholding,
         }).ToList(),
     };
+
+    /// <summary>Only one row can be the remainder; ticking a new one unticks the old.</summary>
+    private void SetRemainder(DepositSplitDto d, bool on)
+    {
+        foreach (var other in editing!.DepositSplits) other.IsRemainder = false;
+        d.IsRemainder = on;
+        if (on) d.Amount = null;
+    }
+
+    private void MoveSplit(DepositSplitDto d, int delta)
+    {
+        var list = editing!.DepositSplits;
+        var from = list.IndexOf(d);
+        var to = from + delta;
+        if (from < 0 || to < 0 || to >= list.Count) return;
+        list.RemoveAt(from);
+        list.Insert(to, d);
+    }
 
     private void AddSchedule() => editing!.PaySchedules.Add(new PayScheduleDto { EffectiveDate = today, AnchorPayDate = today, Frequency = PayFrequency.BiWeekly });
 

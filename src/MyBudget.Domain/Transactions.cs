@@ -41,6 +41,10 @@ public class Transaction
     public required string Description { get; set; }
     /// <summary>Cleaned-up payee, for grouping (BIL-9).</summary>
     public string? Merchant { get; set; }
+    /// <summary>The income source a deposit came from, when it is pay rather than spending.</summary>
+    public int? IncomeSourceId { get; set; }
+    public IncomeSource? IncomeSource { get; set; }
+
     public int? CategoryId { get; set; }
     public Category? Category { get; set; }
     /// <summary>Where it was: Amazon, Costco, an IHG property. Sharpens rewards rates (see <see cref="Label"/>).</summary>
@@ -92,6 +96,9 @@ public class CategoryRule
     public int? BudgetLineId { get; set; }
     public BudgetLine? BudgetLine { get; set; }
     public bool MarkAsTransfer { get; set; }
+    /// <summary>Tag matches as pay from this income source (a payroll direct deposit), not as spending.</summary>
+    public int? IncomeSourceId { get; set; }
+    public IncomeSource? IncomeSource { get; set; }
     /// <summary>Lower runs first.</summary>
     public int Priority { get; set; } = 100;
     public bool IsActive { get; set; } = true;

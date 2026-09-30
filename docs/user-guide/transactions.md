@@ -17,6 +17,14 @@ Set the budget line and the category and label follow, because a budget line alr
 the line has no label of its own, you can pick one from its category — Amazon or Costco under General
 Merchandise.
 
+## Pay
+
+On a row with money in, **Pay from** marks it as a payroll deposit from that job. Doing so takes it out
+of spending entirely — no category, no label, no budget line — and feeds the **Where it lands** table on
+[Paycheck](paycheck.md), which adds up what arrived across every account your cheque splits into.
+
+The list shows such a row as *Pay · <job>* in place of a category.
+
 ## Reconciling
 
 A transaction you entered by hand and the same one arriving later in a statement are the same event.

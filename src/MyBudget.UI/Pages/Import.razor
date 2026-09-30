@@ -51,7 +51,7 @@ else
             </div>
             <div class="scroll-x">
             <table class="grid">
-                <thead><tr><th>Date</th><th>Description</th><th>Merchant</th><th class="money">Amount</th><th>Budget line</th><th>Category</th><th>Label</th><th>Transfer</th><th>Skip</th></tr></thead>
+                <thead><tr><th>Date</th><th>Description</th><th>Merchant</th><th class="money">Amount</th><th>Income</th><th>Budget line</th><th>Category</th><th>Label</th><th>Transfer</th><th>Skip</th></tr></thead>
                 <tbody>
                 @foreach (var r in pv.Rows.Where(r => !hideDupes || !r.IsDuplicate))
                 {
@@ -60,17 +60,30 @@ else
                         <td title="@r.Memo">@r.Description</td>
                         <td class="muted" title="@r.SuggestionSource">@r.Merchant</td>
                         <td><Money Value="r.Amount" Signed="true" /></td>
+                        @* Money in can be pay, and pay is not spending: tagging it to an income source
+                           is what lets the Paycheck screen add up what actually landed across accounts.
+                           Only money in is offered it; money out is never a deposit. *@
+                        <td>
+                            @if (!r.IsDuplicate && r.Amount > 0 && incomeSources.Count > 0)
+                            {
+                                <select @bind="r.IncomeSourceId" @bind:after="() => IncomeChosen(r)">
+                                    <option value="">not pay</option>
+                                    @foreach (var i in incomeSources) { <option value="@i.Id">@i.Name</option> }
+                                </select>
+                            }
+                        </td>
+                        @{ var isPay = r.IncomeSourceId is not null; }
                         @* The budget line leads: it already knows its category, and often its label.
                            Picking one fills both in, and where the line has no label of its own the
                            column offers the ones belonging to its category — Amazon or Costco under
                            General Merchandise. *@
-                        <td>@if (!r.IsDuplicate) { <select @bind="r.BudgetLineId" @bind:after="() => LineChosen(r)"><option value="">—</option>@foreach (var b in lines.Where(b => b.IsActive)) { <option value="@b.Id">@b.Name</option> }</select> }</td>
+                        <td>@if (isPay) { <span class="muted">pay</span> } else if (!r.IsDuplicate) { <select @bind="r.BudgetLineId" @bind:after="() => LineChosen(r)"><option value="">—</option>@foreach (var b in lines.Where(b => b.IsActive)) { <option value="@b.Id">@b.Name</option> }</select> }</td>
                         @{ var chosen = lines.FirstOrDefault(b => b.Id == r.BudgetLineId); }
 
                         @* Where the budget line settles a field, it is shown rather than offered: an
                            editable dropdown invites a row that disagrees with its own budget line. *@
                         <td>
-                            @if (r.IsDuplicate) { }
+                            @if (r.IsDuplicate || isPay) { }
                             else if (chosen?.CategoryId is { } fromLine)
                             {
                                 <span class="muted" title="From the budget line">@(categories.FirstOrDefault(c => c.Id == fromLine)?.Name)</span>
@@ -81,7 +94,7 @@ else
                             }
                         </td>
                         <td>
-                            @if (r.IsDuplicate) { }
+                            @if (r.IsDuplicate || isPay) { }
                             else if (chosen?.LabelId is { } lineLabel)
                             {
                                 <span class="muted" title="From the budget line">@(labels.FirstOrDefault(l => l.Id == lineLabel)?.Name)</span>
@@ -92,7 +105,7 @@ else
                                 <select @bind="r.LabelId" @bind:after='() => OfferToSpread(r, "label")'><option value="">—</option>@foreach (var l in LabelChoices.For(labels, r.CategoryId, r.LabelId)) { <option @key="l.Id" value="@l.Id">@l.Name</option> }</select>
                             }
                         </td>
-                        <td>@if (!r.IsDuplicate) { <input type="checkbox" @bind="r.IsTransfer" /> }</td>
+                        <td>@if (!r.IsDuplicate && !isPay) { <input type="checkbox" @bind="r.IsTransfer" /> }</td>
                         <td>@if (r.IsDuplicate) { <span class="muted">dup</span> } else { <input type="checkbox" @bind="r.Skip" /> }</td>
                     </tr>
 
@@ -101,7 +114,7 @@ else
                         @* Under the row you just changed. Scrolling back to a bar at the top costs you
                            your place in a list of hundreds. *@
                         <tr class="spread-row">
-                            <td colspan="9">
+                            <td colspan="10">
                                 <span class="row">
                                     <span><strong>@sp.Merchant</strong> → @sp.What. Apply to the other @sp.Count row@(sp.Count == 1 ? "" : "s") from this merchant?</span>
                                     <label class="inline"><input type="checkbox" @bind="spreadRemember" /> Remember for future imports</label>
@@ -151,6 +164,7 @@ else
     private List<CardDto>? cards;
     private List<ImportProfileDto>? profiles;
     private List<CategoryDto>? categories;
+    private List<IncomeSourceDto> incomeSources = [];
     private List<BudgetLineDto>? lines;
     private List<ImportBatchDto>? batches;
     private string source = "";
@@ -159,6 +173,16 @@ else
     private bool busy, hideDupes = true;
     private List<LabelDto>? labels;
     private ImportPreviewDto? preview;
+
+    /// <summary>Tagging a row as pay clears the spending fields: it is a deposit, not a purchase.</summary>
+    private void IncomeChosen(ImportRowDto row)
+    {
+        if (row.IncomeSourceId is not null)
+        {
+            row.BudgetLineId = null; row.CategoryId = null; row.LabelId = null; row.IsTransfer = false;
+        }
+        OfferToSpread(row, "income");
+    }
 
     /// <summary>
     /// A budget line already knows its category, and often its label. Choosing one fills both in, so
@@ -178,7 +202,7 @@ else
         OfferToSpread(row, "budget line");
     }
 
-    private sealed record Spread(ImportRowDto Row, string Merchant, string What, int Count, int? CategoryId, int? LabelId, int? BudgetLineId, string Field);
+    private sealed record Spread(ImportRowDto Row, string Merchant, string What, int Count, int? CategoryId, int? LabelId, int? BudgetLineId, int? IncomeSourceId, string Field);
     private Spread? spread;
     private bool spreadRemember = true;
 
@@ -199,6 +223,7 @@ else
         {
             "category" => same.Count(r => r.CategoryId != row.CategoryId),
             "label" => same.Count(r => r.LabelId != row.LabelId),
+            "income" => same.Count(r => r.IncomeSourceId != row.IncomeSourceId),
             _ => same.Count(r => r.BudgetLineId != row.BudgetLineId || r.CategoryId != row.CategoryId || r.LabelId != row.LabelId),
         };
         if (differ == 0) return;
@@ -207,10 +232,11 @@ else
         {
             "category" => categories?.FirstOrDefault(c => c.Id == row.CategoryId)?.Name ?? "no category",
             "label" => labels?.FirstOrDefault(l => l.Id == row.LabelId)?.Name ?? "no label",
+            "income" => incomeSources.FirstOrDefault(i => i.Id == row.IncomeSourceId)?.Name is { } n ? $"pay from {n}" : "not pay",
             _ => lines?.FirstOrDefault(b => b.Id == row.BudgetLineId)?.Name ?? "no budget line",
         };
 
-        spread = new Spread(row, row.Merchant!, what, differ, row.CategoryId, row.LabelId, row.BudgetLineId, field);
+        spread = new Spread(row, row.Merchant!, what, differ, row.CategoryId, row.LabelId, row.BudgetLineId, row.IncomeSourceId, field);
     }
 
     /// <summary>
@@ -227,6 +253,10 @@ else
             {
                 case "category": r.CategoryId = sp.CategoryId; break;
                 case "label": r.LabelId = sp.LabelId; break;
+                case "income":
+                    r.IncomeSourceId = sp.IncomeSourceId;
+                    r.BudgetLineId = null; r.CategoryId = null; r.LabelId = null; r.IsTransfer = false;
+                    break;
                 default:
                     // A budget line carries its category and label with it, so spreading it spreads all three.
                     r.BudgetLineId = sp.BudgetLineId;
@@ -247,6 +277,7 @@ else
                     CategoryId = sp.CategoryId,
                     LabelId = sp.LabelId,
                     BudgetLineId = sp.BudgetLineId,
+                    IncomeSourceId = sp.IncomeSourceId,
                     IsActive = true,
                 });
             }
@@ -265,7 +296,7 @@ else
         try
         {
             accounts = await Api.GetAccountsAsync(); cards = await Api.GetCardsAsync(); profiles = await Api.GetImportProfilesAsync();
-            categories = await Api.GetCategoriesAsync(); labels = await Api.GetLabelsAsync(); lines = await Api.GetBudgetLinesAsync(); batches = await Api.GetImportBatchesAsync();
+            categories = await Api.GetCategoriesAsync(); incomeSources = (await Api.GetIncomeSourcesAsync()).Where(i => i.IsActive).ToList(); labels = await Api.GetLabelsAsync(); lines = await Api.GetBudgetLinesAsync(); batches = await Api.GetImportBatchesAsync();
         }
         catch (Exception ex) { error = ex.Message; }
     }

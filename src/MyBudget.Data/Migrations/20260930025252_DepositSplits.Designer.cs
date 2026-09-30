@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using MyBudget.Data;
 
@@ -10,9 +11,11 @@ using MyBudget.Data;
 namespace MyBudget.Data.Migrations
 {
     [DbContext(typeof(BudgetDbContext))]
-    partial class BudgetDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260930025252_DepositSplits")]
+    partial class DepositSplits
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.12");
@@ -555,9 +558,6 @@ namespace MyBudget.Data.Migrations
                     b.Property<int?>("CategoryId")
                         .HasColumnType("INTEGER");
 
-                    b.Property<int?>("IncomeSourceId")
-                        .HasColumnType("INTEGER");
-
                     b.Property<bool>("IsActive")
                         .HasColumnType("INTEGER");
 
@@ -583,8 +583,6 @@ namespace MyBudget.Data.Migrations
                     b.HasIndex("BudgetLineId");
 
                     b.HasIndex("CategoryId");
-
-                    b.HasIndex("IncomeSourceId");
 
                     b.HasIndex("LabelId");
 
@@ -2302,11 +2300,6 @@ namespace MyBudget.Data.Migrations
                         .HasForeignKey("CategoryId")
                         .OnDelete(DeleteBehavior.Cascade);
 
-                    b.HasOne("MyBudget.Domain.IncomeSource", "IncomeSource")
-                        .WithMany()
-                        .HasForeignKey("IncomeSourceId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
                     b.HasOne("MyBudget.Domain.Label", "Label")
                         .WithMany()
                         .HasForeignKey("LabelId")
@@ -2315,8 +2308,6 @@ namespace MyBudget.Data.Migrations
                     b.Navigation("BudgetLine");
 
                     b.Navigation("Category");
-
-                    b.Navigation("IncomeSource");
 
                     b.Navigation("Label");
                 });

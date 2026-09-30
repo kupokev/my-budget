@@ -46,6 +46,37 @@ else
                     }
                     <p class="muted">@Fmt.Money(estimate.AnnualSalary) ÷ @estimate.PeriodsPerYear checks · W-4: @estimate.W4Summary · MO W-4: @estimate.MoW4Summary · @estimate.TaxYear tables@(estimate.TaxYearVerified ? "" : " (unverified)")</p>
                     <EstimateTable E="estimate" />
+                    @if (estimate.Deposits is { Count: > 0 } deposits)
+                    {
+                        var received = deposits.Sum(x => x.Received);
+                        var anyMatched = deposits.Any(x => x.MatchedCount > 0);
+                        <h3>Where it lands@(anyMatched ? $" · received {Fmt.Money(received)} of {Fmt.Money(deposits.Sum(x => x.Amount))}" : "")</h3>
+                        <table class="compact">
+                            <thead><tr><th>Account</th><th class="money">Expected</th><th class="money">Received</th><th class="money">Difference</th><th>How</th></tr></thead>
+                            <tbody>
+                            @foreach (var d in deposits)
+                            {
+                                <tr>
+                                    <td>@d.Account</td>
+                                    <td class="money"><Money Value="d.Amount" /></td>
+                                    @* Nothing tagged is not a shortfall — that account's statement may simply not be imported yet. *@
+                                    <td class="money">@if (d.MatchedCount > 0) { <Money Value="d.Received" /> } else { <span class="muted">not imported</span> }</td>
+                                    <td class="money">@if (d.MatchedCount > 0) { <span class="@(Math.Abs(d.Received - d.Amount) > 1m ? "neg" : "")">@Fmt.Money(d.Received - d.Amount)</span> } else { <span class="muted">—</span> }</td>
+                                    <td class="muted">@d.Formula</td>
+                                </tr>
+                            }
+                            </tbody>
+                            <tfoot><tr><th>Total</th><th class="money"><Money Value="deposits.Sum(x => x.Amount)" /></th><th class="money"><Money Value="received" /></th><th></th><th></th></tr></tfoot>
+                        </table>
+                        @if (anyMatched && deposits.Any(x => x.MatchedCount == 0))
+                        {
+                            <p class="muted">@deposits.Count(x => x.MatchedCount == 0) of @deposits.Count accounts have nothing tagged for this pay date; import those statements and tag the deposit to @estimate.IncomeSource to complete the picture.</p>
+                        }
+                    }
+                    else
+                    {
+                        <p class="muted">No deposit split set up. Add one under Income → @estimate.IncomeSource → "Where the deposit lands" to see how this cheque divides across accounts.</p>
+                    }
                     <Warnings Items="estimate.Warnings" />
                     <Steps Items="estimate.Steps" />
                 </section>

@@ -29,6 +29,30 @@ Under the date it says which stretch of work the cheque covers:
 Set this per pay schedule on [Income sources](income-sources.md). It does not change how much you are
 paid, only which days the cheque is for.
 
+## Where it lands
+
+If the income source has a deposit split, the estimate is followed by a table of the accounts the
+cheque divides into — what each should get, and what actually arrived.
+
+| Column | What it means |
+| --- | --- |
+| Expected | That account's share of this cheque's net |
+| Received | Total of the deposits tagged to this job near this pay date |
+| Difference | Received − expected; red past a dollar |
+| How | The fixed amount, or "balance of … after the fixed amounts" |
+
+Because the money arrives in several accounts, a deposit cannot be matched one-to-one against a
+cheque. What is compared is each account's tagged total against its expected share, within four days
+either side of payday.
+
+An account with nothing tagged reads **not imported** — not a shortfall. That is usually the truth:
+you have imported one bank's statement and not the others yet. Once all of them are in, the totals
+should agree; a real difference then means the cheque itself was not what was estimated.
+
+Deposits get tagged during [Import](import.md), or on any row from
+[Transactions](transactions.md) with **Pay from**. Set the split up under
+[Income sources](income-sources.md).
+
 ## Odd cheques
 
 A single cheque that is not a normal period — the short one when an employer switches from live pay

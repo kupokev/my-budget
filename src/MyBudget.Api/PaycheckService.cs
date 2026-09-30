@@ -11,11 +11,12 @@ namespace MyBudget.Api;
 public sealed class PaycheckService(BudgetDbContext db)
 {
     public sealed record Context(IncomeSource Source, DateOnly Date, SalaryRate Salary, PaySchedule Schedule, int PeriodsPerYear,
-        List<DeductionElection> Deductions, WithholdingElection W4, TaxYear TaxYear, List<string> Warnings, PaycheckOverride? Override = null);
+        List<DeductionElection> Deductions, WithholdingElection W4, TaxYear TaxYear, List<string> Warnings, PaycheckOverride? Override = null,
+        IReadOnlyDictionary<int, string>? AccountNames = null);
 
     public async Task<Context> LoadAsync(int sourceId, DateOnly date)
     {
-        var source = await db.IncomeSources.Include(s => s.SalaryRates).Include(s => s.PaySchedules).Include(s => s.Deductions).Include(s => s.Withholdings).Include(s => s.Overrides)
+        var source = await db.IncomeSources.Include(s => s.SalaryRates).Include(s => s.DepositSplits).Include(s => s.PaySchedules).Include(s => s.Deductions).Include(s => s.Withholdings).Include(s => s.Overrides)
             .FirstOrDefaultAsync(s => s.Id == sourceId) ?? throw new KeyNotFoundException($"Income source {sourceId} not found.");
         if (source.EndDate is { } ended && date > ended) throw new InvalidOperationException($"{source.Name} employment ended {ended:yyyy-MM-dd}; no check on {date:yyyy-MM-dd}.");
         var warnings = new List<string>();
@@ -45,7 +46,12 @@ public sealed class PaycheckService(BudgetDbContext db)
         if (!taxYear.Verified) warnings.Add($"{taxYear.Year} tax tables are not marked verified against the published tables.");
         if (!string.IsNullOrWhiteSpace(taxYear.Notes)) warnings.Add(taxYear.Notes);
 
-        return new Context(source, date, salary, schedule, PayDates.PaychecksPerYear(schedule.Frequency), deductions, w4, taxYear, warnings, ovr);
+        var accountNames = source.DepositSplits.Count == 0
+            ? new Dictionary<int, string>()
+            : await db.Accounts.Where(a => source.DepositSplits.Select(x => x.AccountId).Contains(a.Id))
+                .ToDictionaryAsync(a => a.Id, a => a.Name);
+
+        return new Context(source, date, salary, schedule, PayDates.PaychecksPerYear(schedule.Frequency), deductions, w4, taxYear, warnings, ovr, accountNames);
     }
 
     public static PaycheckInput BuildInput(Context c, WhatIfRequest? whatIf = null)
@@ -96,7 +102,37 @@ public sealed class PaycheckService(BudgetDbContext db)
             YtdSocialSecurityWages = earlier.Sum(e => e.Result.FicaWages),
             YtdMedicareWages = earlier.Sum(e => e.Result.FicaWages),
         };
-        return ToDto(c, whatIf?.AnnualSalary ?? c.Salary.AnnualAmount, PaycheckEngine.Compute(input));
+        return await WithActualsAsync(ToDto(c, whatIf?.AnnualSalary ?? c.Salary.AnnualAmount, PaycheckEngine.Compute(input)), sourceId, date);
+    }
+
+    /// <summary>Days either side of a pay date a tagged deposit still counts as this cheque.</summary>
+    private const int DepositWindowDays = 4;
+
+    /// <summary>
+    /// Fills in what actually arrived per account, from transactions tagged to this income source within
+    /// a few days of the pay date. The split can't be matched one deposit to one cheque — the money
+    /// arrives in several accounts — so each account's tagged total is compared to its expected share.
+    /// </summary>
+    private async Task<PaycheckEstimateDto> WithActualsAsync(PaycheckEstimateDto dto, int sourceId, DateOnly date)
+    {
+        if (dto.Deposits is not { Count: > 0 } expected) return dto;
+        var from = date.AddDays(-DepositWindowDays);
+        var to = date.AddDays(DepositWindowDays);
+        var actual = await db.Transactions
+            .Where(t => t.IncomeSourceId == sourceId && t.Date >= from && t.Date <= to && t.AccountId != null)
+            .GroupBy(t => t.AccountId!.Value)
+            .Select(g => new { AccountId = g.Key, Total = g.Sum(t => t.Amount), Count = g.Count() })
+            .ToListAsync();
+        if (actual.Count == 0) return dto;
+
+        return dto with
+        {
+            Deposits = expected.Select(d =>
+            {
+                var a = actual.FirstOrDefault(x => x.AccountId == d.AccountId);
+                return a is null ? d : d with { Received = a.Total, MatchedCount = a.Count };
+            }).ToList(),
+        };
     }
 
     public async Task<YearEstimateDto> YearAsync(int sourceId, int year, WhatIfRequest? whatIf = null)
@@ -148,7 +184,18 @@ public sealed class PaycheckService(BudgetDbContext db)
             r.Gross, r.PreTaxDeductions.Select(L).ToList(), r.FicaWages, r.FederalTaxableWages,
             L(r.FederalIncomeTax), L(r.SocialSecurity), L(r.Medicare), L(r.MissouriIncomeTax),
             r.PostTaxDeductions.Select(L).ToList(), r.TotalPreTaxDeductions, r.TotalTaxes, r.TotalPostTaxDeductions, r.Net, r.Steps, c.Warnings,
-            period.Start, period.End, c.Schedule.PayLagDays);
+            period.Start, period.End, c.Schedule.PayLagDays, Deposits(c, r.Net));
+    }
+
+    /// <summary>The configured direct-deposit split applied to this cheque's net (DepositSplit is the single source of truth for the order).</summary>
+    private static IReadOnlyList<DepositDto>? Deposits(Context c, decimal net)
+    {
+        var split = c.Source.SplitOf(net);
+        if (split.Count == 0) return null;
+        return split.Select(x => new DepositDto(x.Split.AccountId,
+            c.AccountNames?.GetValueOrDefault(x.Split.AccountId) ?? $"Account {x.Split.AccountId}",
+            x.Amount,
+            x.Split.IsRemainder ? $"balance of {net:C} after the fixed amounts" : $"fixed {x.Split.Amount:C}{(x.Amount < (x.Split.Amount ?? 0m) ? " (short: the cheque ran out)" : "")}")).ToList();
     }
 
     private static string Words(Enum e) => System.Text.RegularExpressions.Regex.Replace(e.ToString(), "(?<=[a-z0-9])([A-Z])", " $1");

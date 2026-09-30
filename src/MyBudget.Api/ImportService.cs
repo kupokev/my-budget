@@ -11,6 +11,9 @@ public sealed class ImportService(BudgetDbContext db)
 {
     public const int ReconcileWindowDays = 3;
 
+    /// <summary>Wording payroll providers use on a direct deposit. Matched only against money in.</summary>
+    private static readonly string[] PayrollHints = ["PAYROLL", "DIRECT DEP", "DIR DEP", "DIRECTDEP", "DD PAYROLL", "SALARY", "PAYCHECK", "ADP", "PAYCHEX", "GUSTO", "WAGES", "EMPLOYER"];
+
     private static readonly string[] TransferHints = ["PAYMENT THANK YOU", "AUTOPAY", "AUTOMATIC PAYMENT", "ONLINE TRANSFER", "PAYMENT RECEIVED", "MOBILE PYMT", "MOBILE PMT", "MOBILE PAYMENT", "PAYMENT - THANK YOU", "TRANSFER TO", "TRANSFER FROM", "INTERNET PAYMENT", "ACH PAYMENT", "DIRECTPAY", "PAYMENT TO CHASE CARD", "CCPYMT", "CARD PAYMENT", "MONEYLINE", "WEALTHFRONT", "ACCT_XFER"];
 
     public async Task<ImportPreviewDto> PreviewAsync(string fileName, string content, int? accountId, int? cardId, string? profileKey)
@@ -30,6 +33,7 @@ public sealed class ImportService(BudgetDbContext db)
         var rules = await db.CategoryRules.Include(r => r.Category).Include(r => r.BudgetLine).Where(r => r.IsActive).OrderBy(r => r.Priority).ToListAsync();
         var categories = await db.Categories.Where(c => c.IsActive).ToListAsync();
         var lines = await db.BudgetLines.Where(b => b.IsActive).ToListAsync();
+        var incomeSources = await db.IncomeSources.Where(i => i.IsActive).ToListAsync();
         // Grouped, not keyed: two cards can share their last four digits — a "…81007" and a "…01007"
         // both end 1007 — and ToDictionary threw on the collision, failing the whole import.
         var cardsByLast4 = (await db.Cards.Where(c => c.IsActive && c.AccountNumber != null && c.AccountNumber.Length >= 4).ToListAsync())
@@ -54,7 +58,7 @@ public sealed class ImportService(BudgetDbContext db)
                 Date = p.Date, PostedDate = p.PostedDate, Amount = p.Amount, Description = p.Description, Merchant = Merchants.Normalize(p.Description),
                 ExternalId = externalId, SourceCategory = p.SourceCategory, Memo = p.Memo, IsDuplicate = existing.Contains(externalId),
             };
-            Suggest(row, rules, categories, lines, cardsByLast4);
+            Suggest(row, rules, categories, lines, cardsByLast4, incomeSources);
             var match = manual.FirstOrDefault(m => m.Amount == row.Amount && Math.Abs(m.Date.DayNumber - row.Date.DayNumber) <= ReconcileWindowDays);
             if (!row.IsDuplicate && match is not null)
             {
@@ -67,9 +71,10 @@ public sealed class ImportService(BudgetDbContext db)
             rows.Count(r => !r.IsDuplicate), rows.Count(r => r.IsDuplicate), rows.MinBy(r => r.Date)?.Date, rows.MaxBy(r => r.Date)?.Date, parsed.Warnings);
     }
 
-    public static void Suggest(ImportRowDto row, List<CategoryRule> rules, List<Category> categories, List<BudgetLine> lines, IReadOnlyDictionary<string, IReadOnlyList<string>>? cardsByLast4 = null)
+    public static void Suggest(ImportRowDto row, List<CategoryRule> rules, List<Category> categories, List<BudgetLine> lines, IReadOnlyDictionary<string, IReadOnlyList<string>>? cardsByLast4 = null, List<IncomeSource>? sources = null)
     {
         var text = $"{row.Description} {row.Merchant} {row.Memo}";
+        var incomeSources = sources ?? [];
         // "Payment to Chase card ending in 9039" → the card whose number ends in 9039: a card payment, i.e. a transfer.
         var ending = System.Text.RegularExpressions.Regex.Match(row.Description, @"(?:ending in|ending|x{2,}|\.{3})\s*(\d{4})\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
         if (ending.Success)
@@ -105,7 +110,25 @@ public sealed class ImportService(BudgetDbContext db)
             row.LabelId = rule.LabelId;
             row.BudgetLineId = rule.BudgetLineId;
             row.IsTransfer = rule.MarkAsTransfer;
+            row.IncomeSourceId = rule.IncomeSourceId;
             row.SuggestionSource = $"rule \"{rule.Pattern}\"";
+            return;
+        }
+        // Pay landing in an account is not spending and not a transfer: it gets tagged to the income
+        // source so the Paycheck screen can add up what actually arrived (INC-12).
+        if (row.Amount > 0 && PayrollHints.Any(h => row.Description.Contains(h, StringComparison.OrdinalIgnoreCase)))
+        {
+            var match = incomeSources.Count == 1 ? incomeSources[0] : incomeSources.FirstOrDefault(i => text.Contains(i.Name, StringComparison.OrdinalIgnoreCase));
+            if (match is not null)
+            {
+                row.IncomeSourceId = match.Id;
+                row.SuggestionSource = $"payroll deposit ({match.Name})";
+            }
+            else
+            {
+                // Certainly pay; which job is a guess when there are several, so leave it to be picked.
+                row.SuggestionSource = incomeSources.Count == 0 ? "looks like pay; no income source on file" : "looks like pay; pick the income source";
+            }
             return;
         }
         if (TransferHints.Any(h => row.Description.Contains(h, StringComparison.OrdinalIgnoreCase)))
@@ -167,6 +190,7 @@ public sealed class ImportService(BudgetDbContext db)
             {
                 AccountId = req.AccountId, CardId = req.CardId, Date = r.Date, PostedDate = r.PostedDate, Amount = r.Amount, Description = r.Description.Trim(),
                 Merchant = r.Merchant, ExternalId = r.ExternalId, CategoryId = r.CategoryId, LabelId = r.LabelId, BudgetLineId = r.BudgetLineId, IsTransfer = r.IsTransfer, ImportBatch = batch,
+                IncomeSourceId = r.IncomeSourceId,
                 Notes = r.Memo, Origin = TransactionOrigin.Imported,
             };
             db.Transactions.Add(t);
@@ -242,8 +266,8 @@ public sealed class ImportService(BudgetDbContext db)
             var rule = rules.FirstOrDefault(r => Matches(r, text));
             if (rule is null) continue;
             var cat = rule.CategoryId ?? rule.BudgetLine?.CategoryId;
-            if (t.CategoryId == cat && t.LabelId == rule.LabelId && t.BudgetLineId == rule.BudgetLineId && t.IsTransfer == rule.MarkAsTransfer) continue;
-            t.CategoryId = cat; t.LabelId = rule.LabelId; t.BudgetLineId = rule.BudgetLineId; t.IsTransfer = rule.MarkAsTransfer;
+            if (t.CategoryId == cat && t.LabelId == rule.LabelId && t.BudgetLineId == rule.BudgetLineId && t.IsTransfer == rule.MarkAsTransfer && t.IncomeSourceId == rule.IncomeSourceId) continue;
+            t.CategoryId = cat; t.LabelId = rule.LabelId; t.BudgetLineId = rule.BudgetLineId; t.IsTransfer = rule.MarkAsTransfer; t.IncomeSourceId = rule.IncomeSourceId;
             changed.Add(t);
         }
         await db.SaveChangesAsync();

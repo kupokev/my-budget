@@ -16,6 +16,63 @@ public class IncomeSource
     public List<DeductionElection> Deductions { get; set; } = [];
     public List<WithholdingElection> Withholdings { get; set; } = [];
     public List<PaycheckOverride> Overrides { get; set; } = [];
+
+    /// <summary>
+    /// Where the net pay lands. A cheque is rarely one deposit: a fixed amount into each of several
+    /// accounts and whatever is left into the last one. Without this, a $2,150 deposit looks like an
+    /// unexplained credit rather than part of a cheque.
+    /// </summary>
+    public List<DepositSplit> DepositSplits { get; set; } = [];
+
+    /// <summary>
+    /// How one cheque's net divides across accounts, in order. Fixed amounts come out first and the
+    /// remainder row takes what is left, which is how payroll systems do it — so a raise or a
+    /// deduction change moves only the remainder, exactly as it does in real life.
+    /// </summary>
+    public IReadOnlyList<(DepositSplit Split, decimal Amount)> SplitOf(decimal net)
+    {
+        var ordered = DepositSplits.Where(s => s.IsActive).OrderBy(s => s.Order).ToList();
+        var result = new List<(DepositSplit, decimal)>();
+        var left = net;
+
+        foreach (var split in ordered.Where(s => !s.IsRemainder))
+        {
+            var take = Math.Min(Math.Max(0m, left), split.Amount ?? 0m);
+            result.Add((split, take));
+            left -= take;
+        }
+
+        foreach (var split in ordered.Where(s => s.IsRemainder))
+        {
+            result.Add((split, Math.Max(0m, left)));
+            left = 0m;
+        }
+
+        return result;
+    }
+}
+
+/// <summary>One account a paycheck is deposited into, and how much of it goes there.</summary>
+public class DepositSplit
+{
+    public int Id { get; set; }
+    public int IncomeSourceId { get; set; }
+    public IncomeSource? IncomeSource { get; set; }
+
+    public int AccountId { get; set; }
+    public Account? Account { get; set; }
+
+    /// <summary>A fixed amount per cheque. Ignored when <see cref="IsRemainder"/> is set.</summary>
+    public decimal? Amount { get; set; }
+
+    /// <summary>Takes whatever is left after the fixed amounts. Only one row should have this.</summary>
+    public bool IsRemainder { get; set; }
+
+    /// <summary>Fixed amounts are taken in this order, which matters when a cheque is short.</summary>
+    public int Order { get; set; }
+
+    public bool IsActive { get; set; } = true;
+    public string? Notes { get; set; }
 }
 
 /// <summary>

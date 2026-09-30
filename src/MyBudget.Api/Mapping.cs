@@ -131,6 +131,11 @@ internal static class Mapping
         Id = s.Id, Name = s.Name, Type = s.Type, Notes = s.Notes, IsActive = s.IsActive, EndDate = s.EndDate,
         Overrides = s.Overrides.OrderBy(o => o.PayDate).Select(o => new PaycheckOverrideDto { Id = o.Id, PayDate = o.PayDate, GrossPercent = o.GrossFraction is { } f ? f * 100m : null, GrossAmount = o.GrossAmount, ProrateFixedDeductions = o.ProrateFixedDeductions, Notes = o.Notes }).ToList(),
         SalaryRates = s.SalaryRates.OrderBy(r => r.EffectiveDate).Select(r => new SalaryRateDto { Id = r.Id, IncomeSourceId = r.IncomeSourceId, AnnualAmount = r.AnnualAmount, EffectiveDate = r.EffectiveDate }).ToList(),
+        DepositSplits = s.DepositSplits.OrderBy(d => d.Order).Select(d => new DepositSplitDto
+        {
+            Id = d.Id, AccountId = d.AccountId, Amount = d.Amount, IsRemainder = d.IsRemainder,
+            Order = d.Order, IsActive = d.IsActive, Notes = d.Notes,
+        }).ToList(),
         PaySchedules = s.PaySchedules.OrderBy(p => p.EffectiveDate).Select(p => new PayScheduleDto
         {
             Id = p.Id, IncomeSourceId = p.IncomeSourceId, Frequency = p.Frequency, EffectiveDate = p.EffectiveDate, AnchorPayDate = p.AnchorPayDate,
@@ -160,6 +165,25 @@ internal static class Mapping
         s.SalaryRates.Clear();
         s.SalaryRates.AddRange(d.SalaryRates.Select(r => new SalaryRate { AnnualAmount = r.AnnualAmount, EffectiveDate = r.EffectiveDate }));
         s.PaySchedules.Clear();
+        // Only one row can be the remainder; the rest are fixed amounts taken in order.
+        s.DepositSplits.Clear();
+        var order = 0;
+        var remainderSeen = false;
+        foreach (var split in d.DepositSplits.Where(x => x.AccountId > 0))
+        {
+            var isRemainder = split.IsRemainder && !remainderSeen;
+            if (isRemainder) remainderSeen = true;
+            s.DepositSplits.Add(new DepositSplit
+            {
+                AccountId = split.AccountId,
+                Amount = isRemainder ? null : split.Amount,
+                IsRemainder = isRemainder,
+                Order = order++,
+                IsActive = split.IsActive,
+                Notes = split.Notes,
+            });
+        }
+
         s.PaySchedules.AddRange(d.PaySchedules.Select(p => new PaySchedule
         {
             Frequency = p.Frequency, EffectiveDate = p.EffectiveDate, AnchorPayDate = p.AnchorPayDate,
