@@ -70,6 +70,23 @@ app.MainWindow
     .SetUseOsDefaultLocation(true)
     .SetResizable(true);
 
+// On Linux the window's icon is not really the app's to set: the desktop matches the window's
+// WM_CLASS against a .desktop file and uses the icon named there. Setting it through the toolkit
+// alone leaves the default in place, which is why this looked like it was being ignored.
+//
+// So do both: tell the window, and make sure a .desktop entry exists that claims this window. The
+// installed package ships one, but a dev build runs from bin/ and matches nothing, so it registers
+// one for itself pointing at the icon beside the binary.
+var icon = Path.Combine(AppContext.BaseDirectory, "wwwroot", "icons", "mybudget-linux.png");
+if (File.Exists(icon))
+{
+    if (OperatingSystem.IsLinux()) RegisterDesktopEntry(icon);
+
+    app.MainWindow.IconFile = icon;
+    app.MainWindow.SetIconFile(icon);
+    app.MainWindow.RegisterWindowCreatedHandler((_, _) => app.MainWindow.SetIconFile(icon));
+}
+
 AppDomain.CurrentDomain.UnhandledException += (_, error) =>
 {
     try { app.MainWindow.ShowMessage("Fatal exception", error.ExceptionObject.ToString()); }
@@ -80,3 +97,42 @@ app.Run();
 
 if (localApi is not null) await localApi.DisposeAsync();
 return 0;
+
+/// <summary>
+/// Writes a per-user .desktop entry whose StartupWMClass matches this process, so the desktop can
+/// tie the running window to an icon. Harmless when the packaged entry already covers it: this one
+/// is named after the executable, so an installed run and a dev run do not fight over the same file.
+/// </summary>
+static void RegisterDesktopEntry(string iconPath)
+{
+    try
+    {
+        var home = Environment.GetEnvironmentVariable("HOME");
+        var exe = Environment.ProcessPath;
+        if (string.IsNullOrWhiteSpace(home) || string.IsNullOrWhiteSpace(exe)) return;
+
+        var processName = Path.GetFileName(exe);
+        if (string.IsNullOrWhiteSpace(processName)) return;
+
+        var dir = Path.Combine(home, ".local", "share", "applications");
+        Directory.CreateDirectory(dir);
+
+        File.WriteAllText(Path.Combine(dir, processName + ".desktop"), $"""
+            [Desktop Entry]
+            Version=1.0
+            Type=Application
+            Name=MyBudget
+            Comment=Personal budget
+            Exec="{exe.Replace("\"", "\\\"")}"
+            Icon={iconPath}
+            Terminal=false
+            Categories=Office;Finance;
+            StartupNotify=true
+            StartupWMClass={processName}
+            """);
+    }
+    catch
+    {
+        // An icon is not worth failing a launch over.
+    }
+}
