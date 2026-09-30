@@ -157,6 +157,55 @@ public static class BudgetEndpoints
         });
 
         // Upsert a line's month. Period is any date in that month. A row with nothing set is deleted.
+        // Where a line's money actually went, by label. Driven off transactions rather than the
+        // month rows, because a label split only exists on the individual transactions.
+        g.MapGet("/{id:int}/labels", async (int id, int? year, BudgetDbContext db, TimeProvider clock) =>
+        {
+            var y = year ?? clock.GetLocalNow().Year;
+            var from = new DateOnly(y, 1, 1);
+            var to = new DateOnly(y, 12, 31);
+
+            // The same rule the line's own actual uses: spending only, negated. Summing every
+            // transaction instead would let a refund push the labels above the line they belong to.
+            var rows = await db.Transactions
+                .Where(t => t.BudgetLineId == id && t.Amount < 0 && t.Date >= from && t.Date <= to)
+                .Select(t => new { t.LabelId, t.Date.Month, t.Amount })
+                .ToListAsync();
+
+            var labels = await db.Labels.ToDictionaryAsync(l => l.Id, l => l.Name);
+
+            var byLabel = rows
+                .GroupBy(r => r.LabelId)
+                .Select(g =>
+                {
+                    var months = Enumerable.Range(1, 12)
+                        .Select(m => Math.Round(g.Where(r => r.Month == m).Sum(r => -r.Amount), 2))
+                        .ToList();
+                    var name = g.Key is { } lid && labels.TryGetValue(lid, out var n) ? n : "No label";
+                    return new BudgetLabelRowDto(g.Key, name, months, Math.Round(months.Sum(), 2));
+                })
+                .OrderByDescending(r => r.Total)
+                .ToList();
+
+            // An actual can be recorded without transactions behind it — typed in by hand, or from a
+            // month reconciled before the statement arrived. Showing the remainder keeps the rows
+            // adding up to the line, so a gap reads as "not itemised" rather than money going missing.
+            var recorded = await db.BudgetPeriods
+                .Where(p => p.BudgetLineId == id && p.Period >= from && p.Period <= to && p.ActualAmount != null)
+                .Select(p => new { p.Period.Month, Amount = p.ActualAmount!.Value })
+                .ToListAsync();
+
+            var remainder = Enumerable.Range(1, 12)
+                .Select(m => Math.Round(recorded.Where(r => r.Month == m).Sum(r => r.Amount)
+                                        - byLabel.Sum(l => l.Months[m - 1]), 2))
+                .ToList();
+
+            if (remainder.Any(v => v != 0))
+                byLabel.Add(new BudgetLabelRowDto(null, "Not itemised", remainder, Math.Round(remainder.Sum(), 2)));
+
+            return new BudgetLabelBreakdownDto(id, y, byLabel.OrderByDescending(r => r.Total).ToList());
+        });
+
         g.MapPut("/{id:int}/periods/{period}", async (int id, DateOnly period, BudgetPeriodDto dto, BudgetDbContext db) =>
         {
             if (await db.BudgetLines.FindAsync(id) is null) return Results.NotFound();

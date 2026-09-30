@@ -119,6 +119,8 @@ public sealed class ApiClient(HttpClient http)
     public Task<TransactionDto> UpdateTransactionAsync(int id, TransactionUpdateDto u) => Put<TransactionUpdateDto, TransactionDto>($"api/transactions/{id}", u);
     public Task<TransactionDto> CreateTransactionAsync(TransactionCreateDto t) => Post<TransactionCreateDto, TransactionDto>("api/transactions", t);
     public Task DeleteTransactionAsync(int id) => Delete($"api/transactions/{id}");
+    public Task<BudgetLabelBreakdownDto> GetBudgetLabelsAsync(int lineId, int year)
+        => Get<BudgetLabelBreakdownDto>($"api/budget/{lineId}/labels?year={year}");
     public Task<List<CategoryRuleDto>> GetCategoryRulesAsync() => Get<List<CategoryRuleDto>>("api/category-rules");
     public Task<CategoryRuleDto> SaveCategoryRuleAsync(CategoryRuleDto r) => r.Id == 0 ? Post("api/category-rules", r) : Put($"api/category-rules/{r.Id}", r);
     public Task DeleteCategoryRuleAsync(int id) => Delete($"api/category-rules/{id}");

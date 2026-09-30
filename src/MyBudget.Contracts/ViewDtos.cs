@@ -27,6 +27,15 @@ public sealed record BudgetMonthDto(
     decimal Projected, bool ProjectedIsOverride,
     decimal? Actual, decimal? Variance, DateOnly? PaidOn, string? Notes);
 
+/// <summary>
+/// What a budget line's spending splits into by label, month by month. A line like "General
+/// Merchandise" covers Amazon, Costco and the rest; the split says which of them the money went to.
+/// Actuals only — a label has no budget of its own unless it has been given its own line.
+/// </summary>
+public sealed record BudgetLabelRowDto(int? LabelId, string LabelName, IReadOnlyList<decimal> Months, decimal Total);
+
+public sealed record BudgetLabelBreakdownDto(int BudgetLineId, int Year, IReadOnlyList<BudgetLabelRowDto> Rows);
+
 public sealed record BudgetHistoryDto(int BudgetLineId, string LineName, decimal Projected, decimal? AverageActual, IReadOnlyList<BudgetMonthDto> Months);
 
 public sealed record CardSummaryDto(

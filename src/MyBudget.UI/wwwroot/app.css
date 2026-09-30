@@ -493,3 +493,9 @@ fieldset.group.perk { margin-bottom: 14px; }
    visible wherever you are in a long import. */
 .banner.spread { background: var(--accent-soft); border: 1px solid var(--accent); }
 .banner.spread .row { gap: 10px; align-items: center; }
+
+/* A budget line opened to show where its money went by label. Set back and quieter than the line
+   itself, so the grid still reads as one row per budget line. */
+table.grid tr.label-row td { background: color-mix(in srgb, var(--accent) 4%, transparent); font-size: 11px; }
+table.grid tr.label-row td.indent { padding-left: 26px; }
+table.grid button.link.tree { padding: 0 4px 0 0; }

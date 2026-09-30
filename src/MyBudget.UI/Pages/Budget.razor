@@ -100,6 +100,12 @@ else
             var h = history.FirstOrDefault(x => x.BudgetLineId == b.Id);
             <tr class="@(b.IsActive ? "" : "muted")">
                 <td>
+                    @* A line covers several labels — General Merchandise is Amazon, Costco and the
+                       rest — so it opens to show where the money actually went. No category row:
+                       a line has exactly one category. *@
+                    <button class="link tree" type="button" title="Where this line's money went, by label" @onclick="() => ToggleLabels(b.Id)">
+                        <span class="caret">@(labelsOpen == b.Id ? "▾" : "▸")</span>
+                    </button>
                     <span class="tip">@b.Name
                         <span class="tip-box">
                             <span class="tip-head">
@@ -162,6 +168,38 @@ else
                 }
                 <td><button class="link" type="button" title="Edit line" @onclick="() => Edit(b)">✎</button></td>
             </tr>
+
+            @if (labelsOpen == b.Id)
+            {
+                @if (labelRows is null)
+                {
+                    <tr class="label-row"><td colspan="99" class="muted">Loading…</td></tr>
+                }
+                else if (labelRows.Rows.Count == 0)
+                {
+                    <tr class="label-row"><td colspan="99" class="muted">No transactions on this line in @year yet.</td></tr>
+                }
+                else
+                {
+                    @foreach (var lr in labelRows.Rows)
+                    {
+                        <tr class="label-row" @key="lr.LabelId">
+                            <td class="indent muted">@lr.LabelName</td>
+                            @if (Show("Category")) { <td></td> }
+                            @if (Show("Due")) { <td></td> }
+                            @if (Show("Paid via")) { <td></td> }
+                            @if (Show("Funded from")) { <td></td> }
+                            @if (Show("Projected")) { <td></td> }
+                            @foreach (var m in lr.Months)
+                            {
+                                <td class="money muted">@(m == 0 ? "" : Fmt.Money(m))</td>
+                            }
+                            @if (Show("Avg actual")) { <td class="money muted">@Fmt.Money(lr.Total)</td> }
+                            <td></td>
+                        </tr>
+                    }
+                }
+            }
         }
         </tbody>
         <tfoot>
@@ -307,6 +345,22 @@ else
     private List<BudgetHistoryDto>? priorHistory;
     private int year = DateTime.Today.Year;
     private bool showInactive;
+    private int? labelsOpen;
+    private BudgetLabelBreakdownDto? labelRows;
+
+    /// <summary>
+    /// Opens a line to show where its money went by label. Fetched on demand rather than with the
+    /// grid — a breakdown for every line would be a query per line for something rarely looked at.
+    /// </summary>
+    private async Task ToggleLabels(int lineId)
+    {
+        if (labelsOpen == lineId) { labelsOpen = null; labelRows = null; return; }
+
+        labelsOpen = lineId;
+        labelRows = null;
+        try { labelRows = await Api.GetBudgetLabelsAsync(lineId, year); }
+        catch (Exception ex) { error = ex.Message; labelsOpen = null; }
+    }
 
 
     /// <summary>Starts a new amount row at this month, or the month after the last change.</summary>
