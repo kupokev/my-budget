@@ -137,6 +137,26 @@ public class LedgerEndpointTests : IClassFixture<ApiFixture>
     }
 
     [Fact]
+    public async Task Upcoming_line_marked_paid_on_the_budget_grid_says_so()
+    {
+        var upcoming = await _api.Get<List<UpcomingLineDto>>("api/budget/upcoming?days=14");
+        var history = await _api.Get<List<BudgetHistoryDto>>($"api/budget/history?year={upcoming[0].DueDate.Year}");
+        // One with nothing recorded for its month, so deleting the row afterwards loses nothing.
+        var line = upcoming.First(u => history.Single(h => h.BudgetLineId == u.BudgetLineId).Months
+            .Single(m => m.Period.Month == u.DueDate.Month) is { Actual: null, PaidOn: null, ProjectedIsOverride: false, DueDateIsOverride: false, Notes: null });
+        Assert.False(line.IsPaid);
+
+        var period = $"{line.DueDate:yyyy-MM}-01";
+        await _api.Put($"api/budget/{line.BudgetLineId}/periods/{period}", new BudgetPeriodDto { ActualAmount = 12.34m, PaidOn = line.DueDate });
+        var after = (await _api.Get<List<UpcomingLineDto>>("api/budget/upcoming?days=14")).Single(u => u.BudgetLineId == line.BudgetLineId && u.DueDate == line.DueDate);
+        Assert.True(after.IsPaid);
+        Assert.Equal(line.DueDate, after.PaidOn);
+        Assert.Equal(12.34m, after.PaidAmount);
+
+        await _api.Client.DeleteAsync($"api/budget/{line.BudgetLineId}/periods/{period}");
+    }
+
+    [Fact]
     public async Task Transfer_between_two_accounts_writes_both_sides_and_deletes_together()
     {
         var accounts = await _api.Get<List<AccountDto>>("api/accounts");

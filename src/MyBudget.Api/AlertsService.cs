@@ -19,7 +19,7 @@ public sealed class AlertsService(BudgetDbContext db, InvestmentService investme
         // week makes it a warning; otherwise it's worth knowing but not urgent.
         foreach (var n in needs.Accounts.Where(n => n.LongShort < 0))
         {
-            var soon = upcoming.Where(b => b.FundingAccount == n.AccountName && b.DueDate <= today.AddDays(7)).ToList();
+            var soon = upcoming.Where(b => !b.IsPaid && b.FundingAccount == n.AccountName && b.DueDate <= today.AddDays(7)).ToList();
             var moved = $"Moved {n.TransferredThisMonth:C} of {n.MonthlyNeed:C} so far ({Fmt(n.Cadence)}).";
             alerts.Add(new("transfer",
                 soon.Count > 0 ? AlertSeverity.Warning : AlertSeverity.Info,
@@ -37,7 +37,8 @@ public sealed class AlertsService(BudgetDbContext db, InvestmentService investme
         {
             if (a.Balances.Count == 0 && a.Transactions.Count == 0) continue;
             var cur = BalanceMath.Of(a, today);
-            var due = upcoming.Where(b => b.FundingAccount == a.Name && b.DueDate <= today.AddDays(14)).Sum(b => b.Amount);
+            // A line already marked paid has left the account; counting it again would ask for it twice.
+            var due = upcoming.Where(b => !b.IsPaid && b.FundingAccount == a.Name && b.DueDate <= today.AddDays(14)).Sum(b => b.Amount);
             if (due > 0 && cur.Balance < due + a.MinimumBalance)
                 alerts.Add(new("balance", AlertSeverity.Danger, $"{a.Name} balance {cur.Balance:C} won't cover {due:C} due in the next 14 days",
                     $"Keep {a.MinimumBalance:C} minimum; short by {due + a.MinimumBalance - cur.Balance:C} ({cur.Detail}).", "accounts"));

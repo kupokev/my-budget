@@ -19,7 +19,15 @@ public sealed record PayDateDto(DateOnly Date, string IncomeSource, bool ThirdCh
 
 public sealed record PayCalendarDto(int Year, IReadOnlyList<PayDateDto> PayDates, IReadOnlyList<string> ThreePaycheckMonths);
 
-public sealed record UpcomingLineDto(int BudgetLineId, string LineName, DateOnly DueDate, decimal Amount, string PaidVia, string FundingAccount, bool IsAutopay);
+/// <summary>
+/// A line falling due. <see cref="IsPaid"/> when that month's row on the Budget grid has an actual or a
+/// paid-on date; <see cref="PaidOn"/> and <see cref="PaidAmount"/> are what was recorded there.
+/// </summary>
+public sealed record UpcomingLineDto(int BudgetLineId, string LineName, DateOnly DueDate, decimal Amount, string PaidVia, string FundingAccount, bool IsAutopay,
+    DateOnly? PaidOn = null, decimal? PaidAmount = null)
+{
+    public bool IsPaid => PaidOn is not null || PaidAmount is not null;
+}
 
 /// <summary>A line's month in the year grid. DueDate is the override if set, else the generated date, else null when not due.</summary>
 public sealed record BudgetMonthDto(

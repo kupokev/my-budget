@@ -258,15 +258,17 @@ public static class BudgetEndpoints
         var to = asOf.AddDays(days);
         var lines = await db.BudgetLines.Include(b => b.PaymentAccount).Include(b => b.PaymentCard).Include(b => b.FundingAccount).Include(b => b.Periods).Include(b => b.Amounts).Where(b => b.IsActive).ToListAsync();
         return lines
-            .SelectMany(b => BudgetDueDates.Between(b, asOf, to, DueOverrides(b)).Select(d => new UpcomingLineDto(
-                b.Id, b.Name, d, b.Periods.FirstOrDefault(p => p.Period == new DateOnly(d.Year, d.Month, 1))?.ProjectedAmount ?? b.ProjectedAmount,
-                b.PaymentMethod switch
+            .SelectMany(b => BudgetDueDates.Between(b, asOf, to, DueOverrides(b)).Select(d => (b, d, row: b.Periods.FirstOrDefault(p => p.Period == new DateOnly(d.Year, d.Month, 1)))))
+            .Select(x => (x.b, x.d, x.row, line: new UpcomingLineDto(
+                x.b.Id, x.b.Name, x.d, x.row?.ProjectedAmount ?? x.b.ProjectedAmount,
+                x.b.PaymentMethod switch
                 {
-                    PaymentMethodKind.Card => $"Card: {b.PaymentCard?.Name}",
+                    PaymentMethodKind.Card => $"Card: {x.b.PaymentCard?.Name}",
                     PaymentMethodKind.Cash => "Cash",
-                    _ => b.PaymentAccount?.Name ?? "—",
+                    _ => x.b.PaymentAccount?.Name ?? "—",
                 },
-                b.FundingAccount?.Name ?? "—", b.IsAutopay)))
+                x.b.FundingAccount?.Name ?? "—", x.b.IsAutopay, x.row?.PaidOn, x.row?.ActualAmount)))
+            .Select(x => x.line)
             .OrderBy(u => u.DueDate).ThenBy(u => u.LineName)
             .ToList();
     }

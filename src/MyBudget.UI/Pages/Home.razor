@@ -60,9 +60,19 @@ else
             else
             {
                 <table class="compact">
-                    <thead><tr><th>Due</th><th>Budget line</th><th class="money">Amount</th><th>Paid via</th></tr></thead>
-                    <tbody>@foreach (var b in d.UpcomingLines) { <tr><td>@Fmt.Date(b.DueDate)</td><td>@b.LineName @(b.IsAutopay ? "" : "✍")</td><td><Money Value="b.Amount" /></td><td>@b.PaidVia</td></tr> }</tbody>
-                    <tfoot><tr><th></th><th>Total</th><th><Money Value="d.UpcomingLines.Sum(b => b.Amount)" /></th><th></th></tr></tfoot>
+                    <thead><tr><th>Due</th><th>Budget line</th><th class="money">Amount</th><th>Paid via</th><th>Paid</th></tr></thead>
+                    <tbody>@foreach (var b in d.UpcomingLines)
+                    {
+                        @* Marked paid on the Budget grid. The row dims so what is still outstanding stands out. *@
+                        <tr class="@(b.IsPaid ? "muted" : "")">
+                            <td>@Fmt.Date(b.DueDate)</td><td>@b.LineName @(b.IsAutopay ? "" : "✍")</td><td><Money Value="b.Amount" /></td><td>@b.PaidVia</td>
+                            <td class="@(b.IsPaid ? "pos" : "")" title="@(b.PaidAmount is { } amt ? $"Paid {Fmt.Money(amt)}" : null)">@(b.IsPaid ? (b.PaidOn is { } on ? $"✓ {on:MMM d}" : "✓") : "")</td>
+                        </tr>
+                    }</tbody>
+                    <tfoot>
+                        <tr><th></th><th>Total</th><th><Money Value="d.UpcomingLines.Sum(b => b.Amount)" /></th><th></th><th></th></tr>
+                        <tr><th></th><th>Still to pay</th><th><Money Value="d.UpcomingLines.Where(b => !b.IsPaid).Sum(b => b.Amount)" /></th><th></th><th></th></tr>
+                    </tfoot>
                 </table>
             }
         </section>
