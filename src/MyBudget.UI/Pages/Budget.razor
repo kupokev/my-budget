@@ -22,6 +22,7 @@ else
             <select @bind="sort">
                 <option value="name">by name</option>
                 <option value="category">by category, then name</option>
+                <option value="due">by due day</option>
             </select>
         </label>
         <details class="dropdown">
@@ -379,8 +380,9 @@ else
     private string sort = "name";
 
     /// <summary>
-    /// Name, or category then name. Uncategorised lines sort last rather than first under an empty
-    /// heading, and the name is always the tie-break so the order is stable either way.
+    /// Name, category then name, or the day of the month a line falls due — the order bills come out
+    /// of the account. Uncategorised and undated (Variable) lines sort last rather than first, and the
+    /// name is always the tie-break so the order is stable.
     /// </summary>
     private IEnumerable<BudgetLineDto> Sorted(IEnumerable<BudgetLineDto> rows) => sort switch
     {
@@ -388,8 +390,16 @@ else
             .OrderBy(b => b.CategoryId is null)
             .ThenBy(b => CategoryName(b.CategoryId), StringComparer.OrdinalIgnoreCase)
             .ThenBy(b => b.Name, StringComparer.OrdinalIgnoreCase),
+        "due" => rows
+            .OrderBy(b => b.Frequency == BudgetFrequency.Variable)
+            .ThenBy(DueDayOf)
+            .ThenBy(b => b.Name, StringComparer.OrdinalIgnoreCase),
         _ => rows.OrderBy(b => b.Name, StringComparer.OrdinalIgnoreCase),
     };
+
+    /// <summary>Monthly lines use their due day; quarterly, annual and one-off lines the day of their anchor date.</summary>
+    private static int DueDayOf(BudgetLineDto b) =>
+        b.Frequency != BudgetFrequency.Monthly && b.AnchorDueDate is { } d ? d.Day : b.DueDay;
 
     private string CategoryName(int? id) => categories?.FirstOrDefault(c => c.Id == id)?.Name ?? "";
     private readonly HashSet<string> shown = [];
