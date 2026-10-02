@@ -43,7 +43,7 @@ else
         <section class="panel">
             <h2>Net worth over time</h2>
             <LineChart Series="@NetWorthSeries()" XAxisLabels="@nw.History.Select(h => h.Period.ToString("MMM yy")).ToList()"
-                       SmoothLines="true" CrosshairTooltip="true" Responsive="true" Width="1100" Height="300" Theme="@Palette"
+                       SmoothLines="true" CrosshairTooltip="true" Responsive="true" Width="1600" Height="260" Theme="@Palette"
                        Description="Net worth by month, with what you own and what you owe behind it." />
         </section>
     }
