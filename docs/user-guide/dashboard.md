@@ -22,15 +22,21 @@ Expand it to see each one with a link to the screen that fixes it.
 - **Rainy-day fund** — how many months of expenses the accounts you marked would cover. Mark an
   account on [Accounts](accounts.md).
 
-## Spending this month vs last
+## Paid this month vs last
 
-A cumulative line: this month against last month, day by day. Being below the previous line means
-you are spending more slowly than last month, not that you have spent less overall.
+A cumulative line of what the Budget grid records as paid: this month against last month, day by
+day. Being below the previous line means you are paying out more slowly than last month, not that
+you have paid less overall.
+
+Each amount lands on its **Paid on** date; without one, on the day the line was due that month; a
+Variable line with neither (Fuel, Clothing) lands on today, or on the last day of a past month.
+Imported transactions don't feed it — only what is entered on the grid.
 
 ## Due in the next 14 days
 
-Every budget line falling due, what it costs, and which card or account pays it. This is the panel
-worth checking on a Sunday.
+Every budget line falling due, what it costs, and which card or account pays it. A line marked paid
+on the Budget grid shows ✓ and its paid date, and is dimmed; **Still to pay** totals the rest. This
+is the panel worth checking on a Sunday.
 
 ## Goals
 

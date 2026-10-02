@@ -119,8 +119,8 @@ public sealed record SpendingSummaryDto(int Year, int Month, decimal ThisMonth, 
     IReadOnlyList<SpendingCategoryDto> Categories, int UncategorizedCount, decimal UncategorizedAmount, decimal IncomeThisMonth);
 
 /// <summary>
-/// Spending run up day by day, this month against last, for the dashboard chart. Both series are
-/// cumulative, so each day's figure includes everything spent before it in that month.
+/// What the Budget grid records as paid, run up day by day, this month against last, for the dashboard
+/// chart. Both series are cumulative, so each day's figure includes everything paid before it that month.
 /// </summary>
 public sealed record CumulativeSpendDto(
     int Year, int Month, DateOnly AsOf, int DayOfMonth,

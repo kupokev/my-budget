@@ -157,6 +157,25 @@ public class LedgerEndpointTests : IClassFixture<ApiFixture>
     }
 
     [Fact]
+    public async Task Paid_chart_runs_up_budget_grid_actuals_on_the_day_paid_or_due()
+    {
+        var lines = await _api.Get<List<BudgetLineDto>>("api/budget");
+        var water = lines.Single(b => b.Name == "Water");
+        await _api.Put($"api/budget/{water.Id}/periods/2023-03-01", new BudgetPeriodDto { ActualAmount = 61m, PaidOn = new(2023, 3, 5) });
+        await _api.Put($"api/budget/{water.Id}/periods/2023-02-01", new BudgetPeriodDto { ActualAmount = 55m }); // no paid-on → its due day, the 20th
+
+        var cs = await _api.Get<CumulativeSpendDto>("api/spending/cumulative?year=2023&month=3");
+        Assert.Equal(0m, cs.ThisMonth[3]);
+        Assert.Equal(61m, cs.ThisMonth[4]);
+        Assert.Equal(0m, cs.LastMonth[18]);
+        Assert.Equal(55m, cs.LastMonth[19]);
+        Assert.Equal(55m, cs.LastMonth[^1]);
+
+        await _api.Client.DeleteAsync($"api/budget/{water.Id}/periods/2023-03-01");
+        await _api.Client.DeleteAsync($"api/budget/{water.Id}/periods/2023-02-01");
+    }
+
+    [Fact]
     public async Task Transfer_between_two_accounts_writes_both_sides_and_deletes_together()
     {
         var accounts = await _api.Get<List<AccountDto>>("api/accounts");

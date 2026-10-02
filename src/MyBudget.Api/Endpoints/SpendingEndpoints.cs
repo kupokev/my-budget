@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using MyBudget.Contracts;
 using MyBudget.Data;
 using MyBudget.Domain;
+using MyBudget.Engines.Ledger;
 
 namespace MyBudget.Api.Endpoints;
 
@@ -83,21 +84,35 @@ public static class SpendingEndpoints
     private static decimal R(decimal d) => Math.Round(d, 2, MidpointRounding.AwayFromZero);
 
     /// <summary>
-    /// Money out per day, run up cumulatively, for the named month and the one before it. Transfers and
-    /// card payments are excluded, and a manual row reconciled to an imported one counts once.
-    /// The current month's line stops at today so it doesn't read as a plateau.
+    /// What the Budget grid records as paid, run up day by day, for the named month and the one before
+    /// it. It reads the grid rather than imported transactions: the grid is where a bill is marked paid,
+    /// and transactions only cover the accounts that have had a statement imported.
+    ///
+    /// Each month's actual lands on the day it was paid: its paid-on date, else the day it was due that
+    /// month, else (a Variable line, which has no due date) the last day so far — today in the current
+    /// month, month end in a past one. A date outside its month is pulled to the month's edge, so
+    /// September's bill paid on August 30 still counts in September. The current month stops at today.
     /// </summary>
     internal static async Task<CumulativeSpendDto> Cumulative(BudgetDbContext db, int year, int month, DateOnly today)
     {
         var start = new DateOnly(year, month, 1);
         var priorStart = start.AddMonths(-1);
         var end = start.AddMonths(1);
+        var isCurrent = today.Year == year && today.Month == month;
 
-        var rows = await db.Transactions
-            .Where(t => !t.IsTransfer && t.Amount < 0 && t.Date >= priorStart && t.Date < end)
-            .Where(t => t.Origin != TransactionOrigin.Manual || t.ReconciledWithId == null)
-            .Select(t => new { t.Date, t.Amount })
+        var periods = await db.BudgetPeriods.Include(p => p.BudgetLine).ThenInclude(b => b!.Periods)
+            .Where(p => p.ActualAmount != null && p.Period >= priorStart && p.Period < end)
             .ToListAsync();
+
+        var rows = periods.Select(p =>
+        {
+            var monthEnd = p.Period.AddMonths(1).AddDays(-1);
+            var lastDay = isCurrent && p.Period == start ? today : monthEnd;
+            var due = BudgetDueDates.Between(p.BudgetLine!, p.Period, monthEnd, BudgetEndpoints.DueOverrides(p.BudgetLine!)).Cast<DateOnly?>().FirstOrDefault();
+            var day = p.PaidOn ?? due ?? lastDay;
+            day = day < p.Period ? p.Period : day > lastDay ? lastDay : day;
+            return new { Date = day, Amount = -p.ActualAmount!.Value };
+        }).ToList();
 
         static decimal[] Daily(IEnumerable<(DateOnly Date, decimal Amount)> src, DateOnly monthStart)
         {
@@ -118,7 +133,6 @@ public static class SpendingEndpoints
         var labels = Enumerable.Range(1, span).Select(d => d.ToString()).ToList();
 
         // Today caps the current month; a past month is shown whole.
-        var isCurrent = today.Year == year && today.Month == month;
         var upTo = isCurrent ? today.Day : thisSeries.Length;
         var thisOut = thisSeries.Take(upTo).ToList();
         var lastOut = lastSeries.ToList();
@@ -133,8 +147,8 @@ public static class SpendingEndpoints
         // Two separate facts. Joining them with "bringing" implies the week caused the gap, which
         // reads oddly when the week is empty and isn't true even when it isn't.
         var week = thisWeek == 0
-            ? "Nothing spent in the last seven days."
-            : $"{thisWeek:C} spent in the last seven days.";
+            ? "Nothing marked paid in the last seven days."
+            : $"{thisWeek:C} marked paid in the last seven days.";
         var against = difference == 0
             ? "This month is level with the same point last month."
             : $"This month is {Math.Abs(difference):C} {(difference < 0 ? "below" : "above")} where it stood at this point last month.";

@@ -48,7 +48,7 @@ else
     @if (cumulative is { } cs && cs.ThisMonth.Count > 0)
     {
         <section class="panel grow compact-panel">
-            <h2>Spending this month vs last</h2>
+            <h2>Paid this month vs last</h2>
             <LineChart Series="@SpendSeries(cs)" XAxisLabels="@cs.Days.ToList()" SmoothLines="true" CrosshairTooltip="true"
                        Responsive="true" Width="640" Height="280" Theme="@Palette" Description="@cs.Summary" />
             <p class="muted">@cs.Summary</p>
