@@ -1,0 +1,54 @@
+@*
+   Which year an editor is showing. Card terms change — IHG's card gives something different in 2027
+   than in 2026 — and every row carries the years it applies, but a list of every year's rows at once
+   made "what does 2027 look like?" a matter of reading From/Until on each one. This shows one year,
+   and offers to start a new version of the rows from it.
+*@
+<div class="toolbar year-scope">
+    <span class="year-nav">
+        <button class="secondary" type="button" title="Previous year" @onclick="() => YearChanged.InvokeAsync(Year - 1)">‹</button>
+        <strong>@Year</strong>
+        <button class="secondary" type="button" title="Next year" @onclick="() => YearChanged.InvokeAsync(Year + 1)">›</button>
+    </span>
+    <span class="muted">
+        @What in force in @Year@if (Hidden > 0) { <text> · @Hidden from other years not shown</text> }
+    </span>
+    @if (CanSplit)
+    {
+        <button class="secondary" type="button" @onclick="OnSplit"
+                title="@($"Ends these at {Year - 1} and copies them to start in {Year}, so {Year} can be edited without changing earlier years.")">
+            Change from @Year
+        </button>
+    }
+</div>
+
+@code {
+    [Parameter] public int Year { get; set; }
+    [Parameter] public EventCallback<int> YearChanged { get; set; }
+
+    /// <summary>What the rows are, e.g. "Earn rates", for the "… in force in 2027" line.</summary>
+    [Parameter] public string What { get; set; } = "";
+
+    /// <summary>Rows that exist but apply only in other years.</summary>
+    [Parameter] public int Hidden { get; set; }
+
+    /// <summary>True when some shown row also applies before <see cref="Year"/>, so there is something to split.</summary>
+    [Parameter] public bool CanSplit { get; set; }
+    [Parameter] public EventCallback OnSplit { get; set; }
+
+    /// <summary>Whether a From/Until pair (blank = open) covers a year.</summary>
+    public static bool Covers(int? start, int? end, int year) => (start is null || year >= start) && (end is null || year <= end);
+
+    /// <summary>
+    /// The years a row added while viewing <paramref name="year"/> should get: open-ended in the
+    /// current year, from that year on in a future one, just that year when filling in the past.
+    /// </summary>
+    public static (int? Start, int? End) ForNew(int year)
+    {
+        var now = DateTime.Today.Year;
+        return year > now ? (year, null) : year < now ? (year, year) : (null, null);
+    }
+
+    /// <summary>A shown row that also applied before the year — the ones "Change from" splits.</summary>
+    public static bool StartedBefore(int? start, int year) => start is null || start < year;
+}

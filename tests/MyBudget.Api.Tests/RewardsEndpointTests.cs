@@ -10,6 +10,34 @@ public class RewardsEndpointTests : IClassFixture<ApiFixture>
     public RewardsEndpointTests(ApiFixture api) => _api = api;
 
     [Fact]
+    public async Task Splitting_a_benefit_by_year_moves_later_uses_to_the_new_version()
+    {
+        var cards = await _api.Get<List<CardDto>>("api/cards");
+        var card = cards.Single(c => c.Name == "Chase IHG One Rewards Premier");
+        var original = await _api.Get<CardRewardsDto>($"api/cards/{card.Id}/rewards");
+
+        var rw = await _api.Get<CardRewardsDto>($"api/cards/{card.Id}/rewards");
+        rw.Perks.Add(new CardPerkDto { Description = "Split test bag", ValuePerUse = 40m });
+        rw = await _api.Put($"api/cards/{card.Id}/rewards", rw);
+        var perk = rw.Perks.Single(p => p.Description == "Split test bag");
+        await _api.Post<CardPerkUseDto, CardPerkUseDto>($"api/perks/{perk.Id}/uses", new() { Date = new(2026, 5, 1) });
+        await _api.Post<CardPerkUseDto, CardPerkUseDto>($"api/perks/{perk.Id}/uses", new() { Date = new(2027, 2, 1) });
+
+        // What "Change from 2027" sends: the old version ends in 2026, a copy starts in 2027.
+        rw = await _api.Get<CardRewardsDto>($"api/cards/{card.Id}/rewards");
+        rw.Perks.Single(p => p.Id == perk.Id).EndYear = 2026;
+        rw.Perks.Add(new CardPerkDto { Description = "Split test bag", ValuePerUse = 50m, StartYear = 2027 });
+        rw = await _api.Put($"api/cards/{card.Id}/rewards", rw);
+
+        var v2026 = rw.Perks.Single(p => p.Description == "Split test bag" && p.EndYear == 2026);
+        var v2027 = rw.Perks.Single(p => p.Description == "Split test bag" && p.StartYear == 2027);
+        Assert.Equal([new DateOnly(2026, 5, 1)], v2026.Uses.Select(u => u.Date));
+        Assert.Equal([new DateOnly(2027, 2, 1)], v2027.Uses.Select(u => u.Date));
+
+        await _api.Put($"api/cards/{card.Id}/rewards", original);
+    }
+
+    [Fact]
     public async Task A_card_carries_its_own_earn_rules_thresholds_and_program_link()
     {
         var cards = await _api.Get<List<CardDto>>("api/cards");

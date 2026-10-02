@@ -71,6 +71,16 @@ public static class RewardsEndpoints
                 perk.MaxUsesPerPeriod = x.MaxUsesPerPeriod;
                 perk.StartYear = x.StartYear; perk.EndYear = x.EndYear; perk.Notes = x.Notes;
             }
+            // A benefit split into a 2026 and a 2027 version keeps its log on the earlier one. A use
+            // dated in a year that version no longer covers would stop counting, so it moves to the
+            // version of the same benefit that does cover it.
+            foreach (var perk in c.Perks)
+                foreach (var use in perk.Uses.Where(u => !perk.AppliesIn(u.Date.Year)).ToList())
+                    if (c.Perks.FirstOrDefault(o => o != perk && o.Description == perk.Description && o.AppliesIn(use.Date.Year)) is { } home)
+                    {
+                        perk.Uses.Remove(use);
+                        home.Uses.Add(use);
+                    }
             c.Thresholds.Clear();
             c.Thresholds.AddRange(dto.Thresholds.Where(t => !string.IsNullOrWhiteSpace(t.Description)).Select(t => new SpendThreshold { Amount = t.Amount, RewardKind = t.RewardKind, Description = t.Description.Trim(), ValueDollars = t.ValueDollars, TierName = t.TierName, StartYear = t.StartYear, EndYear = t.EndYear }));
             await db.SaveChangesAsync();

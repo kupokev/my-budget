@@ -52,6 +52,19 @@ you in the rewards heads-up when a periodic benefit is unused and time is runnin
 **Automatic / yr** is the rarer kind that arrives whether you act or not, like a Global Entry credit.
 Leave it at zero for anything you have to use.
 
+### When the card's terms change
+
+Both editors show one year at a time — **‹ 2026 ›** at the top — with a note of how many rows
+belong only to other years. To record that a card changes in 2027:
+
+1. Step to **2027**. It shows 2026's rows, since nothing has ended yet.
+2. Press **Change from 2027**. Every row shown is ended at 2026 and copied to start in 2027.
+3. Edit, remove or add rows for 2027, and save. 2026 still shows exactly what it had.
+
+A row added while viewing a future year starts that year; one added while viewing a past year
+applies to that year only. From year / Until year stay on every row if a range needs adjusting by
+hand. Uses already logged stay with the version of the benefit that covered their date.
+
 ## When a fee changes
 
 Cards waive the first year and raise the fee later. Editing the single **Annual fee** would rewrite
