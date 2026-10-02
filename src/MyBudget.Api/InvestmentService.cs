@@ -82,6 +82,28 @@ public sealed class InvestmentService(BudgetDbContext db, IMarketDataProvider ma
         return created;
     }
 
+    /// <summary>
+    /// Value and cost over the last <paramref name="months"/> months, from the same active holdings
+    /// and the same lot math as <see cref="PortfolioAsync"/>, so the last point matches its totals.
+    /// </summary>
+    public async Task<PortfolioHistoryDto> HistoryAsync(DateOnly asOf, int months, CancellationToken ct = default)
+    {
+        var holdings = await db.Holdings.Include(h => h.Trades).Where(h => h.IsActive).ToListAsync(ct);
+        var tickers = holdings.Select(h => h.Ticker).Distinct().ToList();
+        var prices = (await db.Prices.Where(p => tickers.Contains(p.Ticker)).Select(p => new { p.Ticker, p.Date, p.Price }).ToListAsync(ct))
+            .ToLookup(p => p.Ticker);
+        var inputs = holdings.Select(h => new HoldingHistory(h.Ticker, h.Trades,
+            prices[h.Ticker].OrderBy(p => p.Date).Select(p => (p.Date, p.Price)).ToList())).ToList();
+
+        var from = asOf.AddMonths(-months);
+        var points = PortfolioHistory.SampleDates(from, asOf)
+            .Select(d => PortfolioHistory.ValueOn(inputs, d))
+            .Select(p => new PortfolioPointDto(p.Date, p.Value, p.Cost))
+            .ToList();
+        return new PortfolioHistoryDto(from, asOf, months, points,
+            "Each point: shares held in open lots on that date × the latest close on or before it, summed over active holdings. Cost is those lots' basis.");
+    }
+
     public async Task<PortfolioDto> PortfolioAsync(DateOnly asOf, int year, CancellationToken ct = default)
     {
         var holdings = await db.Holdings.Include(h => h.Account).Include(h => h.Trades).Include(h => h.Dividends).Include(h => h.Fees).Where(h => h.IsActive).OrderBy(h => h.Ticker).ToListAsync(ct);

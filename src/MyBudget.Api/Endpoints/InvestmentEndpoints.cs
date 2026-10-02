@@ -17,6 +17,12 @@ public static class InvestmentEndpoints
             return await svc.PortfolioAsync(today, year ?? today.Year);
         });
 
+        g.MapGet("/history", async (int? months, DateOnly? asOf, InvestmentService svc, TimeProvider clock) =>
+        {
+            var today = asOf ?? DateOnly.FromDateTime(clock.GetLocalNow().DateTime);
+            return await svc.HistoryAsync(today, Math.Clamp(months ?? 12, 1, 60));
+        });
+
         g.MapGet("/holdings", async (BudgetDbContext db) => (await db.Holdings.Include(h => h.Account).OrderBy(h => h.Ticker).ToListAsync()).Select(InvestmentService.ToDto));
         g.MapPost("/holdings", async (HoldingDto dto, BudgetDbContext db) =>
         {

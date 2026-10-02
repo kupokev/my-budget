@@ -48,6 +48,20 @@ public class BuildoutEndpointTests : IClassFixture<ApiFixture>
     }
 
     [Fact]
+    public async Task Value_history_ends_on_the_portfolio_tiles()
+    {
+        var h = await NewHolding("TST3", drip: false);
+        await _api.Client.PostAsync($"api/investments/prices?ticker=TST3&date=2026-09-25&price=300", null);
+        var pf = await _api.Get<PortfolioDto>("api/investments/portfolio?year=2026&asOf=2026-09-26");
+        var history = await _api.Get<PortfolioHistoryDto>("api/investments/history?months=3&asOf=2026-09-26");
+
+        Assert.Equal(new DateOnly(2026, 6, 26), history.From);
+        Assert.Equal(pf.TotalValue, history.Points[^1].Value);
+        Assert.Equal(pf.TotalCost, history.Points[^1].Cost);
+        await _api.Client.DeleteAsync($"api/investments/holdings/{h.Id}");
+    }
+
+    [Fact]
     public async Task Manual_dividend_on_a_drip_holding_creates_a_reinvest_trade()
     {
         var vti = await NewHolding("TST2", drip: true);

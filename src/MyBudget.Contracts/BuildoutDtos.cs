@@ -72,6 +72,11 @@ public sealed record GainsTaxDto(decimal ShortTermGain, decimal LongTermGain, de
 public sealed record PortfolioDto(DateOnly AsOf, int Year, IReadOnlyList<PositionDto> Positions, decimal TotalValue, decimal TotalCost, decimal TotalUnrealized, decimal DividendsThisYear,
     decimal RealizedShortTerm, decimal RealizedLongTerm, GainsTaxDto? Tax, IReadOnlyList<string> Warnings);
 
+public sealed record PortfolioPointDto(DateOnly Date, decimal Value, decimal Cost);
+
+/// <summary>Market value and cost basis over a trailing window, ending at <see cref="To"/>.</summary>
+public sealed record PortfolioHistoryDto(DateOnly From, DateOnly To, int Months, IReadOnlyList<PortfolioPointDto> Points, string Formula);
+
 /// <summary>A cash or sweep balance as at a date, set by hand when no fresh export exists.</summary>
 public sealed class CashBalanceDto
 {

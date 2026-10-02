@@ -54,6 +54,30 @@ else
         }
     </div>
 
+    @if (history is { Points.Count: > 1 } hist)
+    {
+        var first = hist.Points[0]; var last = hist.Points[^1];
+        <section class="panel">
+            <h2>Value over time</h2>
+            <div class="toolbar">
+                <span class="muted" title="@hist.Formula">
+                    Since @Fmt.Date(first.Date): value <Money Value="last.Value - first.Value" Signed="true" />,
+                    of which <Money Value="(last.Value - last.Cost) - (first.Value - first.Cost)" Signed="true" /> is the market
+                    and <Money Value="last.Cost - first.Cost" Signed="true" /> is money in or out
+                </span>
+                <span class="tabs">
+                    @foreach (var (m, label) in Ranges)
+                    {
+                        <button type="button" class="@(historyMonths == m ? "" : "secondary")" @onclick="() => ChangeRange(m)">@label</button>
+                    }
+                </span>
+            </div>
+            <LineChart Series="@HistorySeries(hist)" XAxisLabels="@hist.Points.Select(p => p.Date.ToString(historyMonths > 12 ? "MMM yy" : "MMM d")).ToList()"
+                       MaxXAxisLabels="10" SmoothLines="true" CrosshairTooltip="true" Responsive="true" Width="1600" Height="260" Theme="@Palette"
+                       Description="Market value of the portfolio, with its cost basis beneath it." />
+        </section>
+    }
+
     <section class="panel">
         <table>
             <thead><tr><th>Account / holding</th><th class="money">Shares</th><th class="money">Price</th><th class="money" title="Move between the two most recent closes">Day</th><th class="money">Value</th><th class="money">Cost</th><th class="money">Unrealized</th><th class="money" title="Paid so far in the selected year">Dividends</th><th class="money" title="A year at the current run rate: trailing-twelve-month dividends per share × shares held now">Est. / yr</th><th>DRIP</th><th></th></tr></thead>
@@ -259,6 +283,9 @@ else
 @code {
     private int year = DateTime.Today.Year;
     private PortfolioDto? portfolio;
+    private PortfolioHistoryDto? history;
+    private int historyMonths = 12;
+    private static readonly (int Months, string Label)[] Ranges = [(1, "1M"), (3, "3M"), (6, "6M"), (12, "1Y"), (36, "3Y")];
     private List<AccountDto>? accounts;
     private HoldingDto? editing;
     private int? open;
@@ -324,11 +351,36 @@ else
         {
             accounts ??= await Api.GetAccountsAsync();
             portfolio = await Api.GetPortfolioAsync(year);
+            history = await Api.GetPortfolioHistoryAsync(historyMonths);
         }
         catch (Exception ex) { error = ex.Message; }
     }
 
     private async Task ChangeYear(int y) { year = y; await Load(); }
+
+    private async Task ChangeRange(int months)
+    {
+        historyMonths = months;
+        try { history = await Api.GetPortfolioHistoryAsync(months); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private static List<ChartSeries> HistorySeries(PortfolioHistoryDto h) =>
+    [
+        new() { Label = "Cost basis", Color = "#6b7f72", Values = h.Points.Select(p => p.Cost).ToList() },
+        new() { Label = "Market value", Color = "#4fa970", Values = h.Points.Select(p => p.Value).ToList() },
+    ];
+
+    /// <summary>Same palette as the net-worth chart on Wealth.</summary>
+    private static ChartTheme Palette => new()
+    {
+        TextColor = "#8a978f",
+        GridColor = "#2b342e",
+        GridOpacity = 0.9,
+        TooltipBackground = "#151a17",
+        TooltipTextColor = "#e8efe9",
+        Palette = ["#6b7f72", "#4fa970"],
+    };
     private void Edit(HoldingDto h) => editing = new() { Id = h.Id, Ticker = h.Ticker, Name = h.Name, AccountId = h.AccountId, Drip = h.Drip, IsActive = h.IsActive, Notes = h.Notes };
 
     private async Task SaveHolding()

@@ -10,6 +10,31 @@ public class InvestmentTests
         => new() { Id = id, HoldingId = 1, Date = DateOnly.Parse(date), Kind = kind, Shares = shares, Price = price, Fees = fees };
 
     [Fact]
+    public void History_values_open_lots_at_the_close_on_or_before_each_date()
+    {
+        var trades = new[] { T(1, "2026-01-05", TradeKind.Buy, 10, 100m), T(2, "2026-02-02", TradeKind.Sell, 4, 110m) };
+        var prices = new List<(DateOnly, decimal)> { (new(2026, 1, 5), 100m), (new(2026, 1, 30), 108m), (new(2026, 2, 27), 120m) };
+        var h = new[] { new HoldingHistory("TST", trades, prices) };
+
+        Assert.Equal(new PortfolioPoint(new(2026, 1, 1), 0m, 0m), PortfolioHistory.ValueOn(h, new(2026, 1, 1)));       // before the first buy
+        Assert.Equal(new PortfolioPoint(new(2026, 2, 1), 1_080m, 1_000m), PortfolioHistory.ValueOn(h, new(2026, 2, 1))); // 10 × Friday's 108 close
+        Assert.Equal(new PortfolioPoint(new(2026, 3, 2), 720m, 600m), PortfolioHistory.ValueOn(h, new(2026, 3, 2)));    // 6 left × 120
+    }
+
+    [Fact]
+    public void History_samples_weekdays_thinned_to_the_limit_and_ends_on_the_day_asked()
+    {
+        var month = PortfolioHistory.SampleDates(new(2026, 9, 1), new(2026, 10, 3)); // ends on a Saturday
+        Assert.DoesNotContain(month.SkipLast(1), d => d.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday);
+        Assert.Equal(new DateOnly(2026, 10, 3), month[^1]);
+
+        var threeYears = PortfolioHistory.SampleDates(new(2023, 10, 1), new(2026, 10, 1));
+        Assert.Equal(90, threeYears.Count);
+        Assert.Equal(new DateOnly(2023, 10, 2), threeYears[0]);
+        Assert.Equal(new DateOnly(2026, 10, 1), threeYears[^1]);
+    }
+
+    [Fact]
     public void Fifo_lots_classify_short_and_long_term_and_track_remaining_shares()
     {
         var trades = new[]

@@ -17,6 +17,13 @@ expand a holding to see the individual lots.
 
 Hover a ticker for the security's full name.
 
+## Value over time
+
+Above the tree, a chart of market value with cost basis beneath it, over the last 1M, 3M, 6M, 1Y
+or 3Y. The line under the heading splits the change across the window into the market (the
+movement in unrealized gain) and money in or out (the movement in cost: buys, reinvested dividends,
+sells). The last point is today's Market value tile.
+
 ## Getting data in
 
 Import a brokerage export on [Import](import.md) — a tax-lot CSV or an investment OFX/QFX. It creates

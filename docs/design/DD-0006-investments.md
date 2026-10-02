@@ -23,6 +23,11 @@
   date (or ex-date). Manual dividends and prices go through the same paths.
 - **Net worth:** a brokerage account with holdings is valued from shares × latest price instead
   of its typed snapshot; assets add their latest value.
+- **Value history:** `PortfolioHistory.ValueOn` rebuilds any past date from trades and stored
+  closes — open lots on that date × the latest close on or before it, the same rule as the tiles —
+  so nothing is snapshotted and a corrected trade corrects the past. A holding with shares but no
+  close yet uses its earliest known price. `SampleDates` takes weekdays, thinned to 90 points.
+  `GET /api/investments/history?months=` serves it; the Investments page offers 1, 3, 6, 12, 36.
 - **Ordinary-income context** for the tax estimate comes from the W-2 paycheck year estimate and
   the filing status on the W-4 (`OrdinaryContextAsync`), reused by the 1099 estimate.
 
