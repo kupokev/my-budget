@@ -123,7 +123,7 @@ internal static class Mapping
     public static BudgetPeriodDto ToDto(this BudgetPeriod p) => new()
     {
         Id = p.Id, BudgetLineId = p.BudgetLineId, Period = p.Period, DueDate = p.DueDate, ProjectedAmount = p.ProjectedAmount,
-        ActualAmount = p.ActualAmount, PaidOn = p.PaidOn, Notes = p.Notes,
+        ActualAmount = p.ActualAmount, PaidOn = p.PaidOn, ConfirmationNumber = p.ConfirmationNumber, Notes = p.Notes,
     };
 
     public static IncomeSourceDto ToDto(this IncomeSource s) => new()

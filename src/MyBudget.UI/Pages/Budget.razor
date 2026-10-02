@@ -62,6 +62,8 @@ else
                     <div class="field"><label>Amount paid</label>
                         <input type="number" step="0.01" @bind="monthEdit.ActualAmount" @bind:event="oninput" @onkeydown="OnMonthKey" @ref="actualInput" placeholder="0.00" /></div>
                     <div class="field"><label>Paid on</label><OptionalDate @bind-Value="monthEdit.PaidOn" Suggested="monthEdit.DefaultDueDate ?? monthEdit.Period" Empty="not paid yet" @onkeydown="OnMonthKey" /></div>
+                    <div class="field"><label>Confirmation #</label>
+                        <input type="text" maxlength="60" @bind="monthEdit.ConfirmationNumber" @bind:event="oninput" @onkeydown="OnMonthKey" placeholder="if the biller gave one" /></div>
                 </fieldset>
                 <fieldset class="group">
                     <legend>Only if this month is different</legend>
@@ -413,7 +415,7 @@ else
     {
         public int BudgetLineId; public string LineName = ""; public DateOnly Period;
         public decimal DefaultProjected; public DateOnly? DefaultDueDate;
-        public decimal? ActualAmount; public decimal? ProjectedAmount; public DateOnly? DueDate; public DateOnly? PaidOn; public string? Notes;
+        public decimal? ActualAmount; public decimal? ProjectedAmount; public DateOnly? DueDate; public DateOnly? PaidOn; public string? ConfirmationNumber; public string? Notes;
     }
 
     protected override Task OnInitializedAsync() => Load();
@@ -468,6 +470,7 @@ else
             if (m.Variance is { } v && v != 0) lines.Add($"             {(v > 0 ? "over by" : "under by")} {Fmt.Money(Math.Abs(v))}");
         }
         if (m.PaidOn is { } p) lines.Add($"Paid         {Fmt.Date(p)}");
+        if (!string.IsNullOrWhiteSpace(m.ConfirmationNumber)) lines.Add($"Confirmation {m.ConfirmationNumber}");
         if (priorYearActual is { } prior) lines.Add($"{m.Period.Year - 1} actual  {Fmt.Money(prior)}");
         if (!string.IsNullOrWhiteSpace(m.Notes)) lines.Add($"\n{m.Notes}");
         return string.Join("\n", lines);
@@ -529,7 +532,7 @@ else
             BudgetLineId = b.Id, LineName = b.Name, Period = m.Period,
             DefaultProjected = defaultProjected, DefaultDueDate = m.DueDateIsOverride ? null : m.DueDate,
             ActualAmount = m.Actual, ProjectedAmount = m.ProjectedIsOverride ? m.Projected : null,
-            DueDate = m.DueDateIsOverride ? m.DueDate : null, PaidOn = m.PaidOn, Notes = m.Notes,
+            DueDate = m.DueDateIsOverride ? m.DueDate : null, PaidOn = m.PaidOn, ConfirmationNumber = m.ConfirmationNumber, Notes = m.Notes,
         };
         await Task.Yield();
         try { await actualInput.FocusAsync(); } catch { }
@@ -549,7 +552,7 @@ else
             await Api.SaveBudgetPeriodAsync(monthEdit.BudgetLineId, monthEdit.Period, new BudgetPeriodDto
             {
                 BudgetLineId = monthEdit.BudgetLineId, Period = monthEdit.Period, ActualAmount = monthEdit.ActualAmount,
-                ProjectedAmount = monthEdit.ProjectedAmount, DueDate = monthEdit.DueDate, PaidOn = monthEdit.PaidOn, Notes = monthEdit.Notes,
+                ProjectedAmount = monthEdit.ProjectedAmount, DueDate = monthEdit.DueDate, PaidOn = monthEdit.PaidOn, ConfirmationNumber = monthEdit.ConfirmationNumber, Notes = monthEdit.Notes,
             });
             monthEdit = null;
             history = await Api.GetBudgetHistoryAsync(year);

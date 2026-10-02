@@ -149,7 +149,7 @@ public static class BudgetEndpoints
                     var projected = row?.ProjectedAmount ?? (applies ? b.AmountFor(period) : 0m);
                     var actual = row?.ActualAmount;
                     return new BudgetMonthDto(period, due, row?.DueDate is not null, projected, row?.ProjectedAmount is not null,
-                        actual, actual is { } a ? a - projected : null, row?.PaidOn, row?.Notes);
+                        actual, actual is { } a ? a - projected : null, row?.PaidOn, row?.Notes, row?.ConfirmationNumber);
                 }).ToList();
                 var actuals = months.Where(m => m.Actual is not null).Select(m => m.Actual!.Value).ToList();
                 return new BudgetHistoryDto(b.Id, b.Name, b.ProjectedAmount, actuals.Count > 0 ? Math.Round(actuals.Average(), 2) : null, months);
@@ -211,7 +211,8 @@ public static class BudgetEndpoints
             if (await db.BudgetLines.FindAsync(id) is null) return Results.NotFound();
             var p = new DateOnly(period.Year, period.Month, 1);
             var row = await db.BudgetPeriods.FirstOrDefaultAsync(x => x.BudgetLineId == id && x.Period == p);
-            var empty = dto.DueDate is null && dto.ProjectedAmount is null && dto.ActualAmount is null && dto.PaidOn is null && string.IsNullOrWhiteSpace(dto.Notes);
+            var empty = dto.DueDate is null && dto.ProjectedAmount is null && dto.ActualAmount is null && dto.PaidOn is null
+                        && string.IsNullOrWhiteSpace(dto.ConfirmationNumber) && string.IsNullOrWhiteSpace(dto.Notes);
             if (empty)
             {
                 if (row is not null) { db.BudgetPeriods.Remove(row); await db.SaveChangesAsync(); }
@@ -219,7 +220,9 @@ public static class BudgetEndpoints
             }
             row ??= db.BudgetPeriods.Add(new BudgetPeriod { BudgetLineId = id, Period = p }).Entity;
             row.DueDate = dto.DueDate; row.ProjectedAmount = dto.ProjectedAmount; row.ActualAmount = dto.ActualAmount;
-            row.PaidOn = dto.PaidOn; row.Notes = string.IsNullOrWhiteSpace(dto.Notes) ? null : dto.Notes.Trim();
+            row.PaidOn = dto.PaidOn;
+            row.ConfirmationNumber = string.IsNullOrWhiteSpace(dto.ConfirmationNumber) ? null : dto.ConfirmationNumber.Trim();
+            row.Notes = string.IsNullOrWhiteSpace(dto.Notes) ? null : dto.Notes.Trim();
             await db.SaveChangesAsync();
             return Results.Ok(row.ToDto());
         });

@@ -280,6 +280,10 @@ public sealed class BudgetDbContext(DbContextOptions<BudgetDbContext> options) :
             e.HasOne(x => x.FundingAccount).WithMany().HasForeignKey(x => x.FundingAccountId).OnDelete(DeleteBehavior.Restrict);
             e.HasMany(x => x.Periods).WithOne(x => x.BudgetLine).HasForeignKey(x => x.BudgetLineId).OnDelete(DeleteBehavior.Cascade);
         });
-        mb.Entity<BudgetPeriod>().HasIndex(x => new { x.BudgetLineId, x.Period }).IsUnique();
+        mb.Entity<BudgetPeriod>(e =>
+        {
+            e.HasIndex(x => new { x.BudgetLineId, x.Period }).IsUnique();
+            e.Property(x => x.ConfirmationNumber).HasMaxLength(60);
+        });
     }
 }

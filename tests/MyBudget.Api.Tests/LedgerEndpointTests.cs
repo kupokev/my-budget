@@ -62,6 +62,21 @@ public class LedgerEndpointTests : IClassFixture<ApiFixture>
     }
 
     [Fact]
+    public async Task Confirmation_number_is_kept_with_the_month_and_alone_keeps_the_row()
+    {
+        var lines = await _api.Get<List<BudgetLineDto>>("api/budget");
+        var water = lines.Single(b => b.Name == "Water");
+
+        await _api.Put($"api/budget/{water.Id}/periods/2026-08-01", new BudgetPeriodDto { ConfirmationNumber = "  WTR-88213  " });
+
+        var history = await _api.Get<List<BudgetHistoryDto>>("api/budget/history?year=2026");
+        var aug = history.Single(h => h.BudgetLineId == water.Id).Months.Single(m => m.Period == new DateOnly(2026, 8, 1));
+        Assert.Equal("WTR-88213", aug.ConfirmationNumber);
+
+        await _api.Client.DeleteAsync($"api/budget/{water.Id}/periods/2026-08-01");
+    }
+
+    [Fact]
     public async Task Per_month_due_date_and_projected_overrides_flow_to_history_upcoming_and_needs()
     {
         var lines = await _api.Get<List<BudgetLineDto>>("api/budget");

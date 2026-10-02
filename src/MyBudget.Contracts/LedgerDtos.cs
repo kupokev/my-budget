@@ -193,6 +193,7 @@ public sealed class BudgetPeriodDto
     public decimal? ProjectedAmount { get; set; }
     public decimal? ActualAmount { get; set; }
     public DateOnly? PaidOn { get; set; }
+    [StringLength(60)] public string? ConfirmationNumber { get; set; }
     public string? Notes { get; set; }
 }
 

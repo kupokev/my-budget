@@ -95,6 +95,8 @@ public class BudgetPeriod
     public decimal? ProjectedAmount { get; set; }
     public decimal? ActualAmount { get; set; }
     public DateOnly? PaidOn { get; set; }
+    /// <summary>The biller's confirmation or reference number for this payment, when it gave one.</summary>
+    public string? ConfirmationNumber { get; set; }
     public string? Notes { get; set; }
 }
 

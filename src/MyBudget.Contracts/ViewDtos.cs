@@ -25,7 +25,8 @@ public sealed record UpcomingLineDto(int BudgetLineId, string LineName, DateOnly
 public sealed record BudgetMonthDto(
     DateOnly Period, DateOnly? DueDate, bool DueDateIsOverride,
     decimal Projected, bool ProjectedIsOverride,
-    decimal? Actual, decimal? Variance, DateOnly? PaidOn, string? Notes);
+    decimal? Actual, decimal? Variance, DateOnly? PaidOn, string? Notes,
+    string? ConfirmationNumber = null);
 
 /// <summary>
 /// What a budget line's spending splits into by label, month by month. A line like "General
