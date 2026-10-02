@@ -116,7 +116,7 @@ else
                                 <span class="chip small">@(categories.FirstOrDefault(c => c.Id == b.CategoryId)?.Name ?? "Uncategorized")</span>
                             </span>
                             <span class="tip-grid">
-                                <span>Due</span><span>@DueText(b)</span>
+                                <span>Schedule</span><span>@DueText(b)</span>
                                 <span>Amount</span><span class="num">@Fmt.Money(b.ProjectedAmount)@(b.Frequency == BudgetFrequency.Variable ? " / mo planned" : "")</span>
                                 <span>Paid via</span><span>@PaidVia(b)@(b.IsAutopay ? ", autopay" : ", by hand")</span>
                                 <span>Funded from</span><span>@(accounts.FirstOrDefault(a => a.Id == b.FundingAccountId)?.Name ?? "—")</span>
@@ -141,7 +141,7 @@ else
                     </span>
                 </td>
                 @if (Show("Category")) { <td>@(categories.FirstOrDefault(c => c.Id == b.CategoryId)?.Name)</td> }
-                @if (Show("Due")) { <td>@DueText(b)</td> }
+                @if (Show("Due")) { <td>@(DueDayOf(b) is { } day ? Ordinal(day) : "")</td> }
                 @if (Show("Paid via")) { <td>@PaidVia(b)</td> }
                 @if (Show("Funded from")) { <td>@accounts.FirstOrDefault(a => a.Id == b.FundingAccountId)?.Name</td> }
                 @if (Show("Projected")) { <td><Money Value="b.ProjectedAmount" /></td> }
@@ -393,15 +393,23 @@ else
             .ThenBy(b => CategoryName(b.CategoryId), StringComparer.OrdinalIgnoreCase)
             .ThenBy(b => b.Name, StringComparer.OrdinalIgnoreCase),
         "due" => rows
-            .OrderBy(b => b.Frequency == BudgetFrequency.Variable)
+            .OrderBy(b => DueDayOf(b) is null)
             .ThenBy(DueDayOf)
             .ThenBy(b => b.Name, StringComparer.OrdinalIgnoreCase),
         _ => rows.OrderBy(b => b.Name, StringComparer.OrdinalIgnoreCase),
     };
 
-    /// <summary>Monthly lines use their due day; quarterly, annual and one-off lines the day of their anchor date.</summary>
-    private static int DueDayOf(BudgetLineDto b) =>
-        b.Frequency != BudgetFrequency.Monthly && b.AnchorDueDate is { } d ? d.Day : b.DueDay;
+    /// <summary>
+    /// The day of the month a payment is due, as <c>BudgetDueDates</c> generates it: the line's due day
+    /// for monthly and periodic lines (the anchor date only picks the month), the anchor's own day for a
+    /// one-off, and none for a Variable line, which is planned spend rather than a bill.
+    /// </summary>
+    private static int? DueDayOf(BudgetLineDto b) => b.Frequency switch
+    {
+        BudgetFrequency.Variable => null,
+        BudgetFrequency.OneOff => b.AnchorDueDate?.Day,
+        _ => b.DueDay,
+    };
 
     private string CategoryName(int? id) => categories?.FirstOrDefault(c => c.Id == id)?.Name ?? "";
     private readonly HashSet<string> shown = [];
