@@ -15,8 +15,13 @@
 - **Loop (`AiService.ChatAsync`):** system prompt forbids guessing and fixes the refusal wording;
   tool calls are executed, results appended as `tool` messages, up to MaxToolRounds; every call
   (name, arguments, result) is returned for the audit trail the Assistant page shows.
-- **Monthly narrative (AI-1):** a fixed prompt that names the tools to call for the month and
-  restricts the narrative to their results.
+- **Monthly narrative (AI-1):** written from the dashboard's "What changed this month" lines
+  (`MonthHighlights`), which the app computes itself. The model gets those sentences as a short
+  fact sheet, with no tools, and is asked which two or three matter and why. *Changed 2026-10-03:*
+  it used to call five tools itself. Their raw results (~3,700 tokens) overflowed Ollama's default
+  context window, which drops the oldest messages first — the instructions — so models narrated
+  only the last result, formatted against instructions, and miscalculated variances. The fact
+  sheet is ~100 tokens and carries no arithmetic for the model to get wrong.
 - **Adding a question:** add a tool to the catalog and a case in `InvokeAsync`; nothing else.
 
 ## Status

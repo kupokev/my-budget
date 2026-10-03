@@ -217,7 +217,7 @@ public sealed class ApiClient(HttpClient http)
         return (await r.Content.ReadFromJsonAsync<BackupImportDto>(Json))!;
     }
     public Task<ChatResponseDto> ChatAsync(ChatRequest req) => Post<ChatRequest, ChatResponseDto>("api/ai/chat", req);
-    public Task<AiSummaryDto> GetAiSummaryAsync(int year, int month) => Get<AiSummaryDto>($"api/ai/summary?year={year}&month={month}");
+    public Task<AiSummaryDto> GetAiSummaryAsync() => Get<AiSummaryDto>("api/ai/summary");
 
     // Views
     public Task<TransferNeedsDto> GetTransferNeedsAsync(DateOnly? asOf = null)

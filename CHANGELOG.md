@@ -52,6 +52,13 @@ replace *unreleased* with the date.
 - **Balance alerts** no longer count bills already marked paid, since that money has already left
   the account.
 - **Net worth chart** on the Wealth dashboard is about half as tall.
+- **"This month in plain English" is now "What changed this month".** The app writes it itself:
+  budget lines over plan, paid so far against planned, bills making their last payment (and what
+  that frees each month) or starting next month, HSA pace, whether money freed next month covers
+  what the HSA still needs, goals that are behind, and the net-worth change. Hover a line for its working. **Ask the AI what matters most** adds a short
+  note written from those lines only. Before, the model fetched raw data itself; that overflowed
+  its context window, so it ignored its instructions and summarised only the last thing it saw.
+  The note is always plain prose, even when the model replies in Markdown.
 - **Price changes in the budget line editor** sit on one line each: from month, amount, reason and
   remove.
 - **Credit card screens:** the card editor, rewards and benefits were reorganised. Benefits are

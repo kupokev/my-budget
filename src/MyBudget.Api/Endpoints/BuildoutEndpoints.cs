@@ -38,9 +38,11 @@ public static class BuildoutEndpoints
             var prev = nw.History.Count >= 2 ? nw.History[^2].Total : (decimal?)null;
             // Home is a financial-health snapshot; rewards are something to dig into on purpose, so they stay off it.
             var alertList = (await alerts.ComputeAsync(today, needs, upcoming, rewards, hsa)).Where(a => a.Kind != "rewards").ToList();
+            var change = prev is { } p ? nw.Total - p : (decimal?)null;
+            var highlights = MonthHighlights.Build(today, await BudgetEndpoints.History(db, today.Year), await BudgetEndpoints.ActiveLines(db, today), hsa, goals, nw.Total, change);
             return new HomeDashboardDto(today, alertList, upcoming, calendar.PayDates.FirstOrDefault(d => d.Date >= today), needs.Accounts,
                 spending.ThisMonth, spending.LastMonth, spending.Categories.Take(6).ToList(), spending.UncategorizedCount,
-                rewards.Programs, goals, nw.Total, prev is { } p ? nw.Total - p : null, await alerts.RainyDayAsync(today), (await aiOptions.GetAsync()).Enabled);
+                rewards.Programs, goals, nw.Total, change, await alerts.RainyDayAsync(today), (await aiOptions.GetAsync()).Enabled, highlights);
         });
 
         var s = api.MapGroup("/settings");
@@ -135,10 +137,16 @@ public static class BuildoutEndpoints
         a.MapGet("/status", async (AiService svc) => await svc.StatusAsync());
         a.MapPost("/chat", async (ChatRequest req, AiService svc, TimeProvider clock) =>
             await PaycheckEndpoints.Guarded(() => svc.ChatAsync(req.Messages, DateOnly.FromDateTime(clock.GetLocalNow().DateTime))));
-        a.MapGet("/summary", async (int? year, int? month, AiService svc, TimeProvider clock) =>
+        // The current month only: the highlights it is written from describe today's position.
+        a.MapGet("/summary", async (BudgetDbContext db, PaycheckService paychecks, AiService svc, TimeProvider clock) =>
         {
             var today = DateOnly.FromDateTime(clock.GetLocalNow().DateTime);
-            return await PaycheckEndpoints.Guarded(() => svc.SummaryAsync(year ?? today.Year, month ?? today.Month, today));
+            var hsa = await HsaEndpoints.PlanAsync(db, today.Year, today);
+            var goals = await GoalEndpoints.AllProgress(db, paychecks, today);
+            var nw = await ReportEndpoints.NetWorth(db, today, history: true);
+            var change = nw.History.Count >= 2 ? nw.Total - nw.History[^2].Total : (decimal?)null;
+            var highlights = MonthHighlights.Build(today, await BudgetEndpoints.History(db, today.Year), await BudgetEndpoints.ActiveLines(db, today), hsa, goals, nw.Total, change);
+            return await PaycheckEndpoints.Guarded(() => svc.SummaryAsync(highlights, today.Year, today.Month, today));
         });
 
         return api;

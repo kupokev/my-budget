@@ -127,36 +127,7 @@ public static class BudgetEndpoints
         // BIL-3: one row per line, one column per month of the year, with projected-vs-actual variance.
         // Per-month overrides (due date, projected) win over the line's defaults.
         g.MapGet("/history", async (int? year, BudgetDbContext db, TimeProvider clock) =>
-        {
-            var y = year ?? clock.GetLocalNow().Year;
-            var lines = await db.BudgetLines.Include(b => b.Periods).Include(b => b.Amounts).OrderBy(b => b.Name).ToListAsync();
-            var from = new DateOnly(y, 1, 1);
-            var to = new DateOnly(y, 12, 31);
-            return lines.Select(b =>
-            {
-                var generated = BudgetDueDates.Between(b, from, to).ToLookup(d => new DateOnly(d.Year, d.Month, 1));
-                var months = Enumerable.Range(1, 12).Select(m =>
-                {
-                    var period = new DateOnly(y, m, 1);
-                    var row = b.Periods.FirstOrDefault(p => p.Period == period);
-                    var dueDefault = generated[period].Cast<DateOnly?>().FirstOrDefault();
-                    var due = row?.DueDate ?? dueDefault;
-                    // A variable line has no due dates — it is a monthly allowance, not a bill — so its
-                    // expected amount applies every month. Falling through to zero made every month
-                    // look over budget the moment a single dollar was spent.
-                    var applies = dueDefault is not null
-                                  || (b.Frequency == BudgetFrequency.Variable
-                                      && (b.StartDate is null || b.StartDate <= period.AddMonths(1).AddDays(-1))
-                                      && (b.EndDate is null || b.EndDate >= period));
-                    var projected = row?.ProjectedAmount ?? (applies ? b.AmountFor(period) : 0m);
-                    var actual = row?.ActualAmount;
-                    return new BudgetMonthDto(period, due, row?.DueDate is not null, projected, row?.ProjectedAmount is not null,
-                        actual, actual is { } a ? a - projected : null, row?.PaidOn, row?.Notes, row?.ConfirmationNumber);
-                }).ToList();
-                var actuals = months.Where(m => m.Actual is not null).Select(m => m.Actual!.Value).ToList();
-                return new BudgetHistoryDto(b.Id, b.Name, b.ProjectedAmount, actuals.Count > 0 ? Math.Round(actuals.Average(), 2) : null, months);
-            });
-        });
+            await History(db, year ?? clock.GetLocalNow().Year));
 
         // Upsert a line's month. Period is any date in that month. A row with nothing set is deleted.
         // Where a line's money actually went, by label. Driven off transactions rather than the
@@ -254,6 +225,45 @@ public static class BudgetEndpoints
     {
         l.Name = d.Name.Trim(); l.CategoryId = d.CategoryId; l.IsActive = d.IsActive; l.Notes = d.Notes;
     }
+
+    /// <summary>
+    /// The Budget grid for a year: each line's twelve months, projected against actual. Shared by the
+    /// grid and the dashboard's "What changed this month", so both read the same numbers.
+    /// </summary>
+    internal static async Task<List<BudgetHistoryDto>> History(BudgetDbContext db, int y)
+    {
+        var lines = await db.BudgetLines.Include(b => b.Periods).Include(b => b.Amounts).OrderBy(b => b.Name).ToListAsync();
+        var from = new DateOnly(y, 1, 1);
+        var to = new DateOnly(y, 12, 31);
+        return lines.Select(b =>
+        {
+            var generated = BudgetDueDates.Between(b, from, to).ToLookup(d => new DateOnly(d.Year, d.Month, 1));
+            var months = Enumerable.Range(1, 12).Select(m =>
+            {
+                var period = new DateOnly(y, m, 1);
+                var row = b.Periods.FirstOrDefault(p => p.Period == period);
+                var dueDefault = generated[period].Cast<DateOnly?>().FirstOrDefault();
+                var due = row?.DueDate ?? dueDefault;
+                // A variable line has no due dates — it is a monthly allowance, not a bill — so its
+                // expected amount applies every month. Falling through to zero made every month
+                // look over budget the moment a single dollar was spent.
+                var applies = dueDefault is not null
+                              || (b.Frequency == BudgetFrequency.Variable
+                                  && (b.StartDate is null || b.StartDate <= period.AddMonths(1).AddDays(-1))
+                                  && (b.EndDate is null || b.EndDate >= period));
+                var projected = row?.ProjectedAmount ?? (applies ? b.AmountFor(period) : 0m);
+                var actual = row?.ActualAmount;
+                return new BudgetMonthDto(period, due, row?.DueDate is not null, projected, row?.ProjectedAmount is not null,
+                    actual, actual is { } a ? a - projected : null, row?.PaidOn, row?.Notes, row?.ConfirmationNumber);
+            }).ToList();
+            var actuals = months.Where(m => m.Actual is not null).Select(m => m.Actual!.Value).ToList();
+            return new BudgetHistoryDto(b.Id, b.Name, b.ProjectedAmount, actuals.Count > 0 ? Math.Round(actuals.Average(), 2) : null, months);
+        }).ToList();
+    }
+
+    /// <summary>Active lines with their price changes, as the editor sees them, valued as of <paramref name="asOf"/>.</summary>
+    internal static async Task<List<BudgetLineDto>> ActiveLines(BudgetDbContext db, DateOnly asOf)
+        => (await db.BudgetLines.Include(b => b.Amounts).Where(b => b.IsActive).ToListAsync()).Select(b => b.ToDto(asOf)).ToList();
 
     internal static async Task<List<UpcomingLineDto>> Upcoming(BudgetDbContext db, DateOnly asOf, int days)
     {

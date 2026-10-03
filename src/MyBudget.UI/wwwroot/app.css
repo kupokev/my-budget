@@ -203,6 +203,13 @@ input[type=search] { min-width: 200px; }
 .alert.danger { border-left-color: var(--danger); }
 .alert a { margin-left: 8px; }
 .narrative { font-size: 15px; line-height: 1.6; max-width: 80ch; }
+/* "What changed this month": one fact per line, coloured by whether it is good news. */
+.highlights { list-style: none; margin: 0 0 12px; padding: 0; }
+.highlights li { padding: 6px 0 6px 12px; border-left: 3px solid var(--border); margin-bottom: 4px; line-height: 1.45; }
+.highlights li.bad { border-left-color: var(--danger); }
+.highlights li.good { border-left-color: var(--ok); }
+.highlights li a { color: inherit; text-decoration: none; }
+.highlights li a:hover { text-decoration: underline; }
 .chat .msg { display: flex; margin: 6px 0; }
 .chat .msg.user { justify-content: flex-end; }
 .chat .bubble { max-width: 75%; padding: 8px 12px; border-radius: 12px; background: color-mix(in srgb, var(--fg) 8%, transparent); white-space: pre-wrap; }

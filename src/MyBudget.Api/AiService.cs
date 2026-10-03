@@ -201,17 +201,20 @@ public sealed class AiService(HttpClient http, AiOptionsProvider optionsProvider
         catch (Exception ex) { return new(true, options.BaseUrl, options.Model, AiTools.Catalog.Select(t => t.Name).ToList(), false, ex.Message); }
     }
 
-    public async Task<ChatResponseDto> ChatAsync(IReadOnlyList<ChatMessageDto> history, DateOnly today, CancellationToken ct = default)
+    /// <param name="system">Replaces the assistant's usual instructions, for a caller that supplies the facts itself.</param>
+    /// <param name="useTools">False sends no function definitions: the answer comes from what is in the messages.</param>
+    public async Task<ChatResponseDto> ChatAsync(IReadOnlyList<ChatMessageDto> history, DateOnly today, CancellationToken ct = default,
+        string? system = null, bool useTools = true)
     {
         var options = await optionsProvider.GetAsync(ct);
         if (!options.Enabled) throw new InvalidOperationException("The assistant is off. Turn it on under Admin → Settings.");
-        var messages = new List<object> { new { role = "system", content = System.Replace("{today}", today.ToString("yyyy-MM-dd")) } };
+        var messages = new List<object> { new { role = "system", content = (system ?? System).Replace("{today}", today.ToString("yyyy-MM-dd")) } };
         messages.AddRange(history.Select(m => new { role = m.Role, content = m.Content }));
         var toolDefs = AiTools.Catalog.Select(t => new { type = "function", function = new { name = t.Name, description = t.Description, parameters = t.Parameters } }).ToList();
         var calls = new List<ToolCallDto>();
         // Results keyed by call, so a repeat is answered from memory instead of rerunning the query.
         var answered = new Dictionary<string, string>();
-        var toolsWithheld = false;
+        var toolsWithheld = !useTools;
 
         // Settled on the first round and reused, so a fallback costs one extra request per conversation.
         (string Url, bool OpenAi)? endpoint = null;
@@ -344,14 +347,30 @@ public sealed class AiService(HttpClient http, AiOptionsProvider optionsProvider
             calls, options.Model);
     }
 
-    /// <summary>AI-1: the month's narrative, built only from pre-fetched tool results.</summary>
-    public async Task<AiSummaryDto> SummaryAsync(int year, int month, DateOnly today, CancellationToken ct = default)
+    /// <summary>
+    /// AI-1: a short note on the month, written from the dashboard's "What changed this month" lines and
+    /// nothing else. The app has already done the arithmetic and picked the facts; the model only says
+    /// which matter and why. It used to fetch five raw results itself, which overflowed a small model's
+    /// context window — the instructions were the first thing dropped — and left it doing sums it got wrong.
+    /// </summary>
+    public async Task<AiSummaryDto> SummaryAsync(IReadOnlyList<HighlightDto> highlights, int year, int month, DateOnly today, CancellationToken ct = default)
     {
-        var prompt = $"Write a short monthly summary for {new DateOnly(year, month, 1):MMMM yyyy}: what changed and why, in plain English, 5 to 8 sentences. " +
-                     $"Call spend_by_category for {year}-{month} and bill_status for {year}-{month}, then rewards_progress for {year}, goals_progress, and net_worth. " +
-                     "Use only those results. Mention the biggest category changes, any budget lines over projection, status goals that are short, goals off track, and the net worth change.";
-        var r = await ChatAsync([new ChatMessageDto { Role = "user", Content = prompt }], today, ct);
-        return new AiSummaryDto(year, month, r.Reply, r.ToolCalls, r.Model);
+        var facts = highlights.Select(h => h.Text).ToList();
+        // Each fact says whether it is good news or a concern: without that, a small model treats every
+        // line as a problem and skips money being freed up — the most useful thing it could point out.
+        static string Tag(string tone) => tone switch { "good" => "[good news] ", "bad" => "[concern] ", _ => "" };
+        const string system =
+            "You write a short note for the top of a personal budget dashboard. Use only the facts you are given. " +
+            "Quote amounts exactly as written; never add, change or calculate numbers, and don't reinterpret what a number " +
+            "means — \"a month\" stays a monthly amount. Be calm and matter-of-fact: never call anything critical, urgent or " +
+            "pressing. Write plain sentences — no Markdown, no lists, no headings. Today's date is {today}.";
+        var prompt = $"Here is what the budget app found for {new DateOnly(year, month, 1):MMMM yyyy}:\n" +
+                     string.Join("\n", highlights.Select(h => "- " + Tag(h.Tone) + h.Text)) + "\n\n" +
+                     "In at most four sentences, say what matters most this month. Include good news as well as concerns. " +
+                     "Where one fact bears on another — money being freed up against an amount that needs covering — connect them. " +
+                     "If nothing stands out, say that in one sentence.";
+        var r = await ChatAsync([new ChatMessageDto { Role = "user", Content = prompt }], today, ct, system, useTools: false);
+        return new AiSummaryDto(year, month, PlainText.FromMarkdown(r.Reply), facts, r.Model);
     }
 }
 

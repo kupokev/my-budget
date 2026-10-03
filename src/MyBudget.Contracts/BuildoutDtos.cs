@@ -231,7 +231,14 @@ public sealed record HomeDashboardDto(
     IReadOnlyList<UpcomingLineDto> UpcomingLines, PayDateDto? NextPayDate, IReadOnlyList<AccountNeedDto> Needs,
     decimal SpendingThisMonth, decimal SpendingLastMonth, IReadOnlyList<SpendingCategoryDto> TopCategories, int Uncategorized,
     IReadOnlyList<ProgramStatusDto> Programs, IReadOnlyList<GoalProgressDto> Goals,
-    decimal NetWorth, decimal? NetWorthChange, RainyDayDto RainyDay, bool AiEnabled);
+    decimal NetWorth, decimal? NetWorthChange, RainyDayDto RainyDay, bool AiEnabled,
+    IReadOnlyList<HighlightDto> Highlights);
+
+/// <summary>
+/// One line of "What changed this month". <see cref="Formula"/> is the working behind its number;
+/// <see cref="Tone"/> is "good", "bad" or "neutral"; <see cref="Link"/> is the page that explains it.
+/// </summary>
+public sealed record HighlightDto(string Text, string Formula, string Tone, string? Link);
 
 // ---- Local AI (AI-1, AI-2) ----------------------------------------------------------------------
 
@@ -269,4 +276,5 @@ public sealed class ChatRequest
 
 public sealed record ToolCallDto(string Name, string Arguments, string Result);
 public sealed record ChatResponseDto(string Reply, IReadOnlyList<ToolCallDto> ToolCalls, string Model);
-public sealed record AiSummaryDto(int Year, int Month, string Narrative, IReadOnlyList<ToolCallDto> ToolCalls, string Model);
+/// <summary>The AI's note on the month, written from <see cref="Facts"/> (the dashboard's highlights) and nothing else.</summary>
+public sealed record AiSummaryDto(int Year, int Month, string Narrative, IReadOnlyList<string> Facts, string Model);

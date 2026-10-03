@@ -93,21 +93,26 @@ else
         </section>
 
         <section class="panel grow compact-panel">
-            <h2>This month in plain English</h2>
-        @if (!d.AiEnabled) { <p class="muted">Local AI is off. Turn it on under <a href="settings">Admin → Settings</a> and point it at your Ollama server to get a narrative built from the same numbers above.</p> }
-        else
-        {
-            <div class="toolbar"><button type="button" @onclick="Summarize" disabled="@summarizing">@(summarizing ? "Asking the model…" : "Write this month's summary")</button></div>
-            @if (summarizing)
-            {
-                <p class="muted">Looking up your numbers, then writing the summary. This can take a few minutes.</p>
-            }
+            <h2>What changed this month</h2>
+            @* Written by the app from numbers it has already worked out; hover a line for its working.
+               The AI note, when asked for, is written from exactly these lines and nothing else. *@
             @if (summary is { } s)
             {
-                <p class="narrative">@s.Narrative</p>
-                <details><summary class="muted">What it looked at (@s.ToolCalls.Count tool calls, @s.Model)</summary><ul>@foreach (var t in s.ToolCalls) { <li><code>@(t.Name)(@(t.Arguments))</code></li> }</ul></details>
+                <p class="narrative">@s.Narrative <span class="muted">— @s.Model</span></p>
             }
-        }
+            <ul class="highlights">
+                @foreach (var h in d.Highlights)
+                {
+                    <li class="@h.Tone" title="@h.Formula">@if (h.Link is { } link) { <a href="@link">@h.Text</a> } else { @h.Text }</li>
+                }
+            </ul>
+            @if (d.AiEnabled)
+            {
+                <div class="toolbar">
+                    <button class="secondary" type="button" @onclick="Summarize" disabled="@summarizing">@(summarizing ? "Asking the model…" : "Ask the AI what matters most")</button>
+                    @if (summarizing) { <span class="muted">Usually under a minute.</span> }
+                </div>
+            }
     </section>
     </div>
 }
@@ -150,7 +155,7 @@ else
     private async Task Summarize()
     {
         summarizing = true;
-        try { summary = await Api.GetAiSummaryAsync(DateTime.Today.Year, DateTime.Today.Month); }
+        try { summary = await Api.GetAiSummaryAsync(); }
         catch (Exception ex) { error = ex.Message; }
         finally { summarizing = false; }
     }

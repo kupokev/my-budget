@@ -43,9 +43,16 @@ is the panel worth checking on a Sunday.
 Each active goal with its status and a progress bar. The tick on the bar is how much of the *time*
 has passed, so a bar behind the tick means behind pace. See [Goals](goals.md).
 
-## This month in plain English
+## What changed this month
 
-A written summary of the month, produced by a local AI model against the same numbers shown above —
-it cannot see anything you cannot. Off until you set it up in [Settings](settings.md). Click **Write
-this month's summary** to generate one; expand **What it looked at** to see exactly which figures it
-was given.
+A few lines the app writes itself: budget lines over plan (the biggest three, then the rest
+summed), what you've paid so far against what was planned, bills making their last payment this
+month and what that frees each month after (from the line's **Ends** date), bills starting next
+month, HSA pace toward its target, goals behind where they should be, and net worth against last
+month. An HSA contributions goal is folded into the HSA line rather than repeated. Hover a line for the working
+behind its number; click it to go to the page it comes from. Red is something to look at, green
+good news. Rewards aren't here; they're on Cards.
+
+With local AI set up in [Settings](settings.md), **Ask the AI what matters most** adds a short note
+above the list. The model is given these lines and nothing else, so it can't see anything you can't,
+and it isn't asked to do any arithmetic.
