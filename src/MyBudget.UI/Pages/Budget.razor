@@ -272,17 +272,19 @@ else
                         @* One amount would restate every month already budgeted at the old price. Rows
                            here say what it cost from a month onward; a single odd month is still an
                            override on the grid. *@
-                        <label>Amount changes <span class="muted">(the usual amount applies until a row takes over)</span></label>
+                        <label>Amount changes</label>
+                        @* One row per change — from, amount, why — rather than each input on its own line. *@
                         @foreach (var a in editing.Amounts.OrderBy(a => a.FromPeriod))
                         {
-                            <span class="row" @key="a" style="margin-bottom:6px">
-                                <input type="month" value="@a.FromPeriod.ToString("yyyy-MM")" @onchange="e => SetAmountMonth(a, e)" />
-                                <InputNumber @bind-Value="a.Amount" step="0.01" class="narrow-money" />
-                                <InputText @bind-Value="a.Notes" class="grow" placeholder="why, e.g. membership went up" />
-                                <button class="link danger" type="button" @onclick="() => editing.Amounts.Remove(a)">✕</button>
-                            </span>
+                            <div class="amount-change" @key="a">
+                                <input type="month" title="First month at this amount" value="@a.FromPeriod.ToString("yyyy-MM")" @onchange="e => SetAmountMonth(a, e)" />
+                                <InputNumber @bind-Value="a.Amount" step="0.01" title="Amount from that month" />
+                                <InputText @bind-Value="a.Notes" placeholder="why, e.g. membership went up" />
+                                <button class="link danger" type="button" title="Remove this change" @onclick="() => editing.Amounts.Remove(a)">✕</button>
+                            </div>
                         }
                         <button class="secondary" type="button" @onclick="AddAmountChange">Add an amount change</button>
+                        <span class="hint">The usual amount applies until the first change; each change applies from its month until the next.</span>
                     </div>
                 </fieldset>
                 <fieldset class="group">

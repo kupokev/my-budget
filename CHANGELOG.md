@@ -50,6 +50,8 @@ replace *unreleased* with the date.
 - **Balance alerts** no longer count bills already marked paid, since that money has already left
   the account.
 - **Net worth chart** on the Wealth dashboard is about half as tall.
+- **Price changes in the budget line editor** sit on one line each: from month, amount, reason and
+  remove.
 - **Credit card screens:** the card editor, rewards and benefits were reorganised. Benefits are
   now counted only once you log a use.
 - **Category and label pickers.** The label list narrows to the chosen category.
