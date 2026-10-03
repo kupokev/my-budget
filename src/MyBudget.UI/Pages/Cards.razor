@@ -116,10 +116,11 @@ else
     {
         <Modal Title="@($"Benefits · {cards.First(c => c.Id == bf.CardId).Display}")" Subtitle="What the card gives you, and what you have actually used" Wide="true" OnClose="() => benefits = null">
             <ChildContent>
-            <YearScope Year="rewardsYear" YearChanged="y => rewardsYear = y" What="Benefits"
-                       Hidden="bf.Perks.Count(k => !InYear(k.StartYear, k.EndYear))"
-                       CanSplit="bf.Perks.Any(k => InYear(k.StartYear, k.EndYear) && YearScope.StartedBefore(k.StartYear, rewardsYear))"
+            <YearScope Year="rewardsYear" YearChanged="ChangeRewardsYear" What="Benefits"
+                       Hidden="bf.Perks.Count(k => !Shown(k))"
+                       CanSplit="bf.Perks.Any(k => Shown(k) && InYear(k.StartYear, k.EndYear) && YearScope.StartedBefore(k.StartYear, rewardsYear))"
                        OnSplit="SplitBenefits" />
+            @if (savedNote is not null) { <p class="row-note">@savedNote</p> }
             <p class="muted">Most benefits have to be used: put what a single use is worth under
             <strong>Each time used</strong> — a round-trip bag allowance at $90, a reward night at $120 —
             and where it expires, set <strong>Resets</strong> to each quarter with a <strong>Max</strong> of 1.
@@ -129,10 +130,14 @@ else
             @* One block per benefit instead of rows that run into each other: its settings, then what
                it has returned, then the times it was used. Each use stays editable — correcting a note
                should not mean deleting the record of something that happened. *@
-            @foreach (var k in bf.Perks.Where(k => InYear(k.StartYear, k.EndYear)).ToList())
+            @foreach (var k in bf.Perks.Where(Shown).ToList())
             {
                 <fieldset class="group perk" @key="k">
                     <legend>@(string.IsNullOrWhiteSpace(k.Description) ? "New benefit" : k.Description)</legend>
+                    @if (!InYear(k.StartYear, k.EndYear))
+                    {
+                        <p class="row-note">@MovedNote(k.StartYear, k.EndYear)</p>
+                    }
 
                     <div class="field span2"><label>Benefit</label><input type="text" @bind="k.Description" placeholder="e.g. Checked bag, round trip" /></div>
                     <div class="field"><label>Each time used</label><input type="number" step="1" class="narrow-money" @bind="k.ValuePerUse" /></div>
@@ -171,7 +176,7 @@ else
                 </fieldset>
             }
 
-            <button class="secondary" type="button" @onclick="() => { var (from, until) = YearScope.ForNew(rewardsYear); bf.Perks.Add(new CardPerkDto { StartYear = from, EndYear = until }); }">Add benefit</button>
+            <button class="secondary" type="button" @onclick="() => { var (from, until) = YearScope.ForNew(rewardsYear); bf.Perks.Add(Show(new CardPerkDto { StartYear = from, EndYear = until })); }">Add benefit</button>
             <p class="muted">A new benefit has to be saved before you can log a use against it.</p>
             </ChildContent>
             <Footer>
@@ -193,24 +198,25 @@ else
                 <div class="field"><label>Loyalty program</label><select @bind="rw.LoyaltyProgramId"><option value="">— (cash back / other)</option>@foreach (var p in programs ?? []) { <option value="@p.Id">@p.Name</option> }</select></div>
                 <div class="field"><label>Point value ¢ <span class="muted">(blank = program's)</span></label><input type="number" step="0.01" class="narrow" @bind="rw.PointValueCents" /></div>
                 <span class="tabs">
-                    <button type="button" class="@(rewardsTab == "earn" ? "" : "secondary")" @onclick='() => rewardsTab = "earn"'>Earn rates (@rw.EarnRules.Count(x => InYear(x.StartYear, x.EndYear)))</button>
-                    <button type="button" class="@(rewardsTab == "thresholds" ? "" : "secondary")" @onclick='() => rewardsTab = "thresholds"'>Thresholds (@rw.Thresholds.Count(x => InYear(x.StartYear, x.EndYear)))</button>
+                    <button type="button" class="@(rewardsTab == "earn" ? "" : "secondary")" @onclick='() => rewardsTab = "earn"'>Earn rates (@rw.EarnRules.Count(Shown))</button>
+                    <button type="button" class="@(rewardsTab == "thresholds" ? "" : "secondary")" @onclick='() => rewardsTab = "thresholds"'>Thresholds (@rw.Thresholds.Count(Shown))</button>
                 </span>
             </div>
-            <YearScope Year="rewardsYear" YearChanged="y => rewardsYear = y" What="Earn rates and thresholds"
-                       Hidden="rw.EarnRules.Count(x => !InYear(x.StartYear, x.EndYear)) + rw.Thresholds.Count(x => !InYear(x.StartYear, x.EndYear))"
-                       CanSplit="rw.EarnRules.Any(x => InYear(x.StartYear, x.EndYear) && YearScope.StartedBefore(x.StartYear, rewardsYear))
-                                 || rw.Thresholds.Any(x => InYear(x.StartYear, x.EndYear) && YearScope.StartedBefore(x.StartYear, rewardsYear))"
+            <YearScope Year="rewardsYear" YearChanged="ChangeRewardsYear" What="Earn rates and thresholds"
+                       Hidden="rw.EarnRules.Count(x => !Shown(x)) + rw.Thresholds.Count(x => !Shown(x))"
+                       CanSplit="rw.EarnRules.Any(x => Shown(x) && InYear(x.StartYear, x.EndYear) && YearScope.StartedBefore(x.StartYear, rewardsYear))
+                                 || rw.Thresholds.Any(x => Shown(x) && InYear(x.StartYear, x.EndYear) && YearScope.StartedBefore(x.StartYear, rewardsYear))"
                        OnSplit="SplitRewards" />
+            @if (savedNote is not null) { <p class="row-note">@savedNote</p> }
             @if (rewardsTab == "earn")
             {
             <h4>Earn rules <span class="muted">(no category = everything else; a label narrows it to where you shopped, and beats a category-only rule)</span></h4>
             <table class="compact">
                 <thead><tr><th>Category</th><th>Label</th><th>Points / $</th><th>Annual cap</th><th>From year</th><th>Until year</th><th>Notes</th><th></th></tr></thead>
                 <tbody>
-                @foreach (var r in rw.EarnRules.Where(x => InYear(x.StartYear, x.EndYear)).ToList())
+                @foreach (var r in rw.EarnRules.Where(Shown).ToList())
                 {
-                    <tr>
+                    <tr class="@(InYear(r.StartYear, r.EndYear) ? "" : "muted")" title="@(InYear(r.StartYear, r.EndYear) ? null : MovedNote(r.StartYear, r.EndYear))">
                         <td><select @bind="r.CategoryId"><option value="">everything else</option>@foreach (var c in categories ?? []) { <option value="@c.Id">@c.Name</option> }</select></td>
                         <td><select @bind="r.LabelId"><option value="">any</option>@foreach (var l in LabelChoices.For(labels, r.CategoryId, r.LabelId)) { <option @key="l.Id" value="@l.Id">@l.Name</option> }</select></td>
                         <td><input type="number" step="0.5" class="narrow" @bind="r.PointsPerDollar" /></td>
@@ -223,7 +229,7 @@ else
                 }
                 </tbody>
             </table>
-            <button class="secondary" type="button" @onclick="() => { var (from, until) = YearScope.ForNew(rewardsYear); rw.EarnRules.Add(new EarnRuleDto { StartYear = from, EndYear = until }); }">Add earn rule</button>
+            <button class="secondary" type="button" @onclick="() => { var (from, until) = YearScope.ForNew(rewardsYear); rw.EarnRules.Add(Show(new EarnRuleDto { StartYear = from, EndYear = until })); }">Add earn rule</button>
             }
             @if (rewardsTab == "thresholds")
             {
@@ -231,9 +237,9 @@ else
             <table class="compact">
                 <thead><tr><th>Calendar-year spend</th><th>Reward</th><th>Description</th><th>Worth $</th><th>Tier (status)</th><th>From year</th><th>Until year</th><th></th></tr></thead>
                 <tbody>
-                @foreach (var t in rw.Thresholds.Where(x => InYear(x.StartYear, x.EndYear)).ToList())
+                @foreach (var t in rw.Thresholds.Where(Shown).ToList())
                 {
-                    <tr>
+                    <tr class="@(InYear(t.StartYear, t.EndYear) ? "" : "muted")" title="@(InYear(t.StartYear, t.EndYear) ? null : MovedNote(t.StartYear, t.EndYear))">
                         <td><input type="number" step="1" class="narrow-money" @bind="t.Amount" /></td>
                         <td><select @bind="t.RewardKind">@foreach (var k in Enum.GetValues<MyBudget.Domain.ThresholdRewardKind>()) { <option value="@k">@Fmt.Words(k)</option> }</select></td>
                         <td><input type="text" @bind="t.Description" /></td>
@@ -246,7 +252,7 @@ else
                 }
                 </tbody>
             </table>
-            <button class="secondary" type="button" @onclick="() => { var (from, until) = YearScope.ForNew(rewardsYear); rw.Thresholds.Add(new SpendThresholdDto { StartYear = from, EndYear = until }); }">Add threshold</button>
+            <button class="secondary" type="button" @onclick="() => { var (from, until) = YearScope.ForNew(rewardsYear); rw.Thresholds.Add(Show(new SpendThresholdDto { StartYear = from, EndYear = until })); }">Add threshold</button>
             }
             </ChildContent>
             <Footer>
@@ -345,6 +351,50 @@ else
     private bool InYear(int? start, int? end) => YearScope.Covers(start, end, rewardsYear);
 
     /// <summary>
+    /// The rows listed for the year, decided when the editor opens, the year changes, or rows are added
+    /// or split — not on every keystroke. Filtering live made a row vanish the moment its From year
+    /// was set past the year on screen; the dialog shrank, Save moved out from under the pointer, and
+    /// the click that should have saved it missed.
+    /// </summary>
+    private readonly HashSet<object> shownRows = new(ReferenceEqualityComparer.Instance);
+    private bool Shown(object row) => shownRows.Contains(row);
+    private T Show<T>(T row) where T : notnull { shownRows.Add(row); return row; }
+
+    private void ShowYear()
+    {
+        shownRows.Clear();
+        foreach (var x in rewards?.EarnRules ?? []) if (InYear(x.StartYear, x.EndYear)) shownRows.Add(x);
+        foreach (var x in rewards?.Thresholds ?? []) if (InYear(x.StartYear, x.EndYear)) shownRows.Add(x);
+        foreach (var x in benefits?.Perks ?? []) if (InYear(x.StartYear, x.EndYear)) shownRows.Add(x);
+    }
+
+    private void ChangeRewardsYear(int year) { rewardsYear = year; savedNote = null; ShowYear(); }
+
+    /// <summary>Says where saved rows went when they belong to another year, so a save doesn't look like a loss.</summary>
+    private string? savedNote;
+
+    /// <param name="rows">Rows that were on screen but belong to another year, captured before saving.</param>
+    private void NoteMovedOnSave(IEnumerable<(string Name, int? Start, int? End)> rows)
+    {
+        var moved = rows.ToList();
+        savedNote = moved.Count == 0 ? null
+            : $"Saved. {string.Join(", ", moved.Select(x => x.Name))} {(moved.Count == 1 ? "applies" : "apply")} to other years — use ‹ › to see {(moved.Count == 1 ? "it" : "them")}.";
+    }
+
+    private string MovedNote(int? start, int? end)
+    {
+        var years = (start, end) switch
+        {
+            ({ } s, { } e) when s == e => $"{s} only",
+            ({ } s, { } e) => $"{s}–{e}",
+            ({ } s, null) => $"from {s}",
+            (null, { } e) => $"until {e}",
+            _ => "every year",
+        };
+        return $"Applies {years}, not {rewardsYear}. Kept here until you save or change year.";
+    }
+
+    /// <summary>
     /// "Change from 2027": every row shown that also applied before the year is closed off at the
     /// year before and copied to start in it. Earlier years keep exactly what they had, and the
     /// copies are what gets edited — a rate that didn't change is simply left as copied.
@@ -362,6 +412,7 @@ else
             rewards.Thresholds.Add(new SpendThresholdDto { Amount = x.Amount, RewardKind = x.RewardKind, Description = x.Description, ValueDollars = x.ValueDollars, TierName = x.TierName, StartYear = y, EndYear = x.EndYear });
             x.EndYear = y - 1;
         }
+        ShowYear();
     }
 
     /// <summary>As <see cref="SplitRewards"/>. Uses logged so far stay with the earlier version.</summary>
@@ -373,6 +424,7 @@ else
             benefits.Perks.Add(new CardPerkDto { Description = x.Description, AnnualValue = x.AnnualValue, ValuePerUse = x.ValuePerUse, Period = x.Period, MaxUsesPerPeriod = x.MaxUsesPerPeriod, StartYear = y, EndYear = x.EndYear, Notes = x.Notes });
             x.EndYear = y - 1;
         }
+        ShowYear();
     }
     private CardRewardsDto? benefits;
     private DateOnly perkUseDate = DateOnly.FromDateTime(DateTime.Today);
@@ -414,6 +466,7 @@ else
     {
         if (benefits is not { } bf) return;
         benefits = await Api.GetCardRewardsAsync(bf.CardId);
+        ShowYear();
         report = await Api.GetRewardsReportAsync(DateTime.Today.Year);   // net value moves with a logged use
     }
     private RewardsReportDto? report;
@@ -472,8 +525,8 @@ else
 
     private async Task OpenRewards(int cardId)
     {
-        editing = null; balanceFor = null; benefits = null; rewardsYear = DateTime.Today.Year;
-        try { rewards = await Api.GetCardRewardsAsync(cardId); }
+        editing = null; balanceFor = null; benefits = null; rewardsYear = DateTime.Today.Year; savedNote = null;
+        try { rewards = await Api.GetCardRewardsAsync(cardId); ShowYear(); }
         catch (Exception ex) { error = ex.Message; }
     }
 
@@ -483,20 +536,35 @@ else
     /// </summary>
     private async Task OpenBenefits(int cardId)
     {
-        editing = null; balanceFor = null; rewards = null; rewardsYear = DateTime.Today.Year;
-        try { benefits = await Api.GetCardRewardsAsync(cardId); }
+        editing = null; balanceFor = null; rewards = null; rewardsYear = DateTime.Today.Year; savedNote = null;
+        try { benefits = await Api.GetCardRewardsAsync(cardId); ShowYear(); }
         catch (Exception ex) { error = ex.Message; }
     }
 
     private async Task SaveBenefits()
     {
-        try { benefits = await Api.SaveCardRewardsAsync(benefits!); await Load(); }
+        try
+        {
+            var moved = benefits!.Perks.Where(k => Shown(k) && !InYear(k.StartYear, k.EndYear)).Select(k => (k.Description, k.StartYear, k.EndYear)).ToList();
+            benefits = await Api.SaveCardRewardsAsync(benefits);
+            NoteMovedOnSave(moved);
+            ShowYear();
+            await Load();
+        }
         catch (Exception ex) { error = ex.Message; }
     }
 
     private async Task SaveRewards()
     {
-        try { rewards = await Api.SaveCardRewardsAsync(rewards!); await Load(); }
+        try
+        {
+            var moved = rewards!.EarnRules.Where(x => Shown(x) && !InYear(x.StartYear, x.EndYear)).Select(x => ($"{x.PointsPerDollar:0.##}×", x.StartYear, x.EndYear))
+                .Concat(rewards.Thresholds.Where(x => Shown(x) && !InYear(x.StartYear, x.EndYear)).Select(x => (x.Description, x.StartYear, x.EndYear))).ToList();
+            rewards = await Api.SaveCardRewardsAsync(rewards);
+            NoteMovedOnSave(moved);
+            ShowYear();
+            await Load();
+        }
         catch (Exception ex) { error = ex.Message; }
     }
 

@@ -1,6 +1,11 @@
-@* A centered dialog over a dimmed page. Esc or the backdrop closes it. *@
-<div class="modal-backdrop" @onclick="Close" @onkeydown="OnKey" tabindex="-1" @ref="root">
-    <div class="modal @(Wide ? "wide" : "")" @onclick:stopPropagation="true">
+@* A centered dialog over a dimmed page. Esc or a click on the backdrop closes it.
+
+   "A click on the backdrop" means one that also started there. A browser fires the click on the
+   element both ends share, so pressing inside a field and releasing past the dialog's edge — selecting
+   text, or a dropdown whose list hangs over the backdrop — counted as a backdrop click and closed the
+   editor, losing whatever had been typed. *@
+<div class="modal-backdrop" @onmousedown="() => pressedOnBackdrop = true" @onclick="BackdropClick" @onkeydown="OnKey" tabindex="-1" @ref="root">
+    <div class="modal @(Wide ? "wide" : "")" @onclick:stopPropagation="true" @onmousedown:stopPropagation="true">
         <div class="modal-head"><strong>@Title</strong> @if (!string.IsNullOrEmpty(Subtitle)) { <span class="muted">@Subtitle</span> } <button class="link push-right" type="button" title="Close" @onclick="Close">✕</button></div>
         <div class="modal-body">@ChildContent</div>
         @if (Footer is not null) { <div class="actions-row modal-foot">@Footer</div> }
@@ -17,8 +22,16 @@
 
     [Parameter] public EventCallback OnClose { get; set; }
     private ElementReference root;
+    private bool pressedOnBackdrop;
 
     protected override async Task OnAfterRenderAsync(bool first) { if (first) { try { await root.FocusAsync(); } catch { } } }
     private Task Close() => OnClose.InvokeAsync();
+
+    private Task BackdropClick()
+    {
+        var close = pressedOnBackdrop;
+        pressedOnBackdrop = false;
+        return close ? Close() : Task.CompletedTask;
+    }
     private async Task OnKey(KeyboardEventArgs e) { if (e.Key == "Escape") await Close(); }
 }

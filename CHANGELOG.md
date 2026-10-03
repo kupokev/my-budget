@@ -64,6 +64,12 @@ replace *unreleased* with the date.
   label.
 - A budget line's price changes never appeared in its editor, so they couldn't be corrected or
   removed. The card cost summary and the rewards report also ignored them and used the old amount.
+- In the card Rewards and Benefits editors, setting a row's From or Until year past the year on
+  screen made it vanish at once, so the Save click that followed missed. The row now stays put
+  with a note, and after saving, the editor says which year it went to.
+- Editors such as card Benefits could close while you were using them, losing unsaved changes, when
+  a mouse press inside the dialog ended over the dimmed background. Only a click that starts and
+  ends on the background closes one now.
 - The "marked paid in the last seven days" line under the dashboard chart ignored days from the
   previous month early in a month.
 - The Arch package step of the release build failed, which stopped the first attempt at 1.0.1
