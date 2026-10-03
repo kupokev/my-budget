@@ -512,10 +512,13 @@ else
         monthEdit = null;
         editing = new()
         {
-            Id = b.Id, Name = b.Name, CategoryId = b.CategoryId, AccountNumber = b.AccountNumber, Frequency = b.Frequency, DueDay = b.DueDay == 0 ? 1 : b.DueDay, AnchorDueDate = b.AnchorDueDate,
+            Id = b.Id, Name = b.Name, CategoryId = b.CategoryId, LabelId = b.LabelId, AccountNumber = b.AccountNumber, Frequency = b.Frequency, DueDay = b.DueDay == 0 ? 1 : b.DueDay, AnchorDueDate = b.AnchorDueDate,
             IsAutopay = b.IsAutopay, ProjectedAmount = b.ProjectedAmount, PaymentMethod = b.PaymentMethod, PaymentAccountId = b.PaymentAccountId,
             PaymentCardId = b.PaymentCardId, FundingAccountId = b.FundingAccountId, BankAutopayDiscount = b.BankAutopayDiscount, IsCardEligible = b.IsCardEligible,
             StartDate = b.StartDate, EndDate = b.EndDate, Notes = b.Notes, IsActive = b.IsActive,
+            // Copied, not shared: Cancel must leave the table's rows as they were. Leaving these two
+            // out showed a saved label as blank and sent no price history, so the next save erased both.
+            Amounts = b.Amounts.Select(a => new BudgetLineAmountDto { Id = a.Id, FromPeriod = a.FromPeriod, Amount = a.Amount, Notes = a.Notes }).ToList(),
         };
     }
 

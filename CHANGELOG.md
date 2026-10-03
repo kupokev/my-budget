@@ -45,7 +45,8 @@ replace *unreleased* with the date.
   ("7th"). The full schedule, such as "Annual from Jun 1", moved to the hover box.
 - **The dashboard spending chart** is now **Paid this month vs last**. It adds up what you've
   marked paid on the Budget grid, not imported transactions. Each amount lands on its paid date,
-  or on its due date if it has no paid date.
+  or on its due date if it has no paid date. A month marked paid with a date but no amount counts
+  at its expected amount, and a paid date later than today isn't counted until that day.
 - **Balance alerts** no longer count bills already marked paid, since that money has already left
   the account.
 - **Net worth chart** on the Wealth dashboard is about half as tall.
@@ -55,6 +56,10 @@ replace *unreleased* with the date.
 
 ### Fixed
 
+- Opening a budget line's editor showed its label as blank, and saving the line then cleared the
+  label and erased its price changes.
+- The "marked paid in the last seven days" line under the dashboard chart ignored days from the
+  previous month early in a month.
 - The Arch package step of the release build failed, which stopped the first attempt at 1.0.1
   from publishing.
 - Investment accounts showed $0 in goals (including the rainy-day fund) and in the accounts list.
