@@ -92,6 +92,10 @@ public static class SpendingEndpoints
     /// month, else (a Variable line, which has no due date) the last day so far — today in the current
     /// month, month end in a past one. A date outside its month is pulled to the month's edge, so
     /// September's bill paid on August 30 still counts in September. The current month stops at today.
+    ///
+    /// A month marked paid with a date but no amount counts at its expected amount — the same rule the
+    /// "Due in the next 14 days" tick uses. A paid-on date still ahead of today is a scheduled payment,
+    /// not a paid one, and counts from that day.
     /// </summary>
     internal static async Task<CumulativeSpendDto> Cumulative(BudgetDbContext db, int year, int month, DateOnly today)
     {
@@ -101,18 +105,22 @@ public static class SpendingEndpoints
         var isCurrent = today.Year == year && today.Month == month;
 
         var periods = await db.BudgetPeriods.Include(p => p.BudgetLine).ThenInclude(b => b!.Periods)
-            .Where(p => p.ActualAmount != null && p.Period >= priorStart && p.Period < end)
+            .Include(p => p.BudgetLine).ThenInclude(b => b!.Amounts)
+            .Where(p => (p.ActualAmount != null || p.PaidOn != null) && p.Period >= priorStart && p.Period < end)
             .ToListAsync();
 
-        var rows = periods.Select(p =>
-        {
-            var monthEnd = p.Period.AddMonths(1).AddDays(-1);
-            var lastDay = isCurrent && p.Period == start ? today : monthEnd;
-            var due = BudgetDueDates.Between(p.BudgetLine!, p.Period, monthEnd, BudgetEndpoints.DueOverrides(p.BudgetLine!)).Cast<DateOnly?>().FirstOrDefault();
-            var day = p.PaidOn ?? due ?? lastDay;
-            day = day < p.Period ? p.Period : day > lastDay ? lastDay : day;
-            return new { Date = day, Amount = -p.ActualAmount!.Value };
-        }).ToList();
+        var rows = periods
+            .Where(p => p.PaidOn is not { } on || on <= today)
+            .Select(p =>
+            {
+                var monthEnd = p.Period.AddMonths(1).AddDays(-1);
+                var lastDay = isCurrent && p.Period == start ? today : monthEnd;
+                var due = BudgetDueDates.Between(p.BudgetLine!, p.Period, monthEnd, BudgetEndpoints.DueOverrides(p.BudgetLine!)).Cast<DateOnly?>().FirstOrDefault();
+                var day = p.PaidOn ?? due ?? lastDay;
+                day = day < p.Period ? p.Period : day > lastDay ? lastDay : day;
+                var amount = p.ActualAmount ?? p.ProjectedAmount ?? p.BudgetLine!.AmountFor(p.Period);
+                return new { Date = day, Amount = -amount };
+            }).ToList();
 
         static decimal[] Daily(IEnumerable<(DateOnly Date, decimal Amount)> src, DateOnly monthStart)
         {
@@ -142,7 +150,9 @@ public static class SpendingEndpoints
         var difference = Math.Round(toDate - lastSameDay, 2);
 
         var weekStart = (isCurrent ? today : start.AddMonths(1).AddDays(-1)).AddDays(-6);
-        var thisWeek = Math.Round(rows.Where(r => r.Date >= weekStart && r.Date >= start).Sum(r => -r.Amount), 2);
+        // Both months: on the 2nd, "the last seven days" reaches back into last month.
+        var weekEnd = isCurrent ? today : start.AddMonths(1).AddDays(-1);
+        var thisWeek = Math.Round(rows.Where(r => r.Date >= weekStart && r.Date <= weekEnd).Sum(r => -r.Amount), 2);
 
         // Two separate facts. Joining them with "bringing" implies the week caused the gap, which
         // reads oddly when the week is empty and isn't true even when it isn't.

@@ -4,13 +4,22 @@ Linux packages are built by GitHub Actions and attached to a release.
 
 ## Cutting a release
 
+1. In [`CHANGELOG.md`](../../CHANGELOG.md), change the version's *unreleased* to today's date and
+   commit.
+2. Tag that commit and push the tag:
+
 ```
-git tag v1.0.0
-git push origin v1.0.0
+git tag v1.0.1
+git push origin v1.0.1
 ```
 
 The `Release` workflow runs the tests, publishes a self-contained `linux-x64` build, and produces
-four packages plus `SHA256SUMS.txt`. A tag whose tests fail produces no release.
+four packages plus `SHA256SUMS.txt`. The version's section of the changelog becomes the top of the
+release notes, above the install table. A tag whose tests fail, or which has no section in the
+changelog, produces no release.
+
+To retry a tag whose release failed, move the tag to the fixed commit and push it again:
+`git tag -f v1.0.1 && git push -f origin v1.0.1`.
 
 To rehearse without tagging, run the workflow by hand from the Actions tab and give it a version;
 it builds and uploads artifacts but publishes no release.

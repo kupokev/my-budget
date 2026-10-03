@@ -86,6 +86,70 @@ jobs:
           name: packages-${{ steps.v.outputs.version }}
           path: dist/*
 
+      # The version's section of CHANGELOG.md goes at the top of the release, above the install
+      # table. A tag with no section there is a release nobody wrote notes for, so it stops here.
+      - name: Release notes
+        env:
+          VERSION: ${{ steps.v.outputs.version }}
+        run: |
+          awk -v v="$VERSION" '
+            /^## \[/ { if (found) exit; if (index($0, "## [" v "]") == 1) { found = 1; next } }
+            found
+          ' CHANGELOG.md > release-notes.md
+          if [ ! -s release-notes.md ]; then
+            if [ "${{ github.event_name }}" = "push" ]; then
+              echo "::error::CHANGELOG.md has no section for $VERSION"; exit 1
+            fi
+            echo "::warning::CHANGELOG.md has no section for $VERSION"
+          fi
+          cat >> release-notes.md <<'NOTES'
+
+          ---
+
+          Linux packages for MyBudget ${VERSION}.
+
+          | File | Install |
+          | --- | --- |
+          | `MyBudget-${VERSION}-x86_64.AppImage` | `chmod +x` and run it. No installation. |
+          | `mybudget_${VERSION}_amd64.deb` | `sudo apt install ./mybudget_${VERSION}_amd64.deb` |
+          | `mybudget-${VERSION}-1.x86_64.rpm` | `sudo dnf install ./mybudget-${VERSION}-1.x86_64.rpm` |
+          | `mybudget-${VERSION}-1-x86_64.pkg.tar.zst` | `sudo pacman -U ./mybudget-${VERSION}-1-x86_64.pkg.tar.zst` |
+
+          The packages pull in WebKitGTK, which the window needs. The AppImage expects it to be
+          installed already.
+
+          ### Open-source libraries
+
+          Built on these, each under its own licence:
+
+          | Library | Licence | Used for |
+          | --- | --- | --- |
+          | [ASP.NET Core and Blazor](https://asp.net/) | MIT | The UI and the API |
+          | [Entity Framework Core](https://docs.microsoft.com/ef/core/) | MIT | Data access and migrations |
+          | [SQLitePCLRaw](https://github.com/ericsink/SQLitePCL.raw) | Apache-2.0 | The bundled SQLite engine, itself public domain |
+          | [Photino](https://github.com/tryphotino) | Apache-2.0 | The desktop window |
+          | [FactFoundry.Blazor.Charts](https://github.com/Fact-Foundry/blazor-charts) | MIT | Charts, rendered as SVG |
+          | [.NET runtime](https://github.com/dotnet/runtime) | MIT | Bundled, so nothing needs installing first |
+
+          `THIRD-PARTY-NOTICES.md` in this release lists every package including transitive ones,
+          generated from the build's own dependency graph. The same file is installed to
+          `/usr/share/doc/mybudget/` alongside the licence.
+
+          WebKitGTK is not bundled; it comes from your distribution under the WebKit project's
+          LGPL and BSD licences.
+
+          Your budget lives at `~/.local/share/MyBudget/mybudget.db` and is untouched by installing
+          or upgrading. Back it up from **Admin → Settings → Export budget** before a version jump.
+
+          Verify a download against `SHA256SUMS.txt`:
+
+          ```
+          sha256sum -c SHA256SUMS.txt --ignore-missing
+          ```
+          NOTES
+          sed -i "s/\${VERSION}/$VERSION/g" release-notes.md
+          cat release-notes.md
+
       - name: Publish the release
         if: github.event_name == 'push'
         uses: softprops/action-gh-release@v2
@@ -94,44 +158,4 @@ jobs:
           generate_release_notes: true
           prerelease: ${{ contains(github.ref_name, '-') }}
           files: dist/*
-          body: |
-            Linux packages for MyBudget ${{ steps.v.outputs.version }}.
-
-            | File | Install |
-            | --- | --- |
-            | `MyBudget-${{ steps.v.outputs.version }}-x86_64.AppImage` | `chmod +x` and run it. No installation. |
-            | `mybudget_${{ steps.v.outputs.version }}_amd64.deb` | `sudo apt install ./mybudget_${{ steps.v.outputs.version }}_amd64.deb` |
-            | `mybudget-${{ steps.v.outputs.version }}-1.x86_64.rpm` | `sudo dnf install ./mybudget-${{ steps.v.outputs.version }}-1.x86_64.rpm` |
-            | `mybudget-${{ steps.v.outputs.version }}-1-x86_64.pkg.tar.zst` | `sudo pacman -U ./mybudget-${{ steps.v.outputs.version }}-1-x86_64.pkg.tar.zst` |
-
-            The packages pull in WebKitGTK, which the window needs. The AppImage expects it to be
-            installed already.
-
-            ### Open-source libraries
-
-            Built on these, each under its own licence:
-
-            | Library | Licence | Used for |
-            | --- | --- | --- |
-            | [ASP.NET Core and Blazor](https://asp.net/) | MIT | The UI and the API |
-            | [Entity Framework Core](https://docs.microsoft.com/ef/core/) | MIT | Data access and migrations |
-            | [SQLitePCLRaw](https://github.com/ericsink/SQLitePCL.raw) | Apache-2.0 | The bundled SQLite engine, itself public domain |
-            | [Photino](https://github.com/tryphotino) | Apache-2.0 | The desktop window |
-            | [FactFoundry.Blazor.Charts](https://github.com/Fact-Foundry/blazor-charts) | MIT | Charts, rendered as SVG |
-            | [.NET runtime](https://github.com/dotnet/runtime) | MIT | Bundled, so nothing needs installing first |
-
-            `THIRD-PARTY-NOTICES.md` in this release lists every package including transitive ones,
-            generated from the build's own dependency graph. The same file is installed to
-            `/usr/share/doc/mybudget/` alongside the licence.
-
-            WebKitGTK is not bundled; it comes from your distribution under the WebKit project's
-            LGPL and BSD licences.
-
-            Your budget lives at `~/.local/share/MyBudget/mybudget.db` and is untouched by installing
-            or upgrading. Back it up from **Admin → Settings → Export budget** before a version jump.
-
-            Verify a download against `SHA256SUMS.txt`:
-
-            ```
-            sha256sum -c SHA256SUMS.txt --ignore-missing
-            ```
+          body_path: release-notes.md

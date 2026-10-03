@@ -107,7 +107,10 @@ nfpm package -f "$NFPM_CONFIG" -p archlinux -t "$ARCH_PKG"
 # filesystem: 755 package: 755" for each standard directory. Harmless but noisy, and there is no nfpm
 # release with it fixed, so rewrite those entries and repack. File entries are already correct.
 fix_arch_dir_modes() {
-  local pkg="$1" work
+  # Absolute, because the repack below runs from inside the temp directory: a relative "dist/…"
+  # resolved there, tar found no such folder, and the v1.0.1 release failed on it.
+  local pkg work
+  pkg=$(realpath "$1")
   work=$(mktemp -d)
 
   tar -xpf "$pkg" -C "$work"

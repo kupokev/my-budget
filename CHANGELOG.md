@@ -1,0 +1,79 @@
+# Changelog
+
+What changed in each release of MyBudget. The newest version is at the top. The release workflow
+copies a version's section onto its GitHub release, so write each entry for someone deciding whether
+to upgrade.
+
+Changes that haven't shipped yet go under the next version, marked *unreleased*. When you tag it,
+replace *unreleased* with the date.
+
+## [1.0.1] — unreleased
+
+### Added
+
+- **Investments value chart.** Market value against cost basis over the last 1 month, 3 months,
+  6 months, 1 year or 3 years. Each point is rebuilt from your trades and daily prices, so the last
+  point always equals the Market value tile. The line under the heading splits the change into
+  market movement and money added or withdrawn.
+- **Card terms by year.** The Rewards and Benefits editors show one year at a time. **Change from
+  2027** ends the current rows at 2026 and copies them to start in 2027, so next year's terms can
+  be entered without touching this year's.
+- **Paid status on "Due in the next 14 days".** A bill marked paid on the Budget grid shows ✓ and
+  its paid date, and its row is dimmed. A **Still to pay** total sits under the table.
+- **Confirmation numbers.** When recording a payment on the Budget grid, there's a field for the
+  biller's confirmation number. It also shows when you hover over that month's cell.
+- **Budget line sorting.** Sort by category, then name, or by the day of the month a line is due.
+- **Price changes on a budget line.** When a subscription goes up, record the new amount from the
+  month it starts. Earlier months keep what they were budgeted at.
+- **Label lines under a budget line.** Expand a line to see where its money went by label, for
+  example General Merchandise split into Amazon, Costco and the rest.
+- **Annual fee as a budget line.** Created from the card editor, so the fee is planned for in the
+  month it's charged.
+- **Paycheck deposit splits.** One paycheck can be split across several accounts, and imported
+  deposits are matched to those splits. This is a first version and still needs work.
+- **Pay schedules paid in arrears.** A pay schedule can say how many days after the work period
+  ends it is paid, so the paycheck is assigned to the right period.
+- **Cash** as a payment method for budget lines.
+- **Imports:** QFX files, Wealthfront statements, and investment statements and tax-lot exports
+  from the same upload box on Import.
+- **Correcting holdings.** Set a cash or money-market balance by hand when no recent statement
+  exists.
+
+### Changed
+
+- **Due column on the Budget page.** It now shows just the day of the month a bill is due
+  ("7th"). The full schedule, such as "Annual from Jun 1", moved to the hover box.
+- **The dashboard spending chart** is now **Paid this month vs last**. It adds up what you've
+  marked paid on the Budget grid, not imported transactions. Each amount lands on its paid date,
+  or on its due date if it has no paid date.
+- **Balance alerts** no longer count bills already marked paid, since that money has already left
+  the account.
+- **Net worth chart** on the Wealth dashboard is about half as tall.
+- **Credit card screens:** the card editor, rewards and benefits were reorganised. Benefits are
+  now counted only once you log a use.
+- **Category and label pickers.** The label list narrows to the chosen category.
+
+### Fixed
+
+- The Arch package step of the release build failed, which stopped the first attempt at 1.0.1
+  from publishing.
+- Investment accounts showed $0 in goals (including the rainy-day fund) and in the accounts list.
+  They're now valued from what they hold.
+- 401(k) contributions didn't count toward goals, because the money arrives as fund purchases
+  rather than deposits.
+- Loan balances disagreed between the Wealth dashboard, the loans list and the net-worth report.
+- Variable budget lines showed every month as over budget.
+- Several problems importing investment statements, including cash sweep accounts and funds with
+  no market price.
+- The taskbar icon was missing.
+- Hover boxes were clipped, date fields showed misleading defaults, and the AI settings message
+  was wrong.
+
+## [1.0.0] — 2026-09-27
+
+First release: Linux desktop packages (AppImage, deb, rpm and Arch) for the budget, cards,
+paycheck estimator, HSA planner, rewards optimizer, investments and wealth dashboard, with
+optional local-AI summaries.
+
+[1.0.1]: https://github.com/kupokev/my-budget/compare/v1.0.0...v1.0.1
+[1.0.0]: https://github.com/kupokev/my-budget/releases/tag/v1.0.0
