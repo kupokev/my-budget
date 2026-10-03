@@ -29,7 +29,7 @@ else
                         <td>@s.Name</td>
                         <td>@Fmt.Words(s.Type)</td>
                         <td class="money">@Fmt.Money(rate?.AnnualAmount)</td>
-                        <td>@(sched is null ? "—" : $"{Fmt.Words(sched.Frequency)} since {Fmt.Date(sched.EffectiveDate)}")@(s.EndDate is { } end ? $" · ended {Fmt.Date(end)}" : "")</td>
+                        <td>@(s.Type == IncomeSourceType.Contract1099 ? $"Paid as received · {Fmt.Money(SourceReceipts(s.Id).Sum(r => r.Amount))} in {year}" : sched is null ? "—" : $"{Fmt.Words(sched.Frequency)} since {Fmt.Date(sched.EffectiveDate)}")@(s.EndDate is { } end ? $" · ended {Fmt.Date(end)}" : "")</td>
                         <td class="center">@if (s.IsActive) { <span class="tick">✓</span> } else { <span class="muted">—</span> }</td>
                         <td class="actions icons"><button class="link" type="button" title="Edit income source" @onclick="() => Edit(s)">✎</button></td>
                     </tr>
@@ -67,159 +67,201 @@ else
                     <div class="field"><label>Type</label><InputSelect @bind-Value="editing.Type">
                         @foreach (var t in Enum.GetValues<IncomeSourceType>()) { <option value="@t">@Fmt.Words(t)</option> }
                     </InputSelect></div>
-                    <div class="field"><label>Employment ended <span class="muted">(blank = still employed)</span></label><OptionalDate @bind-Value="editing.EndDate" Empty="still employed" /></div>
+                    <div class="field"><label>@(editing.Type == IncomeSourceType.Contract1099 ? "Work ended" : "Employment ended")</label><OptionalDate @bind-Value="editing.EndDate" Empty="@(editing.Type == IncomeSourceType.Contract1099 ? "still working" : "still employed")" /></div>
                     <div class="field"><label class="inline"><InputCheckbox @bind-Value="editing.IsActive" /> Active</label></div>
                 </div>
                 <div class="field"><label>Notes</label><InputTextArea @bind-Value="editing.Notes" rows="2" /></div>
 
-                <h3>Salary history <span class="muted">(a raise is a new row)</span></h3>
-                <table class="compact">
-                    <thead><tr><th>Effective</th><th class="money">Annual amount</th><th></th></tr></thead>
-                    <tbody>
-                    @foreach (var r in editing.SalaryRates)
-                    {
-                        <tr>
-                            <td><InputDate @bind-Value="r.EffectiveDate" /></td>
-                            <td><InputNumber @bind-Value="r.AnnualAmount" step="0.01" class="narrow-money" /></td>
-                            <td class="actions"><button class="link danger" type="button" title="Remove salary row" @onclick="() => editing.SalaryRates.Remove(r)">✕</button></td>
-                        </tr>
-                    }
-                    </tbody>
-                </table>
-                <button class="secondary" type="button" @onclick="() => editing.SalaryRates.Add(new SalaryRateDto { EffectiveDate = today })">Add salary row</button>
-
-                <h3>Pay schedules <span class="muted">(effective-dated; a frequency change or a live → arrears switch is two rows)</span></h3>
-                <table class="compact">
-                    <thead><tr><th>Effective</th><th>Frequency</th><th>Known pay date</th><th title="Days between the end of the work period and payday. 0 = live pay, 7 = a week in arrears.">Pay lag</th><th>Semi-monthly days</th><th class="center">Weekend → Friday</th><th></th></tr></thead>
-                    <tbody>
-                    @foreach (var p in editing.PaySchedules)
-                    {
-                        <tr>
-                            <td><InputDate @bind-Value="p.EffectiveDate" /></td>
-                            <td><InputSelect @bind-Value="p.Frequency">
-                                @foreach (var f in Enum.GetValues<PayFrequency>()) { <option value="@f">@Fmt.Words(f)</option> }
-                            </InputSelect></td>
-                            <td><InputDate @bind-Value="p.AnchorPayDate" /></td>
-                            <td>
-                                @* Named rather than a raw number: "live" and "arrears" are what payroll calls it. *@
-                                <InputSelect @bind-Value="p.PayLagDays">
-                                    <option value="0">Live (through payday)</option>
-                                    <option value="7">1 week in arrears</option>
-                                    <option value="14">2 weeks in arrears</option>
-                                </InputSelect>
-                            </td>
-                            <td>
-                                @if (p.Frequency == PayFrequency.SemiMonthly)
-                                {
-                                    <InputNumber @bind-Value="p.FirstPayDay" class="narrow" /> <span>&amp;</span> <InputNumber @bind-Value="p.SecondPayDay" class="narrow" />
-                                }
-                            </td>
-                            <td class="center"><InputCheckbox @bind-Value="p.PayOnPriorBusinessDay" /></td>
-                            <td class="actions"><button class="link danger" type="button" title="Remove schedule" @onclick="() => editing.PaySchedules.Remove(p)">✕</button></td>
-                        </tr>
-                    }
-                    </tbody>
-                </table>
-                <button class="secondary" type="button" @onclick="AddSchedule">Add schedule row</button>
-
-                <h3>Where the deposit lands <span class="muted">(direct-deposit split; the fixed amounts come off first, in order, and one account takes the rest)</span></h3>
-                <table class="compact">
-                    <thead><tr><th></th><th>Account</th><th class="money">Fixed amount</th><th class="center" title="Takes whatever is left after the fixed amounts">Remainder</th><th>Note</th><th class="center">Active</th><th></th></tr></thead>
-                    <tbody>
-                    @* @key on the object, not the id: unsaved rows all have Id 0 and would collapse into one. *@
-                    @foreach (var d in editing.DepositSplits)
-                    {
-                        <tr @key="d">
-                            <td class="actions">
-                                <button class="link" type="button" title="Move up" disabled="@(editing.DepositSplits.IndexOf(d) == 0)" @onclick="() => MoveSplit(d, -1)">↑</button>
-                                <button class="link" type="button" title="Move down" disabled="@(editing.DepositSplits.IndexOf(d) == editing.DepositSplits.Count - 1)" @onclick="() => MoveSplit(d, 1)">↓</button>
-                            </td>
-                            <td><InputSelect @bind-Value="d.AccountId">
-                                <option value="0">Pick an account</option>
-                                @foreach (var a in accounts ?? []) { <option value="@a.Id">@a.Name</option> }
-                            </InputSelect></td>
-                            <td>@if (!d.IsRemainder) { <InputNumber @bind-Value="d.Amount" step="0.01" class="narrow-money" /> } else { <span class="muted">balance of cheque</span> }</td>
-                            <td class="center"><input type="checkbox" checked="@d.IsRemainder" @onchange="e => SetRemainder(d, (bool)e.Value!)" /></td>
-                            <td><InputText @bind-Value="d.Notes" /></td>
-                            <td class="center"><InputCheckbox @bind-Value="d.IsActive" /></td>
-                            <td class="actions"><button class="link danger" type="button" title="Remove split" @onclick="() => editing.DepositSplits.Remove(d)">✕</button></td>
-                        </tr>
-                    }
-                    </tbody>
-                </table>
-                <button class="secondary" type="button" @onclick="() => editing.DepositSplits.Add(new DepositSplitDto())">Add deposit account</button>
-                @if (editing.DepositSplits.Any(x => x.IsActive) && !editing.DepositSplits.Any(x => x.IsActive && x.IsRemainder))
+                @* Paycheck machinery — salary, schedules, deposit split, W-4 — means nothing for 1099 work,
+                   which is paid when it's paid with nothing withheld. Showing it made a schedule look required. *@
+                @if (editing.Type != IncomeSourceType.Contract1099)
                 {
-                    <p class="warn-text">No account is marked as the remainder, so the split won't add up to the whole cheque.</p>
+                    <h3>Salary history <span class="muted">(a raise is a new row)</span></h3>
+                    <table class="compact">
+                        <thead><tr><th>Effective</th><th class="money">Annual amount</th><th></th></tr></thead>
+                        <tbody>
+                        @foreach (var r in editing.SalaryRates)
+                        {
+                            <tr>
+                                <td><InputDate @bind-Value="r.EffectiveDate" /></td>
+                                <td><InputNumber @bind-Value="r.AnnualAmount" step="0.01" class="narrow-money" /></td>
+                                <td class="actions"><button class="link danger" type="button" title="Remove salary row" @onclick="() => editing.SalaryRates.Remove(r)">✕</button></td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                    <button class="secondary" type="button" @onclick="() => editing.SalaryRates.Add(new SalaryRateDto { EffectiveDate = today })">Add salary row</button>
+
+                    <h3>Pay schedules <span class="muted">(effective-dated; a frequency change or a live → arrears switch is two rows)</span></h3>
+                    <table class="compact">
+                        <thead><tr><th>Effective</th><th>Frequency</th><th>Known pay date</th><th title="Days between the end of the work period and payday. 0 = live pay, 7 = a week in arrears.">Pay lag</th><th>Semi-monthly days</th><th class="center">Weekend → Friday</th><th></th></tr></thead>
+                        <tbody>
+                        @foreach (var p in editing.PaySchedules)
+                        {
+                            <tr>
+                                <td><InputDate @bind-Value="p.EffectiveDate" /></td>
+                                <td><InputSelect @bind-Value="p.Frequency">
+                                    @foreach (var f in Enum.GetValues<PayFrequency>()) { <option value="@f">@Fmt.Words(f)</option> }
+                                </InputSelect></td>
+                                <td><InputDate @bind-Value="p.AnchorPayDate" /></td>
+                                <td>
+                                    @* Named rather than a raw number: "live" and "arrears" are what payroll calls it. *@
+                                    <InputSelect @bind-Value="p.PayLagDays">
+                                        <option value="0">Live (through payday)</option>
+                                        <option value="7">1 week in arrears</option>
+                                        <option value="14">2 weeks in arrears</option>
+                                    </InputSelect>
+                                </td>
+                                <td>
+                                    @if (p.Frequency == PayFrequency.SemiMonthly)
+                                    {
+                                        <InputNumber @bind-Value="p.FirstPayDay" class="narrow" /> <span>&amp;</span> <InputNumber @bind-Value="p.SecondPayDay" class="narrow" />
+                                    }
+                                </td>
+                                <td class="center"><InputCheckbox @bind-Value="p.PayOnPriorBusinessDay" /></td>
+                                <td class="actions"><button class="link danger" type="button" title="Remove schedule" @onclick="() => editing.PaySchedules.Remove(p)">✕</button></td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                    <button class="secondary" type="button" @onclick="AddSchedule">Add schedule row</button>
+
+                    <h3>Where the deposit lands <span class="muted">(direct-deposit split; the fixed amounts come off first, in order, and one account takes the rest)</span></h3>
+                    <table class="compact">
+                        <thead><tr><th></th><th>Account</th><th class="money">Fixed amount</th><th class="center" title="Takes whatever is left after the fixed amounts">Remainder</th><th>Note</th><th class="center">Active</th><th></th></tr></thead>
+                        <tbody>
+                        @* @key on the object, not the id: unsaved rows all have Id 0 and would collapse into one. *@
+                        @foreach (var d in editing.DepositSplits)
+                        {
+                            <tr @key="d">
+                                <td class="actions">
+                                    <button class="link" type="button" title="Move up" disabled="@(editing.DepositSplits.IndexOf(d) == 0)" @onclick="() => MoveSplit(d, -1)">↑</button>
+                                    <button class="link" type="button" title="Move down" disabled="@(editing.DepositSplits.IndexOf(d) == editing.DepositSplits.Count - 1)" @onclick="() => MoveSplit(d, 1)">↓</button>
+                                </td>
+                                <td><InputSelect @bind-Value="d.AccountId">
+                                    <option value="0">Pick an account</option>
+                                    @foreach (var a in accounts ?? []) { <option value="@a.Id">@a.Name</option> }
+                                </InputSelect></td>
+                                <td>@if (!d.IsRemainder) { <InputNumber @bind-Value="d.Amount" step="0.01" class="narrow-money" /> } else { <span class="muted">balance of cheque</span> }</td>
+                                <td class="center"><input type="checkbox" checked="@d.IsRemainder" @onchange="e => SetRemainder(d, (bool)e.Value!)" /></td>
+                                <td><InputText @bind-Value="d.Notes" /></td>
+                                <td class="center"><InputCheckbox @bind-Value="d.IsActive" /></td>
+                                <td class="actions"><button class="link danger" type="button" title="Remove split" @onclick="() => editing.DepositSplits.Remove(d)">✕</button></td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                    <button class="secondary" type="button" @onclick="() => editing.DepositSplits.Add(new DepositSplitDto())">Add deposit account</button>
+                    @if (editing.DepositSplits.Any(x => x.IsActive) && !editing.DepositSplits.Any(x => x.IsActive && x.IsRemainder))
+                    {
+                        <p class="warn-text">No account is marked as the remainder, so the split won't add up to the whole cheque.</p>
+                    }
+
+                    <h3>Benefit elections <span class="muted">(per check, from a stub; use either an amount or a percent of gross)</span></h3>
+                    <table class="compact">
+                        <thead><tr><th>Name</th><th>Kind</th><th>Tax treatment</th><th class="money">Amount / check</th><th class="money">% of gross</th><th>Effective</th><th>Ends</th><th></th></tr></thead>
+                        <tbody>
+                        @foreach (var d in editing.Deductions)
+                        {
+                            <tr>
+                                <td><InputText @bind-Value="d.Name" /></td>
+                                <td><InputSelect @bind-Value="d.Kind">@foreach (var k in Enum.GetValues<DeductionKind>()) { <option value="@k">@Fmt.Words(k)</option> }</InputSelect></td>
+                                <td><InputSelect @bind-Value="d.Treatment">
+                                    <option value="@DeductionTreatment.PreTaxSection125">Pre-tax (Sec. 125: medical/dental/vision/HSA)</option>
+                                    <option value="@DeductionTreatment.PreTaxRetirement">Pre-tax retirement (traditional 401k)</option>
+                                    <option value="@DeductionTreatment.PostTax">Post-tax (Roth, life, after-tax)</option>
+                                </InputSelect></td>
+                                <td><InputNumber @bind-Value="d.AmountPerCheck" step="0.01" class="narrow-money" /></td>
+                                <td><InputNumber @bind-Value="d.PercentOfGross" step="0.5" class="narrow-money" /></td>
+                                <td><InputDate @bind-Value="d.EffectiveDate" /></td>
+                                <td><OptionalDate @bind-Value="d.EndDate" /></td>
+                                <td class="actions"><button class="link danger" type="button" title="Remove election" @onclick="() => editing.Deductions.Remove(d)">✕</button></td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                    <button class="secondary" type="button" @onclick="() => editing.Deductions.Add(new DeductionElectionDto { EffectiveDate = today, Treatment = DeductionTreatment.PreTaxSection125 })">Add election</button>
+
+                    <h3>W-4 / MO W-4 <span class="muted">(effective-dated; a new W-4 is a new row)</span></h3>
+                    <table class="compact">
+                        <thead><tr><th>Effective</th><th>Federal status</th><th class="center">Step 2</th><th class="money">Step 3 credits/yr</th><th class="money">4(a) other income</th><th class="money">4(b) deductions</th><th class="money">4(c) extra/check</th><th>MO status</th><th class="money">MO extra/check</th><th></th></tr></thead>
+                        <tbody>
+                        @foreach (var w in editing.Withholdings)
+                        {
+                            <tr>
+                                <td><InputDate @bind-Value="w.EffectiveDate" /></td>
+                                <td><InputSelect @bind-Value="w.FederalStatus">@foreach (var f in Enum.GetValues<FederalFilingStatus>()) { <option value="@f">@Fmt.Words(f)</option> }</InputSelect></td>
+                                <td class="center"><InputCheckbox @bind-Value="w.MultipleJobs" /></td>
+                                <td><InputNumber @bind-Value="w.DependentCredits" class="narrow-money" /></td>
+                                <td><InputNumber @bind-Value="w.OtherIncome" class="narrow-money" /></td>
+                                <td><InputNumber @bind-Value="w.Deductions" class="narrow-money" /></td>
+                                <td><InputNumber @bind-Value="w.ExtraWithholding" class="narrow-money" /></td>
+                                <td><InputSelect @bind-Value="w.MissouriStatus">@foreach (var m in Enum.GetValues<MissouriFilingStatus>()) { <option value="@m">@Fmt.Words(m)</option> }</InputSelect></td>
+                                <td><InputNumber @bind-Value="w.MissouriExtraWithholding" class="narrow-money" /></td>
+                                <td class="actions"><button class="link danger" type="button" title="Remove W-4 row" @onclick="() => editing.Withholdings.Remove(w)">✕</button></td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                    <button class="secondary" type="button" @onclick="() => editing.Withholdings.Add(new WithholdingElectionDto { EffectiveDate = today })">Add W-4 row</button>
+
+                    <h3>Odd checks <span class="muted">(a specific pay date that isn't a full period: a live-to-arrears switch, a partial first or last check)</span></h3>
+                    <table class="compact">
+                        <thead><tr><th>Pay date</th><th class="money">% of normal gross</th><th class="money">or exact gross</th><th class="center">Prorate fixed deductions</th><th>Notes</th><th></th></tr></thead>
+                        <tbody>
+                        @foreach (var o in editing.Overrides)
+                        {
+                            <tr>
+                                <td><InputDate @bind-Value="o.PayDate" /></td>
+                                <td><InputNumber @bind-Value="o.GrossPercent" step="1" class="narrow-money" /></td>
+                                <td><InputNumber @bind-Value="o.GrossAmount" step="0.01" class="narrow-money" /></td>
+                                <td class="center"><InputCheckbox @bind-Value="o.ProrateFixedDeductions" /></td>
+                                <td><InputText @bind-Value="o.Notes" /></td>
+                                <td class="actions"><button class="link danger" type="button" title="Remove odd check" @onclick="() => editing.Overrides.Remove(o)">✕</button></td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                    <button class="secondary" type="button" @onclick="() => editing.Overrides.Add(new PaycheckOverrideDto { PayDate = today, GrossPercent = 50 })">Add odd check</button>
+
                 }
-
-                <h3>Benefit elections <span class="muted">(per check, from a stub; use either an amount or a percent of gross)</span></h3>
-                <table class="compact">
-                    <thead><tr><th>Name</th><th>Kind</th><th>Tax treatment</th><th class="money">Amount / check</th><th class="money">% of gross</th><th>Effective</th><th>Ends</th><th></th></tr></thead>
-                    <tbody>
-                    @foreach (var d in editing.Deductions)
+                else
+                {
+                    <h3>Payments received</h3>
+                    <p class="muted">Paid when it's paid, with no tax taken out, so there's no salary or pay schedule to set up.
+                    Log each payment as it arrives. The tax on it is worked out on <a href="paycheck">Paycheck → 1099</a>,
+                    which tracks what to set aside and the quarterly estimated payments.</p>
+                    @if (editing.Id == 0)
                     {
-                        <tr>
-                            <td><InputText @bind-Value="d.Name" /></td>
-                            <td><InputSelect @bind-Value="d.Kind">@foreach (var k in Enum.GetValues<DeductionKind>()) { <option value="@k">@Fmt.Words(k)</option> }</InputSelect></td>
-                            <td><InputSelect @bind-Value="d.Treatment">
-                                <option value="@DeductionTreatment.PreTaxSection125">Pre-tax (Sec. 125: medical/dental/vision/HSA)</option>
-                                <option value="@DeductionTreatment.PreTaxRetirement">Pre-tax retirement (traditional 401k)</option>
-                                <option value="@DeductionTreatment.PostTax">Post-tax (Roth, life, after-tax)</option>
-                            </InputSelect></td>
-                            <td><InputNumber @bind-Value="d.AmountPerCheck" step="0.01" class="narrow-money" /></td>
-                            <td><InputNumber @bind-Value="d.PercentOfGross" step="0.5" class="narrow-money" /></td>
-                            <td><InputDate @bind-Value="d.EffectiveDate" /></td>
-                            <td><OptionalDate @bind-Value="d.EndDate" /></td>
-                            <td class="actions"><button class="link danger" type="button" title="Remove election" @onclick="() => editing.Deductions.Remove(d)">✕</button></td>
-                        </tr>
+                        <p class="muted">Save the source first, then log its payments here.</p>
                     }
-                    </tbody>
-                </table>
-                <button class="secondary" type="button" @onclick="() => editing.Deductions.Add(new DeductionElectionDto { EffectiveDate = today, Treatment = DeductionTreatment.PreTaxSection125 })">Add election</button>
-
-                <h3>W-4 / MO W-4 <span class="muted">(effective-dated; a new W-4 is a new row)</span></h3>
-                <table class="compact">
-                    <thead><tr><th>Effective</th><th>Federal status</th><th class="center">Step 2</th><th class="money">Step 3 credits/yr</th><th class="money">4(a) other income</th><th class="money">4(b) deductions</th><th class="money">4(c) extra/check</th><th>MO status</th><th class="money">MO extra/check</th><th></th></tr></thead>
-                    <tbody>
-                    @foreach (var w in editing.Withholdings)
+                    else
                     {
-                        <tr>
-                            <td><InputDate @bind-Value="w.EffectiveDate" /></td>
-                            <td><InputSelect @bind-Value="w.FederalStatus">@foreach (var f in Enum.GetValues<FederalFilingStatus>()) { <option value="@f">@Fmt.Words(f)</option> }</InputSelect></td>
-                            <td class="center"><InputCheckbox @bind-Value="w.MultipleJobs" /></td>
-                            <td><InputNumber @bind-Value="w.DependentCredits" class="narrow-money" /></td>
-                            <td><InputNumber @bind-Value="w.OtherIncome" class="narrow-money" /></td>
-                            <td><InputNumber @bind-Value="w.Deductions" class="narrow-money" /></td>
-                            <td><InputNumber @bind-Value="w.ExtraWithholding" class="narrow-money" /></td>
-                            <td><InputSelect @bind-Value="w.MissouriStatus">@foreach (var m in Enum.GetValues<MissouriFilingStatus>()) { <option value="@m">@Fmt.Words(m)</option> }</InputSelect></td>
-                            <td><InputNumber @bind-Value="w.MissouriExtraWithholding" class="narrow-money" /></td>
-                            <td class="actions"><button class="link danger" type="button" title="Remove W-4 row" @onclick="() => editing.Withholdings.Remove(w)">✕</button></td>
-                        </tr>
+                        @* Each row saves as it is changed: a payment is a record of something that happened,
+                           corrected in place rather than deleted and retyped. *@
+                        <table class="compact">
+                            <thead><tr><th>Received</th><th class="money">Amount</th><th>Notes</th><th></th></tr></thead>
+                            <tbody>
+                            @foreach (var r in SourceReceipts(editing.Id))
+                            {
+                                <tr @key="r.Id">
+                                    <td><input type="date" @bind="r.Date" @bind:after="() => SaveReceipt(r)" /></td>
+                                    <td><input type="number" step="0.01" class="narrow-money" @bind="r.Amount" @bind:after="() => SaveReceipt(r)" /></td>
+                                    <td><input type="text" @bind="r.Notes" @bind:after="() => SaveReceipt(r)" placeholder="e.g. invoice 1042" /></td>
+                                    <td class="actions"><button class="link danger" type="button" title="Remove this payment" @onclick="() => RemoveReceipt(r)">✕</button></td>
+                                </tr>
+                            }
+                            <tr>
+                                <td><input type="date" @bind="newReceipt.Date" /></td>
+                                <td><input type="number" step="0.01" class="narrow-money" @bind="newReceipt.Amount" placeholder="0.00" /></td>
+                                <td><input type="text" @bind="newReceipt.Notes" placeholder="e.g. invoice 1042" /></td>
+                                <td class="actions"><button class="secondary" type="button" @onclick="AddReceipt">Add payment</button></td>
+                            </tr>
+                            </tbody>
+                        </table>
+                        <p class="muted">@year so far: <Money Value="SourceReceipts(editing.Id).Sum(r => r.Amount)" /></p>
                     }
-                    </tbody>
-                </table>
-                <button class="secondary" type="button" @onclick="() => editing.Withholdings.Add(new WithholdingElectionDto { EffectiveDate = today })">Add W-4 row</button>
-
-                <h3>Odd checks <span class="muted">(a specific pay date that isn't a full period: a live-to-arrears switch, a partial first or last check)</span></h3>
-                <table class="compact">
-                    <thead><tr><th>Pay date</th><th class="money">% of normal gross</th><th class="money">or exact gross</th><th class="center">Prorate fixed deductions</th><th>Notes</th><th></th></tr></thead>
-                    <tbody>
-                    @foreach (var o in editing.Overrides)
-                    {
-                        <tr>
-                            <td><InputDate @bind-Value="o.PayDate" /></td>
-                            <td><InputNumber @bind-Value="o.GrossPercent" step="1" class="narrow-money" /></td>
-                            <td><InputNumber @bind-Value="o.GrossAmount" step="0.01" class="narrow-money" /></td>
-                            <td class="center"><InputCheckbox @bind-Value="o.ProrateFixedDeductions" /></td>
-                            <td><InputText @bind-Value="o.Notes" /></td>
-                            <td class="actions"><button class="link danger" type="button" title="Remove odd check" @onclick="() => editing.Overrides.Remove(o)">✕</button></td>
-                        </tr>
-                    }
-                    </tbody>
-                </table>
-                <button class="secondary" type="button" @onclick="() => editing.Overrides.Add(new PaycheckOverrideDto { PayDate = today, GrossPercent = 50 })">Add odd check</button>
-
+                }
             </EditForm>
             </ChildContent>
             <Footer>
@@ -241,6 +283,36 @@ else
     private readonly DateOnly today = DateOnly.FromDateTime(DateTime.Today);
     private string? error;
 
+    /// <summary>1099 payments received in the year shown, for the list and the editor.</summary>
+    private List<IncomeReceiptDto> receipts = [];
+    private IncomeReceiptDto newReceipt = new() { Date = DateOnly.FromDateTime(DateTime.Today) };
+    private IEnumerable<IncomeReceiptDto> SourceReceipts(int sourceId) => receipts.Where(r => r.IncomeSourceId == sourceId).OrderByDescending(r => r.Date);
+
+    private async Task AddReceipt()
+    {
+        if (editing is null || newReceipt.Amount <= 0) return;
+        try
+        {
+            newReceipt.IncomeSourceId = editing.Id;
+            await Api.AddReceiptAsync(newReceipt);
+            newReceipt = new() { Date = newReceipt.Date };
+            receipts = await Api.GetReceiptsAsync(year);
+        }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task SaveReceipt(IncomeReceiptDto r)
+    {
+        try { await Api.UpdateReceiptAsync(r); receipts = await Api.GetReceiptsAsync(year); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task RemoveReceipt(IncomeReceiptDto r)
+    {
+        try { await Api.DeleteReceiptAsync(r.Id); receipts = await Api.GetReceiptsAsync(year); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
     protected override Task OnInitializedAsync() => Load();
 
     private async Task Load()
@@ -250,6 +322,7 @@ else
             sources = await Api.GetIncomeSourcesAsync();
             accounts = await Api.GetAccountsAsync();
             calendar = await Api.GetPayCalendarAsync(year);
+            receipts = await Api.GetReceiptsAsync(year);
         }
         catch (Exception ex) { error = ex.Message; }
     }

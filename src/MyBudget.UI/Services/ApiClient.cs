@@ -184,6 +184,7 @@ public sealed class ApiClient(HttpClient http)
     public Task DeletePersonAsync(int id) => Delete($"api/people/{id}");
     public Task<List<IncomeReceiptDto>> GetReceiptsAsync(int year) => Get<List<IncomeReceiptDto>>($"api/side-income/receipts?year={year}");
     public Task<IncomeReceiptDto> AddReceiptAsync(IncomeReceiptDto r) => Post("api/side-income/receipts", r);
+    public Task<IncomeReceiptDto> UpdateReceiptAsync(IncomeReceiptDto r) => Put($"api/side-income/receipts/{r.Id}", r);
     public Task DeleteReceiptAsync(int id) => Delete($"api/side-income/receipts/{id}");
     public Task<List<EstimatedTaxPaymentDto>> GetEstimatedPaymentsAsync(int year) => Get<List<EstimatedTaxPaymentDto>>($"api/side-income/payments?year={year}");
     public Task<EstimatedTaxPaymentDto> AddEstimatedPaymentAsync(EstimatedTaxPaymentDto p) => Post("api/side-income/payments", p);

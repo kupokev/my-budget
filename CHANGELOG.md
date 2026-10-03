@@ -35,6 +35,9 @@ replace *unreleased* with the date.
   deposits are matched to those splits. This is a first version and still needs work.
 - **Pay schedules paid in arrears.** A pay schedule can say how many days after the work period
   ends it is paid, so the paycheck is assigned to the right period.
+- **1099 income sources** need no salary or pay schedule. Choosing *Contract 1099* hides the
+  paycheck settings and shows **Payments received**, where each payment is logged as it arrives
+  and can be corrected in place. Tax set-aside and estimated payments stay on Paycheck → 1099.
 - **Cash** as a payment method for budget lines.
 - **Imports:** QFX files, Wealthfront statements, and investment statements and tax-lot exports
   from the same upload box on Import.

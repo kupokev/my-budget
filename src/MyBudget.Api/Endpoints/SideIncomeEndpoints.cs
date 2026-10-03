@@ -26,6 +26,16 @@ public static class SideIncomeEndpoints
             await db.SaveChangesAsync();
             return Results.Created($"/api/side-income/receipts/{r.Id}", new IncomeReceiptDto { Id = r.Id, IncomeSourceId = r.IncomeSourceId, Date = r.Date, Amount = r.Amount, Notes = r.Notes });
         });
+        // A payment logged with the wrong date or amount is corrected, not deleted and retyped.
+        g.MapPut("/receipts/{id:int}", async (int id, IncomeReceiptDto dto, BudgetDbContext db) =>
+        {
+            var r = await db.IncomeReceipts.FindAsync(id);
+            if (r is null) return Results.NotFound();
+            if (dto.Amount <= 0) return Results.Problem("A payment received needs an amount above zero.", statusCode: 400);
+            r.Date = dto.Date; r.Amount = dto.Amount; r.Notes = string.IsNullOrWhiteSpace(dto.Notes) ? null : dto.Notes.Trim();
+            await db.SaveChangesAsync();
+            return Results.Ok(new IncomeReceiptDto { Id = r.Id, IncomeSourceId = r.IncomeSourceId, Date = r.Date, Amount = r.Amount, Notes = r.Notes });
+        });
         g.MapDelete("/receipts/{id:int}", async (int id, BudgetDbContext db) =>
         {
             var r = await db.IncomeReceipts.FindAsync(id);

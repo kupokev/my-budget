@@ -5,6 +5,17 @@
 One entry per employer or income source. This drives [Paycheck](paycheck.md), the per-paycheck
 transfer figures, and the next-payday tile.
 
+## 1099 work
+
+Set **Type** to *Contract 1099* for work that pays when it pays, with no tax taken out. Salary, pay
+schedules, the deposit split and W-4 disappear, because none of them apply. In their place is
+**Payments received**: save the source once, then log each payment with its date, amount and a
+note (an invoice number, say) as it arrives. A payment can be corrected in place. The list of
+sources shows what each 1099 source has paid so far this year.
+
+The tax on those payments — what to set aside from each one, and the quarterly estimated payments
+— is on [Paycheck → 1099](paycheck.md).
+
 ## Salary
 
 One row per rate with the date it took effect. A raise is a new row, not an edit — the old rate stays
