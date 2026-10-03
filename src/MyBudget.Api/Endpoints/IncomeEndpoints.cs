@@ -57,6 +57,43 @@ public static class IncomeEndpoints
         return api;
     }
 
+    /// <summary>
+    /// What has come in this month, and what is still to come: every W-2 check dated this month at its
+    /// take-home (a stub's net when one was entered, the estimator's otherwise) plus 1099 payments logged.
+    /// Checks are run from January so year-to-date caps (Social Security) apply as they would on the stub.
+    /// </summary>
+    internal static async Task<MonthIncomeDto> MonthIncome(BudgetDbContext db, PaycheckService paychecks, DateOnly today)
+    {
+        var start = new DateOnly(today.Year, today.Month, 1);
+        var end = start.AddMonths(1).AddDays(-1);
+        var items = new List<IncomeItemDto>();
+
+        var stubs = await db.Paychecks.Include(p => p.IncomeSource).Where(p => p.PayDate >= start && p.PayDate <= end).ToListAsync();
+        var w2 = await db.IncomeSources.Where(s => s.IsActive && s.Type == IncomeSourceType.W2Salary).ToListAsync();
+        foreach (var source in w2)
+        {
+            List<(DateOnly Date, PaycheckService.Context Context, MyBudget.Engines.Paycheck.PaycheckResult Result)> runs;
+            try { runs = await paychecks.YearToDateAsync(source.Id, today.Year, end); }
+            catch (InvalidOperationException) { continue; }   // no salary or W-4 yet: nothing to estimate
+            foreach (var run in runs.Where(r => r.Date >= start))
+            {
+                var stub = stubs.FirstOrDefault(s => s.IncomeSourceId == source.Id && s.PayDate == run.Date);
+                items.Add(stub is null
+                    ? new(run.Date, source.Name, run.Result.Net, "estimated take-home")
+                    : new(run.Date, source.Name, stub.Net, "take-home from the stub"));
+            }
+        }
+        // A stub on a date the schedule doesn't generate — a bonus, an off-cycle check — still came in.
+        foreach (var stub in stubs.Where(s => items.All(i => i.Date != s.PayDate || i.Source != s.IncomeSource?.Name)))
+            items.Add(new(stub.PayDate, stub.IncomeSource?.Name ?? "Paycheck", stub.Net, "take-home from the stub"));
+
+        var receipts = await db.IncomeReceipts.Include(r => r.IncomeSource).Where(r => r.Date >= start && r.Date <= end).ToListAsync();
+        items.AddRange(receipts.Select(r => new IncomeItemDto(r.Date, r.IncomeSource?.Name ?? "1099", r.Amount, "1099, nothing withheld")));
+
+        items = items.OrderBy(i => i.Date).ToList();
+        return new MonthIncomeDto(items.Where(i => i.Date <= today).Sum(i => i.Amount), items.Sum(i => i.Amount), items);
+    }
+
     internal static async Task<PayCalendarDto> PayCalendar(BudgetDbContext db, int year)
     {
         var sources = await Query(db).Where(s => s.IsActive && s.PaySchedules.Count > 0).ToListAsync();

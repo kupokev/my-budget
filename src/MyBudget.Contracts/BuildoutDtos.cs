@@ -232,7 +232,16 @@ public sealed record HomeDashboardDto(
     decimal SpendingThisMonth, decimal SpendingLastMonth, IReadOnlyList<SpendingCategoryDto> TopCategories, int Uncategorized,
     IReadOnlyList<ProgramStatusDto> Programs, IReadOnlyList<GoalProgressDto> Goals,
     decimal NetWorth, decimal? NetWorthChange, RainyDayDto RainyDay, bool AiEnabled,
-    IReadOnlyList<HighlightDto> Highlights);
+    IReadOnlyList<HighlightDto> Highlights, MonthIncomeDto Income);
+
+/// <summary>
+/// Income for the current month across every source. <see cref="Received"/> counts what is dated
+/// today or earlier; <see cref="Expected"/> is the whole month. W-2 checks are take-home (estimated
+/// unless a stub was entered); 1099 payments are what arrived, with nothing withheld.
+/// </summary>
+public sealed record MonthIncomeDto(decimal Received, decimal Expected, IReadOnlyList<IncomeItemDto> Items);
+
+public sealed record IncomeItemDto(DateOnly Date, string Source, decimal Amount, string Basis);
 
 /// <summary>
 /// One line of "What changed this month". <see cref="Formula"/> is the working behind its number;

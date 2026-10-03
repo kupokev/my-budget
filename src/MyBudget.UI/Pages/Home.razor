@@ -39,7 +39,18 @@ else
 
     <div class="row tiles">
         <section class="panel tile"><h3>Net worth</h3><p class="big"><Money Value="d.NetWorth" Signed="true" /></p><p class="muted">@(d.NetWorthChange is null ? "" : "vs last month ")@if (d.NetWorthChange is { } nwc) { <Money Value="nwc" Signed="true" /> }</p></section>
-        <section class="panel tile"><h3><a href="budget">Spending this month</a></h3><p class="big"><Money Value="d.SpendingThisMonth" /></p><p class="muted">last month <Money Value="d.SpendingLastMonth" /> · <Money Value="d.SpendingThisMonth - d.SpendingLastMonth" Signed="true" />@(d.Uncategorized > 0 ? $" · {d.Uncategorized} uncategorized" : "")</p></section>
+        @* What the Budget grid records as paid, compared at the same day of last month — the same figures as
+           the chart below. It used to count imported transactions, so it read $0 for months whose bills
+           were marked paid on the grid. *@
+        @if (cumulative is { } paid)
+        {
+            <section class="panel tile"><h3><a href="budget">Paid this month</a></h3><p class="big"><Money Value="paid.ThisMonthToDate" /></p>
+                <p class="muted">last month by the @Ordinal(paid.DayOfMonth) <Money Value="paid.LastMonthToSameDay" /> · <Money Value="paid.Difference" Signed="true" /></p></section>
+        }
+        @* Every source: W-2 take-home on each pay date (estimated unless a stub was entered) and 1099
+           payments as logged. Hover for the items behind the figure. *@
+        <section class="panel tile" title="@IncomeTitle(d.Income)"><h3><a href="income">Income this month</a></h3><p class="big"><Money Value="d.Income.Received" /></p>
+            <p class="muted">@(d.Income.Expected > d.Income.Received ? $"{Fmt.Money(d.Income.Expected - d.Income.Received)} more expected · {Fmt.Money(d.Income.Expected)} for the month" : d.Income.Items.Count == 0 ? "nothing expected this month" : "all of this month's income is in")</p></section>
         <section class="panel tile"><h3>Next paycheck</h3>@if (d.NextPayDate is { } np) { <p class="big">@Fmt.Date(np.Date)</p><p class="muted">@np.IncomeSource @(np.ThirdCheckOfMonth ? "· third check this month" : "")</p> } else { <p class="muted">No pay schedule.</p> }</section>
         <section class="panel tile rainy @d.RainyDay.Status.ToLowerInvariant()"><h3>Rainy-day fund</h3><p class="big">@d.RainyDay.MonthsCovered.ToString("0.#") months</p><p class="muted" title="@d.RainyDay.ExpensesFormula"><Money Value="d.RainyDay.Balance" /> vs @Fmt.Money(d.RainyDay.LowTarget)–@Fmt.Money(d.RainyDay.HighTarget) · @d.RainyDay.Verdict</p></section>
     </div>
@@ -131,6 +142,12 @@ else
         try { d = await Api.GetDashboardAsync(); cumulative = await Api.GetCumulativeSpendAsync(); }
         catch (Exception ex) { error = "Could not reach the API: " + ex.Message; }
     }
+
+    private static string IncomeTitle(MonthIncomeDto income) => income.Items.Count == 0
+        ? "No paychecks or 1099 payments dated this month."
+        : string.Join("\n", income.Items.Select(i => $"{Fmt.Date(i.Date)}  {i.Source}  {Fmt.Money(i.Amount)}  ({i.Basis})"));
+
+    private static string Ordinal(int d) => d + (d % 100 is 11 or 12 or 13 ? "th" : (d % 10) switch { 1 => "st", 2 => "nd", 3 => "rd", _ => "th" });
 
     /// <summary>This month solid in the accent colour, last month behind it for comparison.</summary>
     private static List<ChartSeries> SpendSeries(CumulativeSpendDto cs) =>

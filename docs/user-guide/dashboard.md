@@ -13,11 +13,15 @@ falling behind pace, an HSA behind its target, a card benefit about to expire un
 
 Expand it to see each one with a link to the screen that fixes it.
 
-## The four tiles
+## The five tiles
 
 - **Net worth** — everything owned less everything owed, and the change since last month. Detail on
   the [Wealth dashboard](wealth-dashboard.md).
-- **Spending this month** — what has actually gone out, against the same point last month.
+- **Paid this month** — what the Budget grid records as paid, against the same day last month. The
+  same numbers as the chart below.
+- **Income this month** — what has come in so far from every source, and what's still expected.
+  A W-2 check counts at take-home: the stub's net if you entered one under Paycheck → Actual stubs,
+  the estimate otherwise. A 1099 payment counts as logged on its income source. Hover for each item.
 - **Next paycheck** — the next pay date and which employer. From [Income sources](income-sources.md).
 - **Rainy-day fund** — how many months of expenses the accounts you marked would cover. Mark an
   account on [Accounts](accounts.md).

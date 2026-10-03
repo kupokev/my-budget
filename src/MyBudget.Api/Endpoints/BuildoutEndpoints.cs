@@ -42,7 +42,8 @@ public static class BuildoutEndpoints
             var highlights = MonthHighlights.Build(today, await BudgetEndpoints.History(db, today.Year), await BudgetEndpoints.ActiveLines(db, today), hsa, goals, nw.Total, change);
             return new HomeDashboardDto(today, alertList, upcoming, calendar.PayDates.FirstOrDefault(d => d.Date >= today), needs.Accounts,
                 spending.ThisMonth, spending.LastMonth, spending.Categories.Take(6).ToList(), spending.UncategorizedCount,
-                rewards.Programs, goals, nw.Total, change, await alerts.RainyDayAsync(today), (await aiOptions.GetAsync()).Enabled, highlights);
+                rewards.Programs, goals, nw.Total, change, await alerts.RainyDayAsync(today), (await aiOptions.GetAsync()).Enabled, highlights,
+                await IncomeEndpoints.MonthIncome(db, paychecks, today));
         });
 
         var s = api.MapGroup("/settings");

@@ -32,4 +32,30 @@ public class IncomeReceiptTests : IClassFixture<ApiFixture>
         await _api.Client.DeleteAsync($"api/side-income/receipts/{r.Id}");
         await _api.Client.DeleteAsync($"api/income-sources/{source.Id}");
     }
+
+    [Fact]
+    public async Task Income_this_month_uses_a_stub_over_the_estimate_and_counts_1099_payments()
+    {
+        var before = (await _api.Get<HomeDashboardDto>("api/home/dashboard")).Income;
+        var check = before.Items.First(i => i.Basis == "estimated take-home");
+        var source = (await _api.Get<List<IncomeSourceDto>>("api/income-sources")).Single(s => s.Name == check.Source);
+
+        // A stub for that pay date replaces the estimate.
+        var stub = await _api.Post("api/paychecks", new PaycheckDto { IncomeSourceId = source.Id, PayDate = check.Date, Gross = 5_000m, Net = 3_210.98m });
+        // A 1099 payment today counts as received, at its full amount.
+        var side = await _api.Post("api/income-sources", new IncomeSourceDto { Name = "Consulting (month income)", Type = IncomeSourceType.Contract1099, IsActive = true });
+        var today = (await _api.Get<HomeDashboardDto>("api/home/dashboard")).AsOf;
+        await _api.Post("api/side-income/receipts", new IncomeReceiptDto { IncomeSourceId = side.Id, Date = today, Amount = 800m });
+
+        var after = (await _api.Get<HomeDashboardDto>("api/home/dashboard")).Income;
+        var replaced = Assert.Single(after.Items, i => i.Source == check.Source && i.Date == check.Date);
+        Assert.Equal(3_210.98m, replaced.Amount);
+        Assert.Equal("take-home from the stub", replaced.Basis);
+        Assert.Contains(after.Items, i => i.Source == "Consulting (month income)" && i.Amount == 800m && i.Basis == "1099, nothing withheld");
+        Assert.Equal(before.Expected - check.Amount + 3_210.98m + 800m, after.Expected);
+        Assert.Equal(after.Items.Where(i => i.Date <= today).Sum(i => i.Amount), after.Received);
+
+        await _api.Client.DeleteAsync($"api/paychecks/{stub.Id}");
+        await _api.Client.DeleteAsync($"api/income-sources/{side.Id}");
+    }
 }

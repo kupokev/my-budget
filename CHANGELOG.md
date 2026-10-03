@@ -35,6 +35,9 @@ replace *unreleased* with the date.
   deposits are matched to those splits. This is a first version and still needs work.
 - **Pay schedules paid in arrears.** A pay schedule can say how many days after the work period
   ends it is paid, so the paycheck is assigned to the right period.
+- **Income this month** tile on the dashboard: every source's income dated this month, received so
+  far and expected for the month. W-2 checks count at take-home, from the stub where one was
+  entered and the paycheck estimate otherwise; 1099 payments count as logged. Hover for each item.
 - **1099 income sources** need no salary or pay schedule. Choosing *Contract 1099* hides the
   paycheck settings and shows **Payments received**, where each payment is logged as it arrives
   and can be corrected in place. Tax set-aside and estimated payments stay on Paycheck → 1099.
@@ -52,6 +55,9 @@ replace *unreleased* with the date.
   marked paid on the Budget grid, not imported transactions. Each amount lands on its paid date,
   or on its due date if it has no paid date. A month marked paid with a date but no amount counts
   at its expected amount, and a paid date later than today isn't counted until that day.
+- **"Spending this month" is now "Paid this month"** and reads the Budget grid, compared with last
+  month at the same day. It counted imported transactions, so it showed $0 for a month whose bills
+  were marked paid.
 - **Balance alerts** no longer count bills already marked paid, since that money has already left
   the account.
 - **Net worth chart** on the Wealth dashboard is about half as tall.
