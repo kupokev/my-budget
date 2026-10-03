@@ -22,7 +22,9 @@ replace *unreleased* with the date.
   its paid date, and its row is dimmed. A **Still to pay** total sits under the table.
 - **Confirmation numbers.** When recording a payment on the Budget grid, there's a field for the
   biller's confirmation number. It also shows when you hover over that month's cell.
-- **Budget line sorting.** Sort by category, then name, or by the day of the month a line is due.
+- **Budget line sorting.** The Budget page opens sorted by the day of the month each line is due,
+  with lines that have no due date last. Sorting by name, or by category then name, is still in
+  the Sort list.
 - **Price changes on a budget line.** When a subscription goes up, record the new amount from the
   month it starts. Earlier months keep what they were budgeted at.
 - **Label lines under a budget line.** Expand a line to see where its money went by label, for

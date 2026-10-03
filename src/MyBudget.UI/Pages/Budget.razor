@@ -20,9 +20,9 @@ else
         </span>
         <label class="inline">Sort
             <select @bind="sort">
+                <option value="due">by due day</option>
                 <option value="name">by name</option>
                 <option value="category">by category, then name</option>
-                <option value="due">by due day</option>
             </select>
         </label>
         <details class="dropdown">
@@ -381,7 +381,7 @@ else
     {
         if (DateOnly.TryParse($"{e.Value}-01", out var month)) row.FromPeriod = month;
     }
-    private string sort = "name";
+    private string sort = "due";   // the order bills come out of the account
 
     /// <summary>
     /// Name, category then name, or the day of the month a line falls due — the order bills come out
