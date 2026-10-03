@@ -85,10 +85,12 @@ public static class BudgetEndpoints
 
         var g = api.MapGroup("/budget");
 
-        g.MapGet("/", async (BudgetDbContext db) => (await db.BudgetLines.OrderBy(b => b.Name).ToListAsync()).Select(b => b.ToDto()));
+        // Price changes are loaded with the line everywhere it is read or saved. Without them the editor
+        // showed none, and a save could add one but never correct or remove it.
+        g.MapGet("/", async (BudgetDbContext db) => (await db.BudgetLines.Include(b => b.Amounts).OrderBy(b => b.Name).ToListAsync()).Select(b => b.ToDto()));
 
         g.MapGet("/{id:int}", async (int id, BudgetDbContext db) =>
-            await db.BudgetLines.FindAsync(id) is { } b ? Results.Ok(b.ToDto()) : Results.NotFound());
+            await db.BudgetLines.Include(b => b.Amounts).FirstOrDefaultAsync(b => b.Id == id) is { } b ? Results.Ok(b.ToDto()) : Results.NotFound());
 
         g.MapPost("/", async (BudgetLineDto dto, BudgetDbContext db) =>
         {
@@ -103,7 +105,7 @@ public static class BudgetEndpoints
         g.MapPut("/{id:int}", async (int id, BudgetLineDto dto, BudgetDbContext db) =>
         {
             if (Validate(dto) is { } problem) return problem;
-            var b = await db.BudgetLines.FindAsync(id);
+            var b = await db.BudgetLines.Include(x => x.Amounts).FirstOrDefaultAsync(x => x.Id == id);
             if (b is null) return Results.NotFound();
             b.Apply(dto);
             await db.SaveChangesAsync();

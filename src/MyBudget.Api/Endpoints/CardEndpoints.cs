@@ -20,7 +20,7 @@ public static class CardEndpoints
         {
             var asOf = DateOnly.FromDateTime(clock.GetLocalNow().DateTime);
             var cards = await db.Cards.Include(c => c.Balances).Include(c => c.PayingAccount).Where(c => c.IsActive).OrderBy(c => c.Name).ToListAsync();
-            var lines = await db.BudgetLines.Where(b => b.IsActive && b.PaymentMethod == PaymentMethodKind.Card).ToListAsync();
+            var lines = await db.BudgetLines.Include(b => b.Amounts).Where(b => b.IsActive && b.PaymentMethod == PaymentMethodKind.Card).ToListAsync();
 
             // Actual spend on each card, this month and last, straight from its transactions.
             var thisMonth = new DateOnly(asOf.Year, asOf.Month, 1);

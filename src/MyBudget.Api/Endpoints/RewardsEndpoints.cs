@@ -135,7 +135,7 @@ public static class RewardsEndpoints
         var spend = await CardSpendFor(db, year);
         var categories = await db.Categories.ToListAsync();
         var labels = await db.Labels.ToListAsync();
-        var lines = await db.BudgetLines.Include(b => b.Category).Include(b => b.Periods).Where(b => b.IsActive).ToListAsync();
+        var lines = await db.BudgetLines.Include(b => b.Category).Include(b => b.Periods).Include(b => b.Amounts).Where(b => b.IsActive).ToListAsync();
         var accrual = lines.ToDictionary(b => b.Id, b => SinkingFund.MonthlyAccrual(b, asOf).Monthly);
         return RewardsOptimizer.Run(new RewardsInput(year, asOf, cards, programs, spend, categories, labels, lines, accrual, carryCurrentTier));
     }

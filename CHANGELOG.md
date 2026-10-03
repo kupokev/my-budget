@@ -57,7 +57,9 @@ replace *unreleased* with the date.
 ### Fixed
 
 - Opening a budget line's editor showed its label as blank, and saving the line then cleared the
-  label and erased its price changes.
+  label.
+- A budget line's price changes never appeared in its editor, so they couldn't be corrected or
+  removed. The card cost summary and the rewards report also ignored them and used the old amount.
 - The "marked paid in the last seven days" line under the dashboard chart ignored days from the
   previous month early in a month.
 - The Arch package step of the release build failed, which stopped the first attempt at 1.0.1
