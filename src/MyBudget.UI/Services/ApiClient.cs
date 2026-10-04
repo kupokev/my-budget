@@ -182,6 +182,8 @@ public sealed class ApiClient(HttpClient http)
     public Task<List<PersonLedgerDto>> GetLedgersAsync() => Get<List<PersonLedgerDto>>("api/people/ledgers");
     public Task<PersonDto> SavePersonAsync(PersonDto p) => p.Id == 0 ? Post("api/people", p) : Put($"api/people/{p.Id}", p);
     public Task DeletePersonAsync(int id) => Delete($"api/people/{id}");
+    public Task<List<TimeOffStatusDto>> GetTimeOffAsync(DateOnly? on = null) => Get<List<TimeOffStatusDto>>(Q("api/time-off", ("on", on?.ToString("yyyy-MM-dd"))));
+    public Task<List<TimeOffGoalCheckDto>> GetTimeOffGoalChecksAsync() => Get<List<TimeOffGoalCheckDto>>("api/time-off/goals");
     public Task<List<IncomeReceiptDto>> GetReceiptsAsync(int year) => Get<List<IncomeReceiptDto>>($"api/side-income/receipts?year={year}");
     public Task<IncomeReceiptDto> AddReceiptAsync(IncomeReceiptDto r) => Post("api/side-income/receipts", r);
     public Task<IncomeReceiptDto> UpdateReceiptAsync(IncomeReceiptDto r) => Put($"api/side-income/receipts/{r.Id}", r);

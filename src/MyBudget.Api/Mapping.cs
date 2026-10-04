@@ -146,6 +146,12 @@ internal static class Mapping
             Id = d.Id, Name = d.Name, Kind = d.Kind, Treatment = d.Treatment, AmountPerCheck = d.AmountPerCheck,
             PercentOfGross = d.PercentOfGross is { } p ? p * 100m : null, EffectiveDate = d.EffectiveDate, EndDate = d.EndDate,
         }).ToList(),
+        TimeOffBuckets = s.TimeOffBuckets.OrderBy(b => b.Name).Select(b => new TimeOffBucketDto
+        {
+            Id = b.Id, Name = b.Name, AccrualHoursPerPaycheck = b.AccrualHoursPerPaycheck, AnnualGrantHours = b.AnnualGrantHours,
+            GrantMonth = b.GrantMonth, MaxHours = b.MaxHours, HoursPerDay = b.HoursPerDay, IsActive = b.IsActive, Notes = b.Notes,
+            OnStubs = b.StubLines.Count > 0,
+        }).ToList(),
         Withholdings = s.Withholdings.OrderBy(w => w.EffectiveDate).Select(w => new WithholdingElectionDto
         {
             Id = w.Id, EffectiveDate = w.EffectiveDate, FederalStatus = w.FederalStatus, MultipleJobs = w.MultipleJobs, DependentCredits = w.DependentCredits,
@@ -164,6 +170,23 @@ internal static class Mapping
         }));
         s.SalaryRates.Clear();
         s.SalaryRates.AddRange(d.SalaryRates.Select(r => new SalaryRate { AnnualAmount = r.AnnualAmount, EffectiveDate = r.EffectiveDate }));
+
+        // Matched by id, unlike the lists above: stubs point at a bucket, so rewriting the rows would
+        // orphan every balance recorded against them. A bucket stubs still mention is retired, not deleted.
+        var keptBuckets = d.TimeOffBuckets.Where(b => !string.IsNullOrWhiteSpace(b.Name)).ToList();
+        foreach (var gone in s.TimeOffBuckets.Where(b => b.Id != 0 && keptBuckets.All(k => k.Id != b.Id)).ToList())
+        {
+            if (gone.StubLines.Count > 0) gone.IsActive = false;
+            else s.TimeOffBuckets.Remove(gone);
+        }
+        foreach (var k in keptBuckets)
+        {
+            var b = s.TimeOffBuckets.FirstOrDefault(x => x.Id == k.Id && k.Id != 0);
+            if (b is null) { b = new TimeOffBucket { Name = "" }; s.TimeOffBuckets.Add(b); }
+            b.Name = k.Name.Trim(); b.AccrualHoursPerPaycheck = k.AccrualHoursPerPaycheck; b.AnnualGrantHours = k.AnnualGrantHours;
+            b.GrantMonth = k.GrantMonth; b.MaxHours = k.MaxHours; b.HoursPerDay = k.HoursPerDay is > 0 ? k.HoursPerDay : 8;
+            b.IsActive = k.IsActive; b.Notes = string.IsNullOrWhiteSpace(k.Notes) ? null : k.Notes.Trim();
+        }
         s.PaySchedules.Clear();
         // Only one row can be the remainder; the rest are fixed amounts taken in order.
         s.DepositSplits.Clear();

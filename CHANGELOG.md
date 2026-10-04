@@ -38,6 +38,12 @@ replace *unreleased* with the date.
 - **Income this month** tile on the dashboard: every source's income dated this month, received so
   far and expected for the month. W-2 checks count at take-home, from the stub where one was
   entered and the paycheck estimate otherwise; 1099 payments count as logged. Hover for each item.
+- **Paid time off.** Each job gets time-off buckets named as its stub names them (PTO, Sick,
+  Floating…), each accruing per paycheck, granted yearly, or both, with an optional cap. Stubs record
+  accrued, used and balance per bucket, and the app projects the balance forward through your pay
+  dates. A goal can need time off (a bucket, hours, and the day it starts); the goal editor, the Goals
+  list and "What changed this month" say whether there will be enough, and the Assistant can answer
+  time-off questions.
 - **1099 income sources** need no salary or pay schedule. Choosing *Contract 1099* hides the
   paycheck settings and shows **Payments received**, where each payment is logged as it arrives
   and can be corrected in place. Tax set-aside and estimated payments stay on Paycheck → 1099.

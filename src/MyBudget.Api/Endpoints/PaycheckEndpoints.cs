@@ -31,7 +31,7 @@ public static class PaycheckEndpoints
         var p = api.MapGroup("/paychecks");
         p.MapGet("/", async (int? sourceId, int? year, BudgetDbContext db) =>
         {
-            var q = db.Paychecks.Include(x => x.Lines).AsQueryable();
+            var q = db.Paychecks.Include(x => x.Lines).Include(x => x.TimeOff).AsQueryable();
             if (sourceId is { } s) q = q.Where(x => x.IncomeSourceId == s);
             if (year is { } y) q = q.Where(x => x.PayDate.Year == y);
             return (await q.OrderByDescending(x => x.PayDate).ToListAsync()).Select(ToDto);
@@ -46,7 +46,7 @@ public static class PaycheckEndpoints
         });
         p.MapPut("/{id:int}", async (int id, PaycheckDto dto, BudgetDbContext db) =>
         {
-            var e = await db.Paychecks.Include(x => x.Lines).FirstOrDefaultAsync(x => x.Id == id);
+            var e = await db.Paychecks.Include(x => x.Lines).Include(x => x.TimeOff).FirstOrDefaultAsync(x => x.Id == id);
             if (e is null) return Results.NotFound();
             Apply(e, dto);
             await db.SaveChangesAsync();
@@ -54,7 +54,8 @@ public static class PaycheckEndpoints
         });
         p.MapDelete("/{id:int}", async (int id, BudgetDbContext db) =>
         {
-            var e = await db.Paychecks.FindAsync(id);
+            // Loaded with its lines so they go with it on any provider, not only where the database cascades.
+            var e = await db.Paychecks.Include(x => x.Lines).Include(x => x.TimeOff).FirstOrDefaultAsync(x => x.Id == id);
             if (e is null) return Results.NotFound();
             db.Paychecks.Remove(e);
             await db.SaveChangesAsync();
@@ -97,6 +98,7 @@ public static class PaycheckEndpoints
     {
         Id = e.Id, IncomeSourceId = e.IncomeSourceId, PayDate = e.PayDate, Kind = e.Kind, Gross = e.Gross, Net = e.Net, Notes = e.Notes,
         Lines = e.Lines.Select(l => new PaycheckLineDto { Category = l.Category, Name = l.Name, Amount = l.Amount }).ToList(),
+        TimeOff = e.TimeOff.Select(t => new PaycheckTimeOffDto { BucketId = t.BucketId, Accrued = t.Accrued, Used = t.Used, Balance = t.Balance }).ToList(),
     };
 
     private static void Apply(Paycheck e, PaycheckDto d)
@@ -104,6 +106,10 @@ public static class PaycheckEndpoints
         e.PayDate = d.PayDate; e.Kind = d.Kind; e.Gross = d.Gross; e.Net = d.Net; e.Notes = d.Notes;
         e.Lines.Clear();
         e.Lines.AddRange(d.Lines.Where(l => !string.IsNullOrWhiteSpace(l.Name)).Select(l => new PaycheckLine { Category = l.Category, Name = l.Name.Trim(), Amount = l.Amount }));
+        // A bucket counts as on this stub only with a balance; accrued and used alone say nothing to project from.
+        e.TimeOff.Clear();
+        e.TimeOff.AddRange(d.TimeOff.Where(t => t.Balance is not null).GroupBy(t => t.BucketId).Select(g => g.First())
+            .Select(t => new PaycheckTimeOff { BucketId = t.BucketId, Accrued = t.Accrued, Used = t.Used, Balance = t.Balance!.Value }));
     }
 
     /// <summary>Turns the service's "not configured" exceptions into 400s with the message, instead of 500s.</summary>

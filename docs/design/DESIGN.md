@@ -14,6 +14,7 @@ works. Add a row and a DD when a new subsystem gets its own design.
 | [DD-0007](./DD-0007-local-ai.md) | Local AI on Ollama, tool-calling only (Phase 5) | Active |
 | [DD-0008](./DD-0008-buildout.md) | Build-out: alerts, home dashboard, receivables, 1099 set-aside, rainy-day fund (Phase 5) | Active |
 | [DD-0009](./DD-0009-income-and-pay-allocation.md) | Income: salary and schedule history, deposit allocation and its versions, matching deposits to a cheque | Draft |
+| [DD-0010](./DD-0010-paid-time-off.md) | Paid time off: buckets per job, balances from stubs, projection, goals that need days off | Active |
 
 ## Decision records
 

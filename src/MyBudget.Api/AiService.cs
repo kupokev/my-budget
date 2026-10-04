@@ -39,6 +39,9 @@ public sealed class AiTools(BudgetDbContext db, PaycheckService paychecks, Inves
         new("goals_progress", "Every goal's current value, prorated target and status.", Obj()),
         new("net_worth", "Net worth from latest balances and its 24-month history.", Obj()),
         new("portfolio", "Investment positions, unrealized and realized gains, dividends, wash-sale warnings for a year.", Obj(("year", "integer"))),
+        new("time_off", "Paid time off per job and bucket (PTO, sick, floating): balance on the latest pay stub, hours added per paycheck, " +
+                        "and the balance projected to a date (YYYY-MM-DD, default December 31), plus goals that need time off and whether there will be enough.",
+            Obj(("on", "string"))),
     ];
 
     public async Task<string> InvokeAsync(string name, JsonElement args)
@@ -57,6 +60,12 @@ public sealed class AiTools(BudgetDbContext db, PaycheckService paychecks, Inves
             "goals_progress" => await GoalEndpoints.AllProgress(db, paychecks, today),
             "net_worth" => await ReportEndpoints.NetWorth(db, today, history: true),
             "portfolio" => SlimPortfolio(await investments.PortfolioAsync(today, Int("year", today.Year))),
+            "time_off" => new
+            {
+                buckets = await TimeOffEndpoints.Status(db, today,
+                    args.ValueKind == JsonValueKind.Object && args.TryGetProperty("on", out var on) && DateOnly.TryParse(on.GetString(), out var d) ? d : new DateOnly(today.Year, 12, 31)),
+                goals = await TimeOffEndpoints.GoalChecks(db, today),
+            },
             _ => throw new KeyNotFoundException($"Unknown tool '{name}'."),
         };
         return JsonSerializer.Serialize(result, Json);

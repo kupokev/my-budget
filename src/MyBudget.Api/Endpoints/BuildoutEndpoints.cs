@@ -39,7 +39,8 @@ public static class BuildoutEndpoints
             // Home is a financial-health snapshot; rewards are something to dig into on purpose, so they stay off it.
             var alertList = (await alerts.ComputeAsync(today, needs, upcoming, rewards, hsa)).Where(a => a.Kind != "rewards").ToList();
             var change = prev is { } p ? nw.Total - p : (decimal?)null;
-            var highlights = MonthHighlights.Build(today, await BudgetEndpoints.History(db, today.Year), await BudgetEndpoints.ActiveLines(db, today), hsa, goals, nw.Total, change);
+            var highlights = MonthHighlights.Build(today, await BudgetEndpoints.History(db, today.Year), await BudgetEndpoints.ActiveLines(db, today), hsa, goals, nw.Total, change,
+                await TimeOffEndpoints.GoalChecks(db, today));
             return new HomeDashboardDto(today, alertList, upcoming, calendar.PayDates.FirstOrDefault(d => d.Date >= today), needs.Accounts,
                 spending.ThisMonth, spending.LastMonth, spending.Categories.Take(6).ToList(), spending.UncategorizedCount,
                 rewards.Programs, goals, nw.Total, change, await alerts.RainyDayAsync(today), (await aiOptions.GetAsync()).Enabled, highlights,
@@ -146,7 +147,8 @@ public static class BuildoutEndpoints
             var goals = await GoalEndpoints.AllProgress(db, paychecks, today);
             var nw = await ReportEndpoints.NetWorth(db, today, history: true);
             var change = nw.History.Count >= 2 ? nw.Total - nw.History[^2].Total : (decimal?)null;
-            var highlights = MonthHighlights.Build(today, await BudgetEndpoints.History(db, today.Year), await BudgetEndpoints.ActiveLines(db, today), hsa, goals, nw.Total, change);
+            var highlights = MonthHighlights.Build(today, await BudgetEndpoints.History(db, today.Year), await BudgetEndpoints.ActiveLines(db, today), hsa, goals, nw.Total, change,
+                await TimeOffEndpoints.GoalChecks(db, today));
             return await PaycheckEndpoints.Guarded(() => svc.SummaryAsync(highlights, today.Year, today.Month, today));
         });
 

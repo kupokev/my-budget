@@ -68,6 +68,9 @@ public class Paycheck
     public decimal Net { get; set; }
     public string? Notes { get; set; }
     public List<PaycheckLine> Lines { get; set; } = [];
+
+    /// <summary>Time-off lines as printed on the stub: accrued, used, balance per bucket.</summary>
+    public List<PaycheckTimeOff> TimeOff { get; set; } = [];
 }
 
 public class PaycheckLine

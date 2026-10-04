@@ -212,6 +212,24 @@ public sealed class IncomeSourceDto
     public List<WithholdingElectionDto> Withholdings { get; set; } = [];
     public List<DepositSplitDto> DepositSplits { get; set; } = [];
     public List<PaycheckOverrideDto> Overrides { get; set; } = [];
+    public List<TimeOffBucketDto> TimeOffBuckets { get; set; } = [];
+}
+
+/// <summary>A kind of paid time off at this job, named as the employer names it, and how it grows.</summary>
+public sealed class TimeOffBucketDto
+{
+    public int Id { get; set; }
+    [Required, StringLength(60)] public string Name { get; set; } = "";
+    /// <summary>Hours added each paycheck. Blank uses what the latest stub accrued.</summary>
+    [Range(0, 100)] public decimal? AccrualHoursPerPaycheck { get; set; }
+    [Range(0, 1000)] public decimal? AnnualGrantHours { get; set; }
+    [Range(1, 12)] public int? GrantMonth { get; set; }
+    [Range(0, 5000)] public decimal? MaxHours { get; set; }
+    [Range(1, 24)] public decimal HoursPerDay { get; set; } = 8;
+    public bool IsActive { get; set; } = true;
+    [StringLength(200)] public string? Notes { get; set; }
+    /// <summary>Read-only: stubs record this bucket, so removing it retires it instead of deleting.</summary>
+    public bool OnStubs { get; set; }
 }
 
 public sealed class PaycheckOverrideDto

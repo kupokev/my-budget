@@ -64,6 +64,14 @@ public class Goal
     public int? LoanId { get; set; }
     /// <summary>True when smaller is better (spend under X, loan balance down to X).</summary>
     public bool LowerIsBetter { get; set; }
+
+    /// <summary>
+    /// For a trip or anything else that needs days off: the bucket it comes out of, how many hours, and
+    /// the day the time off starts. All three or none. Checked against the bucket's projected balance.
+    /// </summary>
+    public int? TimeOffBucketId { get; set; }
+    public decimal? TimeOffHours { get; set; }
+    public DateOnly? TimeOffStarts { get; set; }
     public GoalStatus Status { get; set; }
     public string? Notes { get; set; }
     public bool IsActive { get; set; } = true;

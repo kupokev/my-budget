@@ -171,6 +171,7 @@ public static class GoalEndpoints
         Id = g.Id, Name = g.Name, Kind = g.Kind, Metric = g.Metric, TargetAmount = g.TargetAmount, StartValue = g.StartValue, StartDate = g.StartDate, EndDate = g.EndDate,
         ManualCurrent = g.ManualCurrent, AccountIds = (g.AccountIds ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(int.Parse).ToList(), AccountType = g.AccountType,
         CategoryId = g.CategoryId, LoanId = g.LoanId, LowerIsBetter = g.LowerIsBetter, Status = g.Status, Notes = g.Notes, IsActive = g.IsActive,
+        TimeOffBucketId = g.TimeOffBucketId, TimeOffHours = g.TimeOffHours, TimeOffStarts = g.TimeOffStarts,
     };
 
     private static void Apply(Goal e, GoalDto d)
@@ -179,5 +180,10 @@ public static class GoalEndpoints
         e.StartDate = d.StartDate; e.EndDate = d.EndDate < d.StartDate ? d.StartDate : d.EndDate; e.ManualCurrent = d.ManualCurrent;
         e.AccountIds = d.AccountIds.Count == 0 ? null : string.Join(",", d.AccountIds); e.AccountType = d.Metric == GoalMetric.AccountTypeContributions ? d.AccountType ?? Domain.AccountType.Hsa : null; e.CategoryId = d.CategoryId; e.LoanId = d.LoanId;
         e.LowerIsBetter = d.LowerIsBetter; e.Status = d.Status; e.Notes = d.Notes; e.IsActive = d.IsActive;
+        // All three or none: a bucket with no hours or no start date can't be checked against anything.
+        var timeOff = d.TimeOffBucketId is not null && d.TimeOffHours is > 0 && d.TimeOffStarts is not null;
+        e.TimeOffBucketId = timeOff ? d.TimeOffBucketId : null;
+        e.TimeOffHours = timeOff ? d.TimeOffHours : null;
+        e.TimeOffStarts = timeOff ? d.TimeOffStarts : null;
     }
 }

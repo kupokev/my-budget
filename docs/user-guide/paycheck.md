@@ -59,6 +59,13 @@ A single cheque that is not a normal period — the short one when an employer s
 to arrears — is an **override** on the income source. Give it a percentage of normal gross or an
 exact figure, and say whether fixed deductions shrink with it.
 
+## Paid time off on a stub
+
+When you enter a stub, there's a row for each time-off bucket on that job: type the hours **Accrued**,
+**Used** and the **Balance** exactly as printed. Leave the balance blank for a bucket that stub doesn't
+show. The newest balance is where the app projects from, and the stubs table lists each stub's
+balances. Buckets are set up on [Income sources](income-sources.md).
+
 ## If it does not match your stub
 
 That is a bug, not a rounding difference. The most common causes are a deduction missing from the

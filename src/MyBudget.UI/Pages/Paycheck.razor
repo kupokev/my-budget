@@ -223,11 +223,12 @@ else
             @if (stubs is { Count: > 0 })
             {
                 <table>
-                    <thead><tr><th>Pay date</th><th>Kind</th><th class="money">Gross</th><th class="money">Net</th><th></th></tr></thead>
+                    <thead><tr><th>Pay date</th><th>Kind</th><th class="money">Gross</th><th class="money">Net</th><th>Time off</th><th></th></tr></thead>
                     <tbody>
                     @foreach (var s in stubs)
                     {
                         <tr><td>@Fmt.Date(s.PayDate)</td><td>@s.Kind</td><td><Money Value="s.Gross" /></td><td><Money Value="s.Net" /></td>
+                            <td class="muted">@string.Join(" · ", s.TimeOff.Where(t => t.Balance is not null).Select(t => $"{BucketName(t.BucketId)} {t.Balance:0.##}h"))</td>
                             <td class="actions"><button class="secondary" type="button" @onclick="() => Compare(s)">Compare</button> <button class="secondary" type="button" @onclick="() => EditStub(s)">Edit</button></td></tr>
                     }
                     </tbody>
@@ -259,6 +260,30 @@ else
                     }
                     </tbody>
                 </table>
+                @* Time off as printed on the stub. The balance is what the app projects from; a bucket left
+                   blank simply isn't on this stub. Buckets are set up on the income source. *@
+                @if (stubEdit.TimeOff.Count > 0)
+                {
+                    <h4>Paid time off <span class="muted">(hours, as printed; leave Balance blank for a bucket this stub doesn't show)</span></h4>
+                    <table class="compact">
+                        <thead><tr><th>Bucket</th><th class="money">Accrued</th><th class="money">Used</th><th class="money">Balance</th></tr></thead>
+                        <tbody>
+                        @foreach (var t in stubEdit.TimeOff)
+                        {
+                            <tr @key="t.BucketId">
+                                <td>@BucketName(t.BucketId)</td>
+                                <td><input type="number" step="0.01" class="narrow" @bind="t.Accrued" /></td>
+                                <td><input type="number" step="0.01" class="narrow" @bind="t.Used" /></td>
+                                <td><input type="number" step="0.01" class="narrow" @bind="t.Balance" /></td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                }
+                else
+                {
+                    <p class="muted">To record PTO from this stub, add its time-off buckets to the income source on <a href="income">Income sources</a>.</p>
+                }
                 <div class="toolbar">
                     <button class="secondary" type="button" @onclick="() => stubEdit.Lines.Add(new PaycheckLineDto { Category = PaycheckLineCategory.Tax })">Add line</button>
                     <button type="button" @onclick="SaveStub">Save</button>
@@ -370,6 +395,7 @@ else
     {
         compare = null;
         stubEdit = new PaycheckDto { IncomeSourceId = sourceId, PayDate = date, Gross = estimate?.Gross ?? 0 };
+        AddBucketRows(stubEdit);
         if (estimate is not null)
         {
             foreach (var l in estimate.PreTaxDeductions) stubEdit.Lines.Add(new() { Category = PaycheckLineCategory.PreTaxDeduction, Name = l.Name });
@@ -382,8 +408,22 @@ else
     {
         compare = null;
         stubEdit = new PaycheckDto { Id = s.Id, IncomeSourceId = s.IncomeSourceId, PayDate = s.PayDate, Kind = s.Kind, Gross = s.Gross, Net = s.Net, Notes = s.Notes,
-            Lines = s.Lines.Select(l => new PaycheckLineDto { Category = l.Category, Name = l.Name, Amount = l.Amount }).ToList() };
+            Lines = s.Lines.Select(l => new PaycheckLineDto { Category = l.Category, Name = l.Name, Amount = l.Amount }).ToList(),
+            TimeOff = s.TimeOff.Select(t => new PaycheckTimeOffDto { BucketId = t.BucketId, Accrued = t.Accrued, Used = t.Used, Balance = t.Balance }).ToList() };
+        AddBucketRows(stubEdit);
     }
+
+    /// <summary>A row for every active bucket of the stub's job not already on it, with its usual accrual filled in.</summary>
+    private void AddBucketRows(PaycheckDto stub)
+    {
+        foreach (var b in Buckets(stub.IncomeSourceId).Where(b => b.IsActive && stub.TimeOff.All(t => t.BucketId != b.Id)))
+            stub.TimeOff.Add(new PaycheckTimeOffDto { BucketId = b.Id, Accrued = b.AccrualHoursPerPaycheck });
+    }
+
+    private IEnumerable<TimeOffBucketDto> Buckets(int sourceId) => sources?.FirstOrDefault(s => s.Id == sourceId)?.TimeOffBuckets ?? [];
+
+    private string BucketName(int bucketId) =>
+        sources?.SelectMany(s => s.TimeOffBuckets).FirstOrDefault(b => b.Id == bucketId)?.Name ?? "Time off";
 
     private async Task SaveStub()
     {

@@ -146,6 +146,29 @@ public sealed class PaycheckDto
     public decimal Net { get; set; }
     public string? Notes { get; set; }
     public List<PaycheckLineDto> Lines { get; set; } = [];
+    /// <summary>Time-off lines as printed: one per bucket, blank balance means not on this stub.</summary>
+    public List<PaycheckTimeOffDto> TimeOff { get; set; } = [];
+}
+
+/// <summary>
+/// A time-off bucket now and on a date: the latest stub balance, the rate it grows at (and where that
+/// rate came from), and the balance carried forward to <see cref="On"/>. Balance is null until a stub
+/// records one.
+/// </summary>
+public sealed record TimeOffStatusDto(int BucketId, int IncomeSourceId, string Source, string Bucket, decimal HoursPerDay,
+    decimal? Balance, DateOnly? AsOf, decimal RatePerPaycheck, string RateSource,
+    DateOnly On, decimal? ProjectedHours, string? Formula);
+
+/// <summary>Whether a goal's time off will be there when it starts.</summary>
+public sealed record TimeOffGoalCheckDto(int GoalId, string Goal, string Bucket, decimal HoursNeeded, DateOnly Starts,
+    decimal? ProjectedHours, bool Enough, decimal HoursPerDay, string Formula);
+
+public sealed class PaycheckTimeOffDto
+{
+    public int BucketId { get; set; }
+    [Range(0, 1000)] public decimal? Accrued { get; set; }
+    [Range(0, 1000)] public decimal? Used { get; set; }
+    [Range(-1000, 5000)] public decimal? Balance { get; set; }
 }
 
 public sealed record CompareRowDto(string Name, decimal? Estimated, decimal? Actual, decimal? Variance);

@@ -20,6 +20,7 @@ public sealed class BudgetDbContext(DbContextOptions<BudgetDbContext> options) :
     public DbSet<DeductionElection> DeductionElections => Set<DeductionElection>();
     public DbSet<WithholdingElection> WithholdingElections => Set<WithholdingElection>();
     public DbSet<Paycheck> Paychecks => Set<Paycheck>();
+    public DbSet<TimeOffBucket> TimeOffBuckets => Set<TimeOffBucket>();
     public DbSet<TaxYear> TaxYears => Set<TaxYear>();
     public DbSet<ContributionLimits> ContributionLimits => Set<ContributionLimits>();
     public DbSet<HsaYear> HsaYears => Set<HsaYear>();
@@ -146,6 +147,22 @@ public sealed class BudgetDbContext(DbContextOptions<BudgetDbContext> options) :
         });
         mb.Entity<SpendThreshold>().Property(x => x.Description).HasMaxLength(200);
         mb.Entity<DepositSplit>().Property(x => x.Notes).HasMaxLength(200);
+        mb.Entity<TimeOffBucket>(e =>
+        {
+            e.Property(x => x.Name).HasMaxLength(60);
+            e.Property(x => x.Notes).HasMaxLength(200);
+            e.HasOne(x => x.IncomeSource).WithMany(x => x.TimeOffBuckets).HasForeignKey(x => x.IncomeSourceId).OnDelete(DeleteBehavior.Cascade);
+        });
+        mb.Entity<PaycheckTimeOff>(e =>
+        {
+            e.HasOne(x => x.Paycheck).WithMany(x => x.TimeOff).HasForeignKey(x => x.PaycheckId).OnDelete(DeleteBehavior.Cascade);
+            // A bucket with stub history can't vanish under it; deleting one means retiring it (inactive).
+            e.HasOne(x => x.Bucket).WithMany(x => x.StubLines).HasForeignKey(x => x.BucketId).OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(x => new { x.PaycheckId, x.BucketId }).IsUnique();
+        });
+        // Goal.TimeOffBucketId is deliberately a plain column, not a foreign key: adding one to the existing
+        // Goals table makes SQLite rebuild it outside a transaction, which a crash mid-migration would leave
+        // half done. A goal whose bucket is gone is simply skipped by the time-off check.
         mb.Entity<DepositSplit>().HasOne(x => x.IncomeSource).WithMany(x => x.DepositSplits).HasForeignKey(x => x.IncomeSourceId).OnDelete(DeleteBehavior.Cascade);
         mb.Entity<DepositSplit>().HasOne(x => x.Account).WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Restrict);
         mb.Entity<BudgetLineAmount>().Property(x => x.Notes).HasMaxLength(200);

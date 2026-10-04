@@ -35,3 +35,11 @@ deposit. Reinvested dividends do not count: that is the fund paying itself, not 
 The bar is progress toward the target; the tick is how much of the time has elapsed. Behind the tick
 means behind pace. A **starting value** makes the bar measure progress from where you began rather
 than from zero.
+
+## Goals that need time off
+
+A trip, or anything else that takes days off: under **Needs time off from**, pick the time-off bucket,
+the hours it needs and the day the time off starts. The editor shows straight away what that bucket will
+hold by then — the latest stub's balance carried forward through your pay dates — and whether it's
+enough. The Goals list shows the same check under the goal's name, and the dashboard's "What changed
+this month" says when you have enough to book it.

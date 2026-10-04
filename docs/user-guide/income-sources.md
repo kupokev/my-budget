@@ -5,6 +5,20 @@
 One entry per employer or income source. This drives [Paycheck](paycheck.md), the per-paycheck
 transfer figures, and the next-payday tile.
 
+## Paid time off
+
+One row per time-off bucket your stub shows, named the way the stub names it: a single **PTO** bucket,
+or **PTO**, **Sick** and **Floating** if that's how the employer splits it. For each, say how it grows:
+
+- **Adds / check** — hours added every paycheck. Leave it blank and the app uses whatever the latest
+  stub accrued.
+- **Yearly grant** and **Granted in** — a block of hours given once a year, on the first of that month.
+- **Cap** — the most the bucket can hold; accrual stops there.
+- **Hours / day** — for showing hours as days.
+
+The balances themselves come off your stubs: see [Paycheck](paycheck.md). A bucket that stubs already
+mention can't be deleted, only retired.
+
 ## 1099 work
 
 Set **Type** to *Contract 1099* for work that pays when it pays, with no tax taken out. Salary, pay

@@ -159,6 +159,10 @@ public sealed class GoalDto
     public int? CategoryId { get; set; }
     public int? LoanId { get; set; }
     public bool LowerIsBetter { get; set; }
+    /// <summary>Time off this goal needs — a trip, say: from which bucket, how many hours, starting when. All or none.</summary>
+    public int? TimeOffBucketId { get; set; }
+    [Range(0, 2000)] public decimal? TimeOffHours { get; set; }
+    public DateOnly? TimeOffStarts { get; set; }
     public GoalStatus Status { get; set; }
     public string? Notes { get; set; }
     public bool IsActive { get; set; } = true;

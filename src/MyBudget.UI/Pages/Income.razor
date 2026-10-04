@@ -157,6 +157,44 @@ else
                         <p class="warn-text">No account is marked as the remainder, so the split won't add up to the whole cheque.</p>
                     }
 
+                    @* Each employer keeps its own buckets — one PTO bucket here, PTO + sick + floating
+                       elsewhere — and grows them its own way. Balances come off the stubs (Paycheck →
+                       Actual stubs); this only says what the buckets are and how they grow. *@
+                    <h3>Paid time off</h3>
+                    <p class="muted">One row per bucket on your stub, named as the stub names it. Record the balance from each
+                    stub under <a href="paycheck">Paycheck → Actual stubs</a>; the app carries it forward from there.
+                    Leave <strong>Adds / check</strong> blank to use what the latest stub accrued.</p>
+                    <table class="compact">
+                        <thead><tr><th>Bucket</th><th class="money" title="Hours added each paycheck">Adds / check (h)</th><th class="money" title="Hours granted once a year">Yearly grant (h)</th><th>Granted in</th><th class="money" title="Accrual stops at this balance">Cap (h)</th><th class="money" title="For showing hours as days">Hours / day</th><th class="center">Active</th><th></th></tr></thead>
+                        <tbody>
+                        @foreach (var b in editing.TimeOffBuckets)
+                        {
+                            <tr @key="b" class="@(b.IsActive ? "" : "muted")">
+                                <td><InputText @bind-Value="b.Name" placeholder="e.g. PTO, Sick" /></td>
+                                <td><InputNumber @bind-Value="b.AccrualHoursPerPaycheck" step="0.01" class="narrow" placeholder="from stub" /></td>
+                                <td><InputNumber @bind-Value="b.AnnualGrantHours" step="1" class="narrow" placeholder="none" /></td>
+                                <td><select @bind="b.GrantMonth" disabled="@(b.AnnualGrantHours is null or 0)">
+                                    @for (var m = 1; m <= 12; m++) { var month = m; <option value="@month">@System.Globalization.CultureInfo.CurrentCulture.DateTimeFormat.GetAbbreviatedMonthName(month)</option> }
+                                </select></td>
+                                <td><InputNumber @bind-Value="b.MaxHours" step="1" class="narrow" placeholder="none" /></td>
+                                <td><InputNumber @bind-Value="b.HoursPerDay" step="0.5" class="narrow" /></td>
+                                <td class="center"><InputCheckbox @bind-Value="b.IsActive" /></td>
+                                <td class="actions">
+                                    @if (b.OnStubs)
+                                    {
+                                        <button class="link danger" type="button" title="Stubs record this bucket, so it is retired rather than deleted" @onclick="() => b.IsActive = false">Retire</button>
+                                    }
+                                    else
+                                    {
+                                        <button class="link danger" type="button" title="Remove bucket" @onclick="() => editing.TimeOffBuckets.Remove(b)">✕</button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                    <button class="secondary" type="button" @onclick="() => editing.TimeOffBuckets.Add(new TimeOffBucketDto { GrantMonth = 1 })">Add a time-off bucket</button>
+
                     <h3>Benefit elections <span class="muted">(per check, from a stub; use either an amount or a percent of gross)</span></h3>
                     <table class="compact">
                         <thead><tr><th>Name</th><th>Kind</th><th>Tax treatment</th><th class="money">Amount / check</th><th class="money">% of gross</th><th>Effective</th><th>Ends</th><th></th></tr></thead>
@@ -351,6 +389,11 @@ else
         {
             Id = w.Id, EffectiveDate = w.EffectiveDate, FederalStatus = w.FederalStatus, MultipleJobs = w.MultipleJobs, DependentCredits = w.DependentCredits, OtherIncome = w.OtherIncome,
             Deductions = w.Deductions, ExtraWithholding = w.ExtraWithholding, MissouriStatus = w.MissouriStatus, MissouriExtraWithholding = w.MissouriExtraWithholding,
+        }).ToList(),
+        TimeOffBuckets = s.TimeOffBuckets.Select(b => new TimeOffBucketDto
+        {
+            Id = b.Id, Name = b.Name, AccrualHoursPerPaycheck = b.AccrualHoursPerPaycheck, AnnualGrantHours = b.AnnualGrantHours, GrantMonth = b.GrantMonth ?? 1,
+            MaxHours = b.MaxHours, HoursPerDay = b.HoursPerDay, IsActive = b.IsActive, Notes = b.Notes, OnStubs = b.OnStubs,
         }).ToList(),
     };
 

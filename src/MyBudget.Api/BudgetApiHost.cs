@@ -133,6 +133,7 @@ public static class BudgetApiHost
             .MapTransactions()
             .MapSpending()
             .MapGoals()
+            .MapTimeOff()
             .MapReports()
             .MapInvestments()
             .MapReceivables()

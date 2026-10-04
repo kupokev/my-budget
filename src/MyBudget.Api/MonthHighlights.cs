@@ -16,8 +16,10 @@ public static class MonthHighlights
     private const int MaxOverLines = 3;
 
     /// <param name="lines">Active budget lines, for when they start and end and what they cost a month.</param>
+    /// <param name="timeOff">Goals needing time off, each checked against its bucket on the day it starts.</param>
     public static List<HighlightDto> Build(DateOnly today, IReadOnlyList<BudgetHistoryDto> grid, IReadOnlyList<BudgetLineDto> lines,
-        HsaPlanDto? hsa, IReadOnlyList<GoalProgressDto> goals, decimal netWorth, decimal? netWorthChange)
+        HsaPlanDto? hsa, IReadOnlyList<GoalProgressDto> goals, decimal netWorth, decimal? netWorthChange,
+        IReadOnlyList<TimeOffGoalCheckDto>? timeOff = null)
     {
         var month = today.ToString("MMMM");
         var rows = grid.Select(l => (l.LineName, Month: l.Months.Single(m => m.Period.Month == today.Month))).ToList();
@@ -110,6 +112,21 @@ public static class MonthHighlights
         // Goals behind where they should be by now.
         foreach (var g in goals.Where(g => g.StatusText == "Not On Track" && g != hsaGoalBehind).OrderByDescending(g => g.MissingAmount))
             list.Add(new($"{g.Goal.Name} is behind: {Money(g.MissingAmount)} short of where it should be by now.", g.Formula, "bad", "goals"));
+
+        // Time off a goal needs, against what its bucket will hold by then. Enough means it can be booked
+        // now; short says by how much, while there's still time to plan around it.
+        foreach (var t in timeOff ?? [])
+        {
+            string Days(decimal h) => $"{h:0.##}h ({h / t.HoursPerDay:0.#} days)";
+            list.Add(t.ProjectedHours switch
+            {
+                null => new($"{t.Goal} needs {Days(t.HoursNeeded)} of {t.Bucket}, but no pay stub has recorded that balance yet.", t.Formula, "neutral", "paycheck"),
+                var h when t.Enough => new($"{t.Goal}: {t.Bucket} will be {Days(h.Value)} by {t.Starts:MMM d}, enough for the {Days(t.HoursNeeded)} it needs. You can book the time off.",
+                    t.Formula, "good", "goals"),
+                var h => new($"{t.Goal}: {t.Bucket} will be {Days(h.Value)} by {t.Starts:MMM d}, {Days(t.HoursNeeded - h.Value)} short of the {Days(t.HoursNeeded)} it needs.",
+                    t.Formula, "bad", "goals"),
+            });
+        }
 
         // Net worth against the previous month's reading.
         list.Add(netWorthChange switch

@@ -24,6 +24,9 @@ public class IncomeSource
     /// </summary>
     public List<DepositSplit> DepositSplits { get; set; } = [];
 
+    /// <summary>Paid time off, in whatever buckets this employer keeps.</summary>
+    public List<TimeOffBucket> TimeOffBuckets { get; set; } = [];
+
     /// <summary>
     /// How one cheque's net divides across accounts, in order. Fixed amounts come out first and the
     /// remainder row takes what is left, which is how payroll systems do it — so a raise or a
