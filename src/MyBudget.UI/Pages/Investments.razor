@@ -62,8 +62,9 @@ else
             <div class="toolbar">
                 <span class="muted" title="@hist.Formula">
                     Since @Fmt.Date(first.Date): value <Money Value="last.Value - first.Value" Signed="true" />,
-                    of which <Money Value="(last.Value - last.Cost) - (first.Value - first.Cost)" Signed="true" /> is the market
-                    and <Money Value="last.Cost - first.Cost" Signed="true" /> is money in or out
+                    of which <Money Value="(last.Value - last.Contributed) - (first.Value - first.Contributed)" Signed="true" /> is growth
+                    and <Money Value="last.Contributed - first.Contributed" Signed="true" /> is new money you put in.
+                    Value is <Money Value="last.Value - last.Contributed" Signed="true" /> against everything contributed
                 </span>
                 <span class="tabs">
                     @foreach (var (m, label) in Ranges)
@@ -74,7 +75,7 @@ else
             </div>
             <LineChart Series="@HistorySeries(hist)" XAxisLabels="@hist.Points.Select(p => p.Date.ToString(historyMonths > 12 ? "MMM yy" : "MMM d")).ToList()"
                        MaxXAxisLabels="10" SmoothLines="true" CrosshairTooltip="true" Responsive="true" Width="1600" Height="260" Theme="@Palette"
-                       Description="Market value of the portfolio, with its cost basis beneath it." />
+                       Description="Market value of the portfolio against its cost basis and the net money contributed." />
         </section>
     }
 
@@ -102,8 +103,67 @@ else
                     <td class="money @Sign(acctValue - acctCost)">@AmountPct(acctValue - acctCost, acctCost == 0 ? null : (acctValue - acctCost) / acctCost * 100m)</td>
                     <td><Money Value="acct.Sum(x => x.DividendsThisYear)" /></td>
                     <td class="money">@Fmt.Money(acct.Sum(x => x.EstimatedDividends ?? 0))</td>
-                    <td colspan="2"></td>
+                    <td></td>
+                    <td class="actions icons">
+                        <button class="link" type="button" title="Contributions: money put into and taken out of this account" @onclick="() => ToggleContributions(acct.First().Holding.AccountId)">＄</button>
+                    </td>
                 </tr>
+
+                @if (contributions is { } cs && cs.AccountId == acct.First().Holding.AccountId)
+                {
+                    <tr><td colspan="11">
+                        <h3>Contributions to @cs.AccountName <span class="muted">@Fmt.Money(cs.Total) net</span></h3>
+                        <p class="muted">@cs.Formula</p>
+                        @if (cs.Recorded.Count > 0)
+                        {
+                            <table class="compact">
+                                <thead><tr><th>Date</th><th>From</th><th class="money">Amount</th><th>What</th><th></th><th></th></tr></thead>
+                                <tbody>
+                                @foreach (var c in cs.Recorded)
+                                {
+                                    <tr class="@(editingContribution.Id == c.Id ? "editing" : "")">
+                                        <td>@Fmt.Date(c.Date)</td><td>@KindName(c.Kind)</td>
+                                        <td class="money @(c.Kind == ContributionKind.Withdrawal ? "neg" : "")">@(c.Kind == ContributionKind.Withdrawal ? "−" : "")@Fmt.Money(c.Amount)</td>
+                                        <td>@c.Description</td><td class="muted">@(c.Source == DataSource.Fetched ? "statement" : "manual")</td>
+                                        <td class="actions icons">
+                                            <button class="link" type="button" title="Correct this entry" @onclick="() => EditContribution(c)">✎</button>
+                                            <button class="link" type="button" title="Delete this entry" @onclick="() => RemoveContribution(c)">✕</button>
+                                        </td>
+                                    </tr>
+                                }
+                                </tbody>
+                            </table>
+                        }
+                        <fieldset class="group">
+                            <legend>@(editingContribution.Id == 0 ? "Record a contribution" : "Correct this entry")</legend>
+                            <div class="row">
+                                <div class="field"><label>Date</label><input type="date" @bind="editingContribution.Date" /></div>
+                                <div class="field">
+                                    <label>From</label>
+                                    <select @bind="editingContribution.Kind">
+                                        @foreach (var k in Enum.GetValues<ContributionKind>()) { <option value="@k">@KindName(k)</option> }
+                                    </select>
+                                </div>
+                                <div class="field"><label>Amount</label><input type="number" step="0.01" min="0" class="narrow-money" @bind="editingContribution.Amount" /></div>
+                                <div class="field grow"><label>What</label><input type="text" maxlength="200" @bind="editingContribution.Description" /></div>
+                                <div class="field"><label>&nbsp;</label><button type="button" @onclick="SaveContribution">@(editingContribution.Id == 0 ? "Add" : "Save")</button></div>
+                                @if (editingContribution.Id != 0)
+                                {
+                                    <div class="field"><label>&nbsp;</label><button class="secondary" type="button" @onclick="() => editingContribution = NewContribution(cs.AccountId)">Cancel</button></div>
+                                }
+                            </div>
+                            <span class="hint">Statements fill this in on import. Add one by hand for money a statement doesn't show, such as a rollover.</span>
+                        </fieldset>
+                        <fieldset class="group">
+                            <legend>Complete from</legend>
+                            <div class="row">
+                                <div class="field"><label>Every deposit since</label><OptionalDate @bind-Value="contributionsFrom" Empty="first entry" /></div>
+                                <div class="field"><label>&nbsp;</label><button class="secondary" type="button" @onclick="() => SaveContributionsFrom(cs.AccountId)">Set</button></div>
+                            </div>
+                            <span class="hint">From this date, only the entries above count, so a stretch without any means nothing went in. An import sets it to the start of the statement. Before it, the estimate stands in. Left blank, recording starts at the first entry.</span>
+                        </fieldset>
+                    </td></tr>
+                }
 
                 @if (!accountOpen) { continue; }
 
@@ -298,6 +358,9 @@ else
     private decimal manualPrice;
     private bool syncing;
     private decimal? cashBalance;
+    private AccountContributionsDto? contributions;
+    private ContributionDto editingContribution = new();
+    private DateOnly? contributionsFrom;
     private DateOnly? cashAsOf;
 
     private List<MarketSyncResultDto>? syncResults;
@@ -367,11 +430,12 @@ else
 
     private static List<ChartSeries> HistorySeries(PortfolioHistoryDto h) =>
     [
+        new() { Label = "Net contributions", Color = "#b9c4bc", Values = h.Points.Select(p => p.Contributed).ToList() },
         new() { Label = "Cost basis", Color = "#6b7f72", Values = h.Points.Select(p => p.Cost).ToList() },
         new() { Label = "Market value", Color = "#4fa970", Values = h.Points.Select(p => p.Value).ToList() },
     ];
 
-    /// <summary>Same palette as the net-worth chart on Wealth.</summary>
+    /// <summary>The net-worth chart's colors on Wealth, with a light gray added for net contributions.</summary>
     private static ChartTheme Palette => new()
     {
         TextColor = "#8a978f",
@@ -379,7 +443,7 @@ else
         GridOpacity = 0.9,
         TooltipBackground = "#151a17",
         TooltipTextColor = "#e8efe9",
-        Palette = ["#6b7f72", "#4fa970"],
+        Palette = ["#b9c4bc", "#6b7f72", "#4fa970"],
     };
     private void Edit(HoldingDto h) => editing = new() { Id = h.Id, Ticker = h.Ticker, Name = h.Name, AccountId = h.AccountId, Drip = h.Drip, IsActive = h.IsActive, Notes = h.Notes };
 
@@ -423,6 +487,66 @@ else
     {
         if (newTrade.Shares <= 0) return;
         try { newTrade.HoldingId = holdingId; await Api.SaveTradeAsync(newTrade); newTrade = new() { Date = newTrade.Date }; await Load(); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private static string KindName(ContributionKind k) => k switch
+    {
+        ContributionKind.Personal => "You",
+        ContributionKind.Employer => "Employer",
+        ContributionKind.Rollover => "Rollover",
+        _ => "Withdrawal",
+    };
+
+    private static ContributionDto NewContribution(int accountId) => new() { AccountId = accountId, Date = DateOnly.FromDateTime(DateTime.Today) };
+
+    private async Task ToggleContributions(int accountId)
+    {
+        if (contributions?.AccountId == accountId) { contributions = null; return; }
+        editingContribution = NewContribution(accountId);
+        try { contributions = await Api.GetContributionsAsync(accountId); contributionsFrom = contributions.CoverFrom; }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task SaveContributionsFrom(int accountId)
+    {
+        try
+        {
+            await Api.SetContributionsFromAsync(accountId, contributionsFrom);
+            contributions = await Api.GetContributionsAsync(accountId);
+            await Load();
+        }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private void EditContribution(ContributionDto c) => editingContribution = new()
+    {
+        Id = c.Id, AccountId = c.AccountId, Date = c.Date, Amount = c.Amount, Kind = c.Kind, Description = c.Description, Source = c.Source,
+    };
+
+    private async Task SaveContribution()
+    {
+        if (editingContribution.Amount <= 0) { error = "Enter the amount as a positive number; choose Withdrawal for money taken out."; return; }
+        try
+        {
+            await Api.SaveContributionAsync(editingContribution);
+            var accountId = editingContribution.AccountId;
+            editingContribution = NewContribution(accountId);
+            contributions = await Api.GetContributionsAsync(accountId);
+            await Load();
+        }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task RemoveContribution(ContributionDto c)
+    {
+        try
+        {
+            await Api.DeleteContributionAsync(c.Id);
+            if (editingContribution.Id == c.Id) editingContribution = NewContribution(c.AccountId);
+            contributions = await Api.GetContributionsAsync(c.AccountId);
+            await Load();
+        }
         catch (Exception ex) { error = ex.Message; }
     }
 

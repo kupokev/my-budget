@@ -9,7 +9,28 @@ replace *unreleased* with the date.
 
 ## [1.0.2] — unreleased
 
+### Added
+
+- **Net contributions on the Investments value chart.** A third line shows the money put into your
+  accounts, next to market value and cost basis.
+- **Contributions per account.** The ＄ button on an account row lists the money put into and taken
+  out of that account: your own deposits and payroll deferrals, employer money, rollovers and
+  withdrawals. Importing an investment OFX/QFX records them: a 401(k) purchase is listed under the
+  source the statement gives it, and brokerage deposits and withdrawals are listed too. A Chase
+  investment activity CSV can be imported the same way. Its bank-link deposits (BNK) are counted,
+  and cash moving to and from the sweep (DBS, WDL) is not. Moving money between funds isn't counted.
+  Entries can be corrected in place, and you can add one by hand. **Complete from** records the date
+  an account's statements start. From then on only recorded entries count, so a stretch with no
+  deposit means none was made. Before it, contributions are estimated from purchases the account's
+  own sales and cash dividends couldn't pay for.
+
 ### Fixed
+
+- **Wash sales.** Three corrections to how a disallowed loss is handled:
+  - Shares sold in the same losing sale no longer count as their own replacement.
+  - When a replacement lot is sold later, its gain or loss now includes the added basis.
+  - When only part of a buy replaces the sold shares, only that part takes the added basis. The rest
+    keeps its own cost and is shown as a separate lot.
 
 - Opening MyBudget from the applications menu or taskbar could start a developer build instead of the
   installed app. Every build wrote the same per-user launcher, and whichever ran last owned it. The

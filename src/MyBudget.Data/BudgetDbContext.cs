@@ -36,6 +36,7 @@ public sealed class BudgetDbContext(DbContextOptions<BudgetDbContext> options) :
     public DbSet<Trade> Trades => Set<Trade>();
     public DbSet<DividendPayment> Dividends => Set<DividendPayment>();
     public DbSet<InvestmentFee> InvestmentFees => Set<InvestmentFee>();
+    public DbSet<InvestmentContribution> InvestmentContributions => Set<InvestmentContribution>();
     public DbSet<PriceSnapshot> Prices => Set<PriceSnapshot>();
     public DbSet<Asset> Assets => Set<Asset>();
     public DbSet<Person> People => Set<Person>();
@@ -242,6 +243,14 @@ public sealed class BudgetDbContext(DbContextOptions<BudgetDbContext> options) :
             e.Property(x => x.PerShare).HasPrecision(18, 6);
             e.Property(x => x.SharesHeld).HasPrecision(18, 6);
             e.HasIndex(x => new { x.HoldingId, x.ExDate }).IsUnique();
+        });
+        mb.Entity<InvestmentContribution>(e =>
+        {
+            e.HasOne(x => x.Account).WithMany().HasForeignKey(x => x.AccountId).OnDelete(DeleteBehavior.Cascade);
+            e.Property(x => x.Description).HasMaxLength(200);
+            e.Property(x => x.ExternalId).HasMaxLength(100);
+            e.Ignore(x => x.Signed);
+            e.HasIndex(x => new { x.AccountId, x.Date });
         });
         mb.Entity<PriceSnapshot>(e =>
         {

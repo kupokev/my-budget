@@ -9,11 +9,25 @@ public sealed record ParsedFee(string Ticker, DateOnly Date, decimal Amount, str
 /// <summary>What a statement says is held right now, as opposed to the rows that got it there.</summary>
 public sealed record ParsedPosition(string Ticker, decimal Units, DateOnly AsOf);
 
+/// <summary>
+/// Money into or out of the account that the statement identifies as such. <paramref name="Amount"/>
+/// is positive; <paramref name="Kind"/> says the direction. <paramref name="ExternalId"/> lets a
+/// re-import recognise one it already has.
+/// </summary>
+public sealed record ParsedContribution(DateOnly Date, decimal Amount, MyBudget.Domain.ContributionKind Kind, string Description, string ExternalId);
+
 public sealed record LotParseResult(IReadOnlyList<ParsedLot> Lots, IReadOnlyList<string> Skipped, IReadOnlyList<string> Warnings,
     /// <summary>Holdings the statement reports directly. Empty for a tax-lot export, which lists only lots.</summary>
     IReadOnlyList<ParsedPosition>? Positions = null,
     /// <summary>Charges the statement lists. Recorded rather than noted, so plan costs can be totalled.</summary>
-    IReadOnlyList<ParsedFee>? Fees = null);
+    IReadOnlyList<ParsedFee>? Fees = null,
+    /// <summary>Deposits, withdrawals and payroll contributions the statement lists. Empty for a tax-lot export.</summary>
+    IReadOnlyList<ParsedContribution>? Contributions = null,
+    /// <summary>
+    /// The first day the file accounts for every movement of money in and out, when it is that kind of
+    /// file (an activity export or an investment OFX). Null for a tax-lot export, which says nothing about it.
+    /// </summary>
+    DateOnly? ContributionsCoverFrom = null);
 
 /// <summary>
 /// Reads a tax-lot export (J.P. Morgan / Chase layout: Ticker, Quantity, Unit Cost, Acquisition Date, Price, Pricing Date …).

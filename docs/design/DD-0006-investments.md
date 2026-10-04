@@ -13,8 +13,19 @@
 - **Engine (`MyBudget.Engines.Investments`):** `Portfolio.Analyze` matches sells to lots FIFO,
   classifies each slice short (held ≤ 1 year) or long, then applies the wash-sale rule: a loss is
   disallowed in proportion to same-holding shares bought within 30 days either side (DRIP
-  reinvests count), and the disallowed amount is added to the replacement lot's basis; open
-  windows are reported with the earliest safe repurchase date (INV-5, ALT-5). `Portfolio.Reinvest`
+  reinvests count, shares the same sale disposed of don't), and the disallowed amount is added to
+  the basis of those replacement shares only — a buy that is partly a replacement splits into two
+  lots. Raising a lot's basis changes its gain when it is later sold, so the walk repeats until the
+  adjustments settle. Open windows are reported with the earliest safe repurchase date (INV-5,
+  ALT-5). `Contributions.For` gives each account's net contributions:
+  recorded `InvestmentContribution` rows (kind Personal / Employer / Rollover / Withdrawal; from an
+  OFX's `INV401KSOURCE`-tagged plan trades netted per day and source, its `INVBANKTRAN` deposits and
+  withdrawals other than interest/dividends/fees, a Chase activity CSV's BNK rows via
+  `BrokerageActivityParser`, or entered by hand) from `Account.ContributionsRecordedFrom` (the
+  earliest statement start an import has seen) or the first entry, whichever is earlier, and before
+  that an estimate: a cash pot fed by sale proceeds and cash dividends
+  pays for buys first, and only what it can't cover counts. `PortfolioHistory` charts the sum
+  beside value and basis. `Portfolio.Reinvest`
   builds the DRIP trade (INV-2a). `GainsTax.Estimate` taxes short-term at the ordinary marginal
   rate, stacks long-term on ordinary income across 0/15/20% using the year's thresholds, and
   Missouri at its top rate (INV-4).

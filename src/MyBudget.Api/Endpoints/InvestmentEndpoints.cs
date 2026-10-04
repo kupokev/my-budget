@@ -71,6 +71,36 @@ public static class InvestmentEndpoints
 
         // A sweep balance moves without a new export, so it can be typed. Traded holdings are refused:
         // there the buy or sell is the record, not the resulting number.
+        g.MapGet("/accounts/{accountId:int}/contributions", async (int accountId, DateOnly? asOf, InvestmentService svc, TimeProvider clock) =>
+            await PaycheckEndpoints.Guarded(() => svc.ContributionsAsync(accountId, asOf ?? DateOnly.FromDateTime(clock.GetLocalNow().DateTime))));
+        g.MapPut("/accounts/{accountId:int}/contributions-from", async (int accountId, ContributionsCoverDto dto, InvestmentService svc) =>
+            await PaycheckEndpoints.Guarded(async () => { await svc.SetContributionsRecordedFromAsync(accountId, dto.From); return dto; }));
+        g.MapPost("/contributions", async (ContributionDto dto, BudgetDbContext db) =>
+        {
+            if (await db.Accounts.FindAsync(dto.AccountId) is null) return Results.NotFound("Account not found.");
+            var c = new InvestmentContribution { AccountId = dto.AccountId, Date = dto.Date, Amount = dto.Amount, Kind = dto.Kind, Description = dto.Description, Source = DataSource.Manual };
+            db.InvestmentContributions.Add(c);
+            await db.SaveChangesAsync();
+            return Results.Created($"/api/investments/contributions/{c.Id}", InvestmentService.ToDto(c));
+        });
+        // A corrected entry keeps its statement id, so re-importing the statement doesn't bring the original back.
+        g.MapPut("/contributions/{id:int}", async (int id, ContributionDto dto, BudgetDbContext db) =>
+        {
+            var c = await db.InvestmentContributions.FindAsync(id);
+            if (c is null) return Results.NotFound();
+            c.Date = dto.Date; c.Amount = dto.Amount; c.Kind = dto.Kind; c.Description = dto.Description;
+            await db.SaveChangesAsync();
+            return Results.Ok(InvestmentService.ToDto(c));
+        });
+        g.MapDelete("/contributions/{id:int}", async (int id, BudgetDbContext db) =>
+        {
+            var c = await db.InvestmentContributions.FindAsync(id);
+            if (c is null) return Results.NotFound();
+            db.InvestmentContributions.Remove(c);
+            await db.SaveChangesAsync();
+            return Results.NoContent();
+        });
+
         g.MapPost("/holdings/{id:int}/cash-balance", async (int id, CashBalanceDto dto, InvestmentService svc) =>
             await PaycheckEndpoints.Guarded(() => svc.SetCashBalanceAsync(id, dto.Balance, dto.AsOf)));
 

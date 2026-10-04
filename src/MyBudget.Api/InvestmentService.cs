@@ -83,26 +83,70 @@ public sealed class InvestmentService(BudgetDbContext db, IMarketDataProvider ma
     }
 
     /// <summary>
-    /// Value and cost over the last <paramref name="months"/> months, from the same active holdings
+    /// Value, cost and net contributions over the last <paramref name="months"/> months, from the same active holdings
     /// and the same lot math as <see cref="PortfolioAsync"/>, so the last point matches its totals.
     /// </summary>
     public async Task<PortfolioHistoryDto> HistoryAsync(DateOnly asOf, int months, CancellationToken ct = default)
     {
-        var holdings = await db.Holdings.Include(h => h.Trades).Where(h => h.IsActive).ToListAsync(ct);
+        var holdings = await db.Holdings.Include(h => h.Trades).Include(h => h.Dividends).Where(h => h.IsActive).ToListAsync(ct);
         var tickers = holdings.Select(h => h.Ticker).Distinct().ToList();
         var prices = (await db.Prices.Where(p => tickers.Contains(p.Ticker)).Select(p => new { p.Ticker, p.Date, p.Price }).ToListAsync(ct))
             .ToLookup(p => p.Ticker);
-        var inputs = holdings.Select(h => new HoldingHistory(h.Ticker, h.Trades,
-            prices[h.Ticker].OrderBy(p => p.Date).Select(p => (p.Date, p.Price)).ToList())).ToList();
+        var inputs = holdings.Select(h => ToHistory(h, prices[h.Ticker].OrderBy(p => p.Date).Select(p => (p.Date, p.Price)).ToList())).ToList();
+
+        var (recorded, coverFrom) = await RecordedContributionsAsync(ct);
 
         var from = asOf.AddMonths(-months);
         var points = PortfolioHistory.SampleDates(from, asOf)
-            .Select(d => PortfolioHistory.ValueOn(inputs, d))
-            .Select(p => new PortfolioPointDto(p.Date, p.Value, p.Cost))
+            .Select(d => PortfolioHistory.ValueOn(inputs, d, recorded, coverFrom))
+            .Select(p => new PortfolioPointDto(p.Date, p.Value, p.Cost, p.Contributed))
             .ToList();
         return new PortfolioHistoryDto(from, asOf, months, points,
-            "Each point: shares held in open lots on that date × the latest close on or before it, summed over active holdings. Cost is those lots' basis.");
+            "Each point: shares held in open lots on that date × the latest close on or before it, summed over active holdings. Cost basis is those lots' basis, reinvested dividends included. Net contributions is the money recorded into and out of each account (from statements or entered by hand); before the period an account's statements cover, it is estimated from buys that its sales and cash dividends couldn't pay for.");
     }
+
+    private async Task<(List<RecordedContribution> Recorded, Dictionary<int, DateOnly> CoverFrom)> RecordedContributionsAsync(CancellationToken ct)
+    {
+        var recorded = (await db.InvestmentContributions.Select(c => new { c.AccountId, c.Date, c.Amount, c.Kind }).ToListAsync(ct))
+            .Select(c => new RecordedContribution(c.AccountId, c.Date, c.Kind == ContributionKind.Withdrawal ? -c.Amount : c.Amount))
+            .ToList();
+        var coverFrom = await db.Accounts.Where(a => a.ContributionsRecordedFrom != null).ToDictionaryAsync(a => a.Id, a => a.ContributionsRecordedFrom!.Value, ct);
+        return (recorded, coverFrom);
+    }
+
+    /// <summary>
+    /// One account's contributions: what's recorded, and the estimate that stands in for the time
+    /// before the first recorded one. Their sum is the account's share of the chart's line.
+    /// </summary>
+    public async Task<AccountContributionsDto> ContributionsAsync(int accountId, DateOnly asOf, CancellationToken ct = default)
+    {
+        var account = await db.Accounts.FindAsync([accountId], ct) ?? throw new KeyNotFoundException("Account not found.");
+        var rows = await db.InvestmentContributions.Where(c => c.AccountId == accountId).OrderByDescending(c => c.Date).ThenByDescending(c => c.Id).ToListAsync(ct);
+        var holdings = await db.Holdings.Include(h => h.Trades).Include(h => h.Dividends).Where(h => h.IsActive && h.AccountId == accountId).ToListAsync(ct);
+        var recorded = rows.Select(c => new RecordedContribution(accountId, c.Date, c.Signed)).ToList();
+        var coverFrom = account.ContributionsRecordedFrom is { } from ? new Dictionary<int, DateOnly> { [accountId] = from } : null;
+        var breakdown = Contributions.For(holdings.Select(h => ToHistory(h, [])), recorded, asOf, coverFrom).SingleOrDefault();
+        return new AccountContributionsDto(accountId, account.Name, rows.Select(ToDto).ToList(),
+            breakdown?.Estimated ?? 0, breakdown?.RecordedFrom, breakdown?.Total ?? 0, breakdown?.Formula ?? "Nothing recorded or bought yet.",
+            account.ContributionsRecordedFrom);
+    }
+
+    /// <summary>Sets, or clears, the date from which every contribution to the account is recorded.</summary>
+    public async Task SetContributionsRecordedFromAsync(int accountId, DateOnly? from, CancellationToken ct = default)
+    {
+        var account = await db.Accounts.FindAsync([accountId], ct) ?? throw new KeyNotFoundException("Account not found.");
+        account.ContributionsRecordedFrom = from;
+        await db.SaveChangesAsync(ct);
+    }
+
+    private static HoldingHistory ToHistory(Holding h, IReadOnlyList<(DateOnly, decimal)> prices) =>
+        new(h.Ticker, h.Trades, prices, h.AccountId,
+            h.Dividends.Where(d => !h.Trades.Any(t => t.DividendPaymentId == d.Id)).Select(d => (d.PayDate ?? d.ExDate, d.Amount)).ToList());
+
+    public static ContributionDto ToDto(InvestmentContribution c) => new()
+    {
+        Id = c.Id, AccountId = c.AccountId, Date = c.Date, Amount = c.Amount, Kind = c.Kind, Description = c.Description, Source = c.Source,
+    };
 
     public async Task<PortfolioDto> PortfolioAsync(DateOnly asOf, int year, CancellationToken ct = default)
     {
@@ -227,7 +271,9 @@ public sealed class InvestmentService(BudgetDbContext db, IMarketDataProvider ma
         // reduce to lots, so everything below this line is shared.
         var parsed = MyBudget.Engines.Import.InvestmentOfxParser.LooksLikeInvestmentOfx(content)
             ? MyBudget.Engines.Import.InvestmentOfxParser.Parse(content)
-            : MyBudget.Engines.Import.TaxLotParser.Parse(content);
+            : MyBudget.Engines.Import.CsvStatementParser.ReadRows(content) is [var header, ..] && MyBudget.Engines.Import.BrokerageActivityParser.LooksLikeActivity(header.Select(h => h.Trim().Trim('"').TrimStart('\uFEFF')).ToList())
+                ? MyBudget.Engines.Import.BrokerageActivityParser.Parse(content)
+                : MyBudget.Engines.Import.TaxLotParser.Parse(content);
         var holdings = await db.Holdings.Include(h => h.Trades).Where(h => h.AccountId == accountId).ToListAsync(ct);
         int created = 0, imported = 0, present = 0, prices = 0, feesRecorded = 0;
         foreach (var group in parsed.Lots.GroupBy(l => l.Ticker))
@@ -286,6 +332,22 @@ public sealed class InvestmentService(BudgetDbContext db, IMarketDataProvider ma
             feesRecorded++;
         }
 
+        // Money in and out of the account, kept apart from trades so net contributions comes from what
+        // the statement says rather than from guessing which purchases were new money.
+        var contributionsRecorded = 0;
+        foreach (var c in parsed.Contributions ?? [])
+        {
+            if (await db.InvestmentContributions.AnyAsync(x => x.AccountId == accountId && x.ExternalId == c.ExternalId, ct)) continue;
+            db.InvestmentContributions.Add(new InvestmentContribution
+            {
+                AccountId = accountId, Date = c.Date, Amount = c.Amount, Kind = c.Kind,
+                Description = c.Description, ExternalId = c.ExternalId, Source = DataSource.Fetched,
+            });
+            contributionsRecorded++;
+        }
+        if (parsed.ContributionsCoverFrom is { } covers && (account.ContributionsRecordedFrom is null || covers < account.ContributionsRecordedFrom))
+            account.ContributionsRecordedFrom = covers;
+
         // Settle each holding on what the statement says is held. A plan statement reports fees as
         // dollars with no share count, so the purchases alone overstate the position — here by the
         // 0.248 shares four fees were taken in. The correction is a dated trade, so the holding matches
@@ -330,7 +392,7 @@ public sealed class InvestmentService(BudgetDbContext db, IMarketDataProvider ma
 
         return new LotImportResultDto(account.Name, created, imported, present, prices,
             parsed.Lots.Select(l => l.Ticker).Distinct().OrderBy(t => t).ToList(), parsed.Skipped, parsed.Warnings,
-            pricesFetched, dividendsFetched, fetchErrors, feesRecorded);
+            pricesFetched, dividendsFetched, fetchErrors, feesRecorded, contributionsRecorded);
     }
 
     public static HoldingDto ToDto(Holding h) => new() { Id = h.Id, Ticker = h.Ticker, Name = h.Name, AccountId = h.AccountId, AccountName = h.Account?.Name, Drip = h.Drip, IsCashEquivalent = h.IsCashEquivalent, PricedFromStatement = h.PricedFromStatement, IsActive = h.IsActive, Notes = h.Notes };

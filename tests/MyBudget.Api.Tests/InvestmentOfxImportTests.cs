@@ -17,9 +17,9 @@ public class InvestmentOfxImportTests : IClassFixture<ApiFixture>
     private const string Qfx =
         "<OFX><INVSTMTMSGSRSV1><INVSTMTTRNRS><INVSTMTRS><INVACCTFROM><ACCTID>93793</INVACCTFROM><INVTRANLIST>" +
         "<BUYMF><INVBUY><INVTRAN><FITID>A1<DTTRADE>20260402160000.000[-5:EST]</INVTRAN>" +
-        "<SECID><UNIQUEID>92202V641<UNIQUEIDTYPE>CUSIP</SECID><UNITS>4.032<UNITPRICE>74.41<TOTAL>300.0</INVBUY><BUYTYPE>BUY</BUYMF>" +
+        "<SECID><UNIQUEID>92202V641<UNIQUEIDTYPE>CUSIP</SECID><UNITS>4.032<UNITPRICE>74.41<TOTAL>300.0<INV401KSOURCE>PRETAX</INVBUY><BUYTYPE>BUY</BUYMF>" +
         "<BUYMF><INVBUY><INVTRAN><FITID>A2<DTTRADE>20260917160000.000[-5:EST]</INVTRAN>" +
-        "<SECID><UNIQUEID>92202V641<UNIQUEIDTYPE>CUSIP</SECID><UNITS>3.572<UNITPRICE>83.99<TOTAL>300.0</INVBUY><BUYTYPE>BUY</BUYMF>" +
+        "<SECID><UNIQUEID>92202V641<UNIQUEIDTYPE>CUSIP</SECID><UNITS>3.572<UNITPRICE>83.99<TOTAL>300.0<INV401KSOURCE>PRETAX</INVBUY><BUYTYPE>BUY</BUYMF>" +
         "<INVEXPENSE><INVTRAN><FITID>F1<DTTRADE>20260904160000.000[-5:EST]</INVTRAN>" +
         "<SECID><UNIQUEID>92202V641<UNIQUEIDTYPE>CUSIP</SECID><TOTAL>-10.5</INVEXPENSE>" +
         "</INVTRANLIST><INVPOSLIST><POSMF><INVPOS><SECID><UNIQUEID>VGI001480<UNIQUEIDTYPE>CUSIP</SECID>" +
@@ -125,6 +125,31 @@ public class InvestmentOfxImportTests : IClassFixture<ApiFixture>
         // than a deposit. The statement adjustment is a sell, so it cannot inflate this.
         Assert.Equal(600.03m, progress.Current);
         Assert.Contains("purchases", progress.CurrentSource);
+    }
+
+    [Fact]
+    public async Task Plan_contributions_are_recorded_once_and_can_be_corrected()
+    {
+        var account = await _api.Post("api/accounts", new AccountDto
+        {
+            Name = "401k for contributions", Institution = "Vanguard", Type = AccountType.Retirement401k, IsActive = true,
+        });
+
+        await ImportAsync(account.Id, Qfx);
+        await ImportAsync(account.Id, Qfx);
+
+        var c = await _api.Get<AccountContributionsDto>($"api/investments/accounts/{account.Id}/contributions?asOf=2026-09-30");
+        Assert.Equal(2, c.Recorded.Count);
+        Assert.Equal(600m, c.Total);
+        Assert.Equal(0m, c.Estimated);                           // everything bought is covered by what's recorded
+
+        var fix = c.Recorded[0];
+        fix.Kind = ContributionKind.Employer;
+        await _api.Client.PutAsJsonAsync($"api/investments/contributions/{fix.Id}", fix);
+        await ImportAsync(account.Id, Qfx);                     // the statement doesn't bring the original back
+        c = await _api.Get<AccountContributionsDto>($"api/investments/accounts/{account.Id}/contributions?asOf=2026-09-30");
+        Assert.Equal(2, c.Recorded.Count);
+        Assert.Contains(c.Recorded, x => x.Kind == ContributionKind.Employer);
     }
 
     private async Task<PositionDto> Position(int accountId)

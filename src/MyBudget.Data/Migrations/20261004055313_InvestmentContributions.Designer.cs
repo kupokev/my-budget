@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using MyBudget.Data;
 
@@ -10,9 +11,11 @@ using MyBudget.Data;
 namespace MyBudget.Data.Migrations
 {
     [DbContext(typeof(BudgetDbContext))]
-    partial class BudgetDbContextModelSnapshot : ModelSnapshot
+    [Migration("20261004055313_InvestmentContributions")]
+    partial class InvestmentContributions
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.12");
@@ -25,9 +28,6 @@ namespace MyBudget.Data.Migrations
 
                     b.Property<string>("AccountNumber")
                         .HasMaxLength(60)
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateOnly?>("ContributionsRecordedFrom")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Institution")

@@ -31,7 +31,7 @@ else
     {
         <section class="panel">
             <h2>@fileName · tax lots</h2>
-            <p>@lr.HoldingsCreated new holdings, @lr.LotsImported lots imported, @lr.LotsAlreadyPresent already there, @lr.PricesRecorded prices recorded@(lr.FeesRecorded > 0 ? $", {lr.FeesRecorded} fees recorded" : "") into @lr.AccountName: @string.Join(", ", lr.Tickers).</p>
+            <p>@lr.HoldingsCreated new holdings, @lr.LotsImported lots imported, @lr.LotsAlreadyPresent already there, @lr.PricesRecorded prices recorded@(lr.FeesRecorded > 0 ? $", {lr.FeesRecorded} fees recorded" : "")@(lr.ContributionsRecorded > 0 ? $", {lr.ContributionsRecorded} contributions recorded" : "") into @lr.AccountName: @string.Join(", ", lr.Tickers).</p>
             <p class="muted">Then fetched @lr.PricesFetched more prices and @lr.DividendsFetched dividends, so the figures are populated without a second click. See them on <a href="investments">Investments</a>.</p>
             @if (lr.FetchErrors is { Count: > 0 } fe) { <ul class="warnings">@foreach (var fx in fe) { <li>@fx</li> }</ul> }
             @if (lr.Skipped.Count > 0) { <p class="muted">Skipped: @string.Join("; ", lr.Skipped)</p> }

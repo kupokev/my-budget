@@ -116,4 +116,68 @@ public class InvestmentOfxTests
 
         Assert.Equal(ImportKind.Statement, ImportFileKind.Detect("chase.qfx", bank));
     }
+
+    [Fact]
+    public void Plan_purchases_tagged_with_a_source_are_contributions()
+    {
+        var c = InvestmentOfxParser.Parse(Qfx).Contributions!;
+        Assert.Equal(2, c.Count);
+        Assert.All(c, x => Assert.Equal(MyBudget.Domain.ContributionKind.Personal, x.Kind));
+        Assert.Equal(600m, c.Sum(x => x.Amount));
+        Assert.Equal("401(k) pre-tax", c[0].Description);
+    }
+
+    [Fact]
+    public void An_exchange_between_funds_is_not_a_contribution_but_a_match_is()
+    {
+        const string exchange =
+            "<OFX><INVSTMTMSGSRSV1><INVSTMTTRNRS><INVSTMTRS><INVTRANLIST>" +
+            "<SELLMF><INVSELL><INVTRAN><FITID>S1<DTTRADE>20260501</INVTRAN><SECID><UNIQUEID>AAA</SECID><UNITS>-10<UNITPRICE>50<TOTAL>500<INV401KSOURCE>PRETAX</INVSELL><SELLTYPE>SELL</SELLMF>" +
+            "<BUYMF><INVBUY><INVTRAN><FITID>B1<DTTRADE>20260501</INVTRAN><SECID><UNIQUEID>BBB</SECID><UNITS>5<UNITPRICE>100<TOTAL>-500<INV401KSOURCE>PRETAX</INVBUY><BUYTYPE>BUY</BUYMF>" +
+            "<BUYMF><INVBUY><INVTRAN><FITID>B2<DTTRADE>20260501</INVTRAN><SECID><UNIQUEID>BBB</SECID><UNITS>1.5<UNITPRICE>100<TOTAL>-150<INV401KSOURCE>MATCH</INVBUY><BUYTYPE>BUY</BUYMF>" +
+            "</INVTRANLIST></INVSTMTRS></INVSTMTTRNRS></INVSTMTMSGSRSV1></OFX>";
+        var c = Assert.Single(InvestmentOfxParser.Parse(exchange).Contributions!);
+        Assert.Equal(MyBudget.Domain.ContributionKind.Employer, c.Kind);
+        Assert.Equal(150m, c.Amount);
+    }
+
+    [Fact]
+    public void Brokerage_deposits_and_withdrawals_are_contributions_but_interest_is_not()
+    {
+        const string brokerage =
+            "<OFX><INVSTMTMSGSRSV1><INVSTMTTRNRS><INVSTMTRS><INVTRANLIST>" +
+            "<INVBANKTRAN><STMTTRN><TRNTYPE>CREDIT<DTPOSTED>20260105<TRNAMT>7000.00<FITID>D1<NAME>ACH DEPOSIT</STMTTRN><SUBACCTFUND>CASH</INVBANKTRAN>" +
+            "<INVBANKTRAN><STMTTRN><TRNTYPE>INT<DTPOSTED>20260131<TRNAMT>12.34<FITID>I1<NAME>INTEREST</STMTTRN><SUBACCTFUND>CASH</INVBANKTRAN>" +
+            "<INVBANKTRAN><STMTTRN><TRNTYPE>DEBIT<DTPOSTED>20260301<TRNAMT>-250.00<FITID>W1<NAME>TRANSFER OUT</STMTTRN><SUBACCTFUND>CASH</INVBANKTRAN>" +
+            "</INVTRANLIST></INVSTMTRS></INVSTMTTRNRS></INVSTMTMSGSRSV1></OFX>";
+        var c = InvestmentOfxParser.Parse(brokerage).Contributions!;
+        Assert.Equal(2, c.Count);
+        Assert.Equal((7_000m, MyBudget.Domain.ContributionKind.Personal, "D1"), (c[0].Amount, c[0].Kind, c[0].ExternalId));
+        Assert.Equal((250m, MyBudget.Domain.ContributionKind.Withdrawal), (c[1].Amount, c[1].Kind));
+    }
+
+    // The shape of Chase's investment activity export, trimmed: a bank-link deposit, the sweep moving it
+    // inside the account, a sale, a dividend and interest.
+    private const string ChaseActivity =
+        "\uFEFFTrade Date,Post Date,Settlement Date,Account Name,Account Number,Account Type,Type,Description,Cusip,Ticker,Security Type,Local Currency,Price USD,Price Local,Quantity,G/L Short USD,G/L Short Local,G/L Long USDs,G/L Long Local,Amount USD,Amount Local,Income USD,Income Local,Balance,Commissions USD,Commissions Local,Tran Code,Tran Code Description,Broker,Check Number,Tax Withheld\n" +
+        "\"3/2/2026\",\"3/2/2026\",\"3/2/2026\",\"Roth IRA\",\"...0000\",\"Brokerage\",\"Interest\",\"CHASE IRA DEPOSIT SWEEP MONTHLY INTEREST\",\"\",\"\",\"Other\",\"USD\",\"\",\"\",\"0\",\"\",\"\",\"\",\"\",\"0.01\",\"0.01\",\"\",\"\",\"0\",\"\",\"\",\"0\",\"Interest\",\"\",\"0\",\"0\"\n" +
+        "\"2/18/2026\",\"2/18/2026\",\"2/18/2026\",\"Roth IRA\",\"...0000\",\"Brokerage\",\"BNK\",\"BANKLINK ACH PULL IRA:C2025RTHB 70658546\",\"\",\"\",\"Other\",\"USD\",\"\",\"\",\"0\",\"\",\"\",\"\",\"\",\"1400\",\"1400\",\"\",\"\",\"0\",\"\",\"\",\"0\",\"BNK\",\"\",\"0\",\"0\"\n" +
+        "\"2/18/2026\",\"2/18/2026\",\"2/18/2026\",\"Roth IRA\",\"...0000\",\"Brokerage\",\"DBS\",\"CHASE IRA DEPOSIT SWEEP INTRA-DAY DEPOSIT\",\"\",\"QDERQ\",\"Money Market\",\"USD\",\"1\",\"1\",\"1400\",\"\",\"\",\"\",\"\",\"-1400\",\"-1400\",\"\",\"\",\"0\",\"\",\"\",\"0\",\"DBS\",\"\",\"0\",\"0\"\n" +
+        "\"12/29/2025\",\"12/29/2025\",\"12/30/2025\",\"Roth IRA\",\"...0000\",\"Brokerage\",\"Sell\",\"PIMCO HIGH INCOME FUND\",\"722014107\",\"PHK\",\"Stock\",\"USD\",\"4.85\",\"4.85\",\"-223\",\"\",\"\",\"\",\"\",\"1081.55\",\"1081.55\",\"\",\"\",\"0\",\"\",\"\",\"0\",\"Sell\",\"\",\"0\",\"0\"\n" +
+        "\"10/1/2025\",\"10/1/2025\",\"10/1/2025\",\"Roth IRA\",\"...0000\",\"Brokerage\",\"Dividend\",\"PIMCO HIGH INCOME FUND\",\"722014107\",\"PHK\",\"Stock\",\"USD\",\"\",\"\",\"0\",\"\",\"\",\"\",\"\",\"0.11\",\"0.11\",\"\",\"\",\"0\",\"\",\"\",\"0\",\"Dividend\",\"\",\"0\",\"0\"\n";
+
+    [Fact]
+    public void A_chase_activity_export_goes_to_the_investment_importer()
+        => Assert.Equal(ImportKind.TaxLots, ImportFileKind.Detect("chase roth ira transactions.csv", ChaseActivity));
+
+    [Fact]
+    public void Only_the_bank_link_deposit_is_a_contribution_and_the_file_covers_from_its_first_day()
+    {
+        var r = BrokerageActivityParser.Parse(ChaseActivity);
+        var c = Assert.Single(r.Contributions!);
+        Assert.Equal((new DateOnly(2026, 2, 18), 1_400m, MyBudget.Domain.ContributionKind.Personal), (c.Date, c.Amount, c.Kind));
+        Assert.Contains("C2025RTHB", c.Description);
+        Assert.Equal(new DateOnly(2025, 10, 1), r.ContributionsCoverFrom);
+        Assert.Empty(r.Warnings);
+    }
 }

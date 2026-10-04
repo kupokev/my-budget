@@ -24,6 +24,9 @@ public static class ImportFileKind
         var header = rows[0].Select(h => h.Trim().Trim('"')).ToHashSet(StringComparer.OrdinalIgnoreCase);
         bool Has(params string[] names) => names.Any(header.Contains);
 
+        // An activity export is about the account too: its deposits and withdrawals go with the lots.
+        if (BrokerageActivityParser.LooksLikeActivity(header)) return ImportKind.TaxLots;
+
         // The same four columns TaxLotParser requires. Anything short of all four is a statement, so a
         // near-miss still reaches the statement importer and reports its own missing columns.
         return Has("Ticker", "Symbol")

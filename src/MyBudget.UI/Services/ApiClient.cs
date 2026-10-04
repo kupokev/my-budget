@@ -148,6 +148,10 @@ public sealed class ApiClient(HttpClient http)
     public Task<List<MarketSyncResultDto>> SyncAllHoldingsAsync() => Post<object, List<MarketSyncResultDto>>("api/investments/sync-all", new { });
     public Task<TradeDto> SaveTradeAsync(TradeDto t) => t.Id == 0 ? Post("api/investments/trades", t) : Put($"api/investments/trades/{t.Id}", t);
     public Task DeleteTradeAsync(int id) => Delete($"api/investments/trades/{id}");
+    public Task<AccountContributionsDto> GetContributionsAsync(int accountId) => Get<AccountContributionsDto>($"api/investments/accounts/{accountId}/contributions");
+    public Task<ContributionDto> SaveContributionAsync(ContributionDto c) => c.Id == 0 ? Post("api/investments/contributions", c) : Put($"api/investments/contributions/{c.Id}", c);
+    public Task<ContributionsCoverDto> SetContributionsFromAsync(int accountId, DateOnly? from) => Put($"api/investments/accounts/{accountId}/contributions-from", new ContributionsCoverDto(from));
+    public Task DeleteContributionAsync(int id) => Delete($"api/investments/contributions/{id}");
     public Task<DividendDto> AddDividendAsync(DividendDto d) => Post("api/investments/dividends", d);
     public Task DeleteDividendAsync(int id) => Delete($"api/investments/dividends/{id}");
     public Task SetPriceAsync(string ticker, DateOnly date, decimal price) => Post<object, object>(Q("api/investments/prices", ("ticker", ticker), ("date", date.ToString("yyyy-MM-dd")), ("price", price)), new { });

@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
+using MyBudget.Domain;
 
 namespace MyBudget.Engines.Import;
 
@@ -7,7 +8,9 @@ namespace MyBudget.Engines.Import;
 /// An investment OFX/QFX — what a 401(k) or brokerage hands you, as opposed to the bank statements
 /// <see cref="OfxStatementParser"/> reads. Those carry &lt;STMTTRN&gt; blocks; this one carries
 /// &lt;BUYMF&gt; purchases, &lt;INVEXPENSE&gt; fees, an &lt;INVPOSLIST&gt; of what is held now and a
-/// &lt;SECLIST&gt; naming the funds.
+/// &lt;SECLIST&gt; naming the funds. It also reads the money moving in and out of the account: a 401(k)
+/// purchase names its &lt;INV401KSOURCE&gt;, and a brokerage lists deposits and withdrawals as
+/// &lt;INVBANKTRAN&gt; blocks.
 ///
 /// It produces the same <see cref="ParsedLot"/> shape as a tax-lot export, so the importer that
 /// already turns lots into holdings and trades needs no second implementation.
@@ -102,7 +105,9 @@ public static partial class InvestmentOfxParser
             fees.Add(new ParsedFee(symbol.ToUpperInvariant(), on, Math.Abs(amount), Tag(m.Value, "MEMO") is { Length: > 0 } memo ? memo : "Plan fee"));
         }
 
-        if (lots.Count == 0 && fees.Count == 0)
+        var contributions = Contributions(content);
+
+        if (lots.Count == 0 && fees.Count == 0 && contributions.Count == 0)
             warnings.Add("No purchases or fees found. This may be a bank statement rather than an investment one.");
 
         // The statement is the authority on what is held. Fees here carry no share count, so the
@@ -119,8 +124,76 @@ public static partial class InvestmentOfxParser
                              (fees.Count > 0 ? $"; the {fees.Count} fee(s) recorded were taken in shares, and the difference has been applied." : "; the difference has been recorded."));
         }
 
-        return new LotParseResult(lots, skipped, warnings, positions, fees);
+        // The transaction list states the period it covers; every deposit and payroll contribution in it is listed.
+        var coversFrom = OfxDate(Tag(Regex.Match(content, "<INVTRANLIST>.*", RegexOptions.IgnoreCase | RegexOptions.Singleline).Value, "DTSTART"));
+
+        return new LotParseResult(lots, skipped, warnings, positions, fees, contributions, coversFrom);
     }
+
+    /// <summary>
+    /// Money into or out of the account, as distinct from money moving between its holdings.
+    /// <list type="bullet">
+    /// <item>A plan purchase or sale tagged with a 401(k) source is payroll or employer money arriving
+    /// (or leaving). An exchange between funds is a sale and a purchase from the same source on the same
+    /// day, so they are netted per day and source; only what's left over moved in or out.</item>
+    /// <item>A bank transaction in an investment statement is a deposit or withdrawal, unless its type
+    /// says it is interest, a dividend or a fee, which are earnings and costs, not contributions.</item>
+    /// </list>
+    /// </summary>
+    private static List<ParsedContribution> Contributions(string content)
+    {
+        var found = new List<ParsedContribution>();
+
+        var plan = new Dictionary<(DateOnly Date, string Source), decimal>();
+        foreach (Match m in PlanTradeRegex().Matches(content))
+        {
+            var source = Tag(m.Value, "INV401KSOURCE").ToUpperInvariant();
+            if (source.Length == 0 || OfxDate(Tag(m.Value, "DTTRADE")) is not { } date) continue;
+            var total = Money(Tag(m.Value, "TOTAL")) is { } t ? Math.Abs(t)
+                : (Money(Tag(m.Value, "UNITS")) ?? 0) * (Money(Tag(m.Value, "UNITPRICE")) ?? 0);
+            var sign = m.Groups[1].Value.StartsWith("SELL", StringComparison.OrdinalIgnoreCase) ? -1 : 1;
+            plan[(date, source)] = plan.GetValueOrDefault((date, source)) + sign * Math.Abs(total);
+        }
+        foreach (var ((date, source), net) in plan.OrderBy(x => x.Key.Date))
+        {
+            if (net == 0) continue;
+            var kind = net < 0 ? ContributionKind.Withdrawal : PlanSourceKind(source);
+            found.Add(new ParsedContribution(date, Math.Abs(net), kind, $"401(k) {PlanSourceName(source)}", $"401k:{date:yyyyMMdd}:{source}"));
+        }
+
+        foreach (Match m in BankTranRegex().Matches(content))
+        {
+            var type = Tag(m.Value, "TRNTYPE").ToUpperInvariant();
+            if (type is "INT" or "DIV" or "FEE" or "SRVCHG") continue;
+            if (Money(Tag(m.Value, "TRNAMT")) is not { } amount || amount == 0 || OfxDate(Tag(m.Value, "DTPOSTED")) is not { } date) continue;
+            var name = Tag(m.Value, "NAME");
+            var memo = Tag(m.Value, "MEMO");
+            var description = string.Join(" — ", new[] { name, memo }.Where(x => x.Length > 0).Distinct());
+            var id = Tag(m.Value, "FITID");
+            found.Add(new ParsedContribution(date, Math.Abs(amount), amount > 0 ? ContributionKind.Personal : ContributionKind.Withdrawal,
+                description.Length > 0 ? description : amount > 0 ? "Deposit" : "Withdrawal",
+                id.Length > 0 ? id : $"bank:{date:yyyyMMdd}:{amount}"));
+        }
+        return found;
+    }
+
+    private static ContributionKind PlanSourceKind(string source) => source switch
+    {
+        "MATCH" or "PROFITSHARING" or "OTHERVEST" or "OTHERNONVEST" => ContributionKind.Employer,
+        "ROLLOVER" => ContributionKind.Rollover,
+        _ => ContributionKind.Personal, // PRETAX, AFTERTAX, ROTH
+    };
+
+    private static string PlanSourceName(string source) => source switch
+    {
+        "PRETAX" => "pre-tax",
+        "AFTERTAX" => "after-tax",
+        "ROTH" => "Roth",
+        "MATCH" => "employer match",
+        "PROFITSHARING" => "profit sharing",
+        "ROLLOVER" => "rollover",
+        _ => source.ToLowerInvariant(),
+    };
 
     private static string Tag(string block, string name)
     {
@@ -137,6 +210,13 @@ public static partial class InvestmentOfxParser
 
     [GeneratedRegex(@"<BUYMF>(.*?)</BUYMF>", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
     private static partial Regex BuyRegex();
+
+    /// <summary>Any plan buy or sell: mutual fund, stock or other, each closed by its own end tag.</summary>
+    [GeneratedRegex(@"<(BUYMF|BUYSTOCK|BUYOTHER|SELLMF|SELLSTOCK|SELLOTHER)>(.*?)</\1>", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
+    private static partial Regex PlanTradeRegex();
+
+    [GeneratedRegex(@"<INVBANKTRAN>(.*?)</INVBANKTRAN>", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
+    private static partial Regex BankTranRegex();
 
     [GeneratedRegex(@"<INVEXPENSE>(.*?)</INVEXPENSE>", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
     private static partial Regex ExpenseRegex();

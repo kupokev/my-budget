@@ -65,6 +65,47 @@ public class InvestmentFee
     public DataSource Source { get; set; }
 }
 
+/// <summary>Where money moving into or out of an investment account came from or went.</summary>
+public enum ContributionKind
+{
+    /// <summary>Your own money: a deposit, or a pre-tax, Roth or after-tax payroll deferral.</summary>
+    Personal,
+    /// <summary>An employer match, profit sharing or other employer money.</summary>
+    Employer,
+    /// <summary>Money rolled or transferred in from another retirement plan.</summary>
+    Rollover,
+    /// <summary>Money taken out of the account.</summary>
+    Withdrawal,
+}
+
+/// <summary>
+/// Money moved into or out of an investment account, as opposed to money moved between its holdings.
+/// Read from a statement where it says so (a 401(k) buy names its source; a brokerage lists deposits
+/// and withdrawals) or entered by hand. Net contributions is the sum of these, so the chart can set
+/// what the accounts are worth against what was actually put in.
+/// </summary>
+public class InvestmentContribution
+{
+    public int Id { get; set; }
+    public int AccountId { get; set; }
+    public Account? Account { get; set; }
+    public DateOnly Date { get; set; }
+
+    /// <summary>Always positive; <see cref="Kind"/> says which way it went.</summary>
+    public decimal Amount { get; set; }
+
+    public ContributionKind Kind { get; set; }
+    public string? Description { get; set; }
+
+    /// <summary>The statement's own id for this movement, so re-importing the same file doesn't add it twice.</summary>
+    public string? ExternalId { get; set; }
+
+    public DataSource Source { get; set; }
+
+    /// <summary>Into the account counts up, out counts down.</summary>
+    public decimal Signed => Kind == ContributionKind.Withdrawal ? -Amount : Amount;
+}
+
 /// <summary>A buy, sell, or dividend reinvestment. Each buy/reinvest is its own lot (INV-4/5 need exact lot dates).</summary>
 public class Trade
 {

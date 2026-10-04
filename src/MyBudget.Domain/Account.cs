@@ -15,6 +15,13 @@ public class Account
     public string? Notes { get; set; }
     public bool IsActive { get; set; } = true;
 
+    /// <summary>
+    /// For an investment account: the date imported statements cover money in and out from. From then
+    /// on, net contributions is what's recorded, and a period with no deposits really had none; before
+    /// it, contributions are estimated from purchases. Null when no statement has said.
+    /// </summary>
+    public DateOnly? ContributionsRecordedFrom { get; set; }
+
     public List<AccountBalance> Balances { get; set; } = [];
     public List<Transaction> Transactions { get; set; } = [];
 }

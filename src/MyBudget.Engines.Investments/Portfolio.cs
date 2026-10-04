@@ -28,20 +28,49 @@ public static class Portfolio
     /// <summary>
     /// Walks trades in date order: buys/reinvests open lots (cost = shares × price + fees), sells consume lots FIFO and
     /// record gains. Then wash-sale rule (INV-5): a loss on a sell is disallowed to the extent shares of the same
-    /// holding were bought within 30 days before or after; the disallowed loss is added to the replacement lot's basis.
+    /// holding were bought within 30 days before or after; the disallowed loss is added to the basis of those
+    /// replacement shares only. Raising a lot's basis changes the gain when it is later sold, which can start or
+    /// change another wash sale, so the walk repeats until the adjustments stop changing.
     /// </summary>
     public static Result Analyze(IEnumerable<Trade> trades, DateOnly asOf)
     {
         var ordered = trades.OrderBy(t => t.Date).ThenBy(t => t.Kind == TradeKind.Sell ? 1 : 0).ThenBy(t => t.Id).ToList();
+        var adjustments = new Dictionary<int, List<Slice>>();
+        // Each pass can only push an adjustment onto a later lot, so it settles within one pass per trade.
+        for (var pass = 0; ; pass++)
+        {
+            var (lots, realized) = Walk(ordered, adjustments);
+            var (next, warnings, finalRealized) = WashSales(ordered, realized, asOf);
+            if (pass >= ordered.Count || SameAdjustments(next, adjustments))
+            {
+                var openLots = lots.Where(l => l.Remaining > 0).Select(l => new Lot(l.TradeId, l.Acquired, l.Shares, R4(l.CostPerShare), l.Remaining, l.FromReinvest, R(l.DisallowedAdded))).ToList();
+                return new Result(openLots, finalRealized, warnings);
+            }
+            adjustments = next;
+        }
+    }
+
+    /// <summary>Shares of one buy that replaced a loss sale, and the disallowed loss added to their basis.</summary>
+    private readonly record struct Slice(decimal Shares, decimal AddedBasis);
+
+    private static (List<MutableLot> Lots, List<RealizedGain> Realized) Walk(List<Trade> ordered, Dictionary<int, List<Slice>> adjustments)
+    {
         var lots = new List<MutableLot>();
         var realized = new List<RealizedGain>();
-
         foreach (var t in ordered)
         {
             if (t.Kind != TradeKind.Sell)
             {
-                var cost = t.Shares * t.Price + t.Fees;
-                lots.Add(new MutableLot(t.Id, t.Date, t.Shares, t.Shares == 0 ? 0 : cost / t.Shares, t.Shares, t.Kind == TradeKind.Reinvest));
+                var costPerShare = t.Shares == 0 ? 0 : (t.Shares * t.Price + t.Fees) / t.Shares;
+                var reinvest = t.Kind == TradeKind.Reinvest;
+                // Replacement shares carry the disallowed loss; the rest of the buy keeps its own cost.
+                var plain = t.Shares;
+                foreach (var s in adjustments.GetValueOrDefault(t.Id) ?? [])
+                {
+                    lots.Add(new MutableLot(t.Id, t.Date, s.Shares, costPerShare + s.AddedBasis / s.Shares, s.Shares, reinvest) { DisallowedAdded = s.AddedBasis });
+                    plain -= s.Shares;
+                }
+                if (plain > 0 || t.Shares == 0) lots.Add(new MutableLot(t.Id, t.Date, plain, costPerShare, plain, reinvest));
                 continue;
             }
             var toSell = t.Shares;
@@ -61,8 +90,17 @@ public static class Portfolio
             if (toSell > 0)
                 realized.Add(new RealizedGain(t.Id, t.Date, 0, t.Date, toSell, R(toSell * proceedsPerShare), 0, R(toSell * proceedsPerShare), GainTerm.Short, 0, false, 0, $"{toSell:0.####} sh sold with no matching lot: check the trade history"));
         }
+        return (lots, realized);
+    }
 
-        // Wash sales: for each sell lot-slice at a loss, replacement shares bought in [sell−30, sell+30] excluding the lot sold.
+    /// <summary>
+    /// For each sell at a loss, replacement shares are those bought in [sell−30, sell+30], not counting shares
+    /// that sale itself disposed of. Returns the basis each replacement buy should carry on the next walk.
+    /// </summary>
+    private static (Dictionary<int, List<Slice>> Adjustments, List<WashSaleWarning> Warnings, List<RealizedGain> Realized) WashSales(
+        List<Trade> ordered, List<RealizedGain> realized, DateOnly asOf)
+    {
+        var adjustments = new Dictionary<int, List<Slice>>();
         var warnings = new List<WashSaleWarning>();
         var buys = ordered.Where(t => t.Kind != TradeKind.Sell).ToList();
         var adjusted = new List<RealizedGain>();
@@ -73,8 +111,9 @@ public static class Portfolio
             var opens = sell.Date.AddDays(-30); var closes = sell.Date.AddDays(30);
             var lossShares = sellGroup.Sum(g => g.Shares);
             var loss = -sellGroup.Sum(g => g.Gain);
-            var replacements = buys.Where(b => b.Id != sellGroup.First().LotTradeId && b.Date >= opens && b.Date <= closes)
-                .Select(b => (b, available: b.Shares - replacementUsed.GetValueOrDefault(b.Id))).Where(x => x.available > 0).ToList();
+            var soldHere = realized.Where(g => g.SellTradeId == sell.Id).GroupBy(g => g.LotTradeId).ToDictionary(g => g.Key, g => g.Sum(x => x.Shares));
+            var replacements = buys.Where(b => b.Date >= opens && b.Date <= closes)
+                .Select(b => (b, available: b.Shares - soldHere.GetValueOrDefault(b.Id) - replacementUsed.GetValueOrDefault(b.Id))).Where(x => x.available > 0).ToList();
             var replacementShares = Math.Min(lossShares, replacements.Sum(x => x.available));
             var disallowed = lossShares == 0 ? 0 : R(loss * replacementShares / lossShares);
             var ids = new List<int>();
@@ -84,16 +123,17 @@ public static class Portfolio
                 if (remaining <= 0) break;
                 var use = Math.Min(available, remaining);
                 replacementUsed[b.Id] = replacementUsed.GetValueOrDefault(b.Id) + use;
-                var lot = lots.First(l => l.TradeId == b.Id);
-                var addBasis = disallowed * use / replacementShares;
-                lot.CostPerShare += lot.Shares == 0 ? 0 : addBasis / lot.Shares;
-                lot.DisallowedAdded += addBasis;
+                if (disallowed > 0)
+                {
+                    if (!adjustments.TryGetValue(b.Id, out var slices)) adjustments[b.Id] = slices = [];
+                    slices.Add(new Slice(use, disallowed * use / replacementShares));
+                }
                 ids.Add(b.Id);
                 remaining -= use;
             }
             var windowOpen = closes >= asOf;
             var msg = disallowed > 0
-                ? $"Sold at a {loss:C} loss on {sell.Date:MMM d}; {replacementShares:0.####} replacement shares bought within 30 days → {disallowed:C} of the loss is disallowed and added to the replacement lot's basis."
+                ? $"Sold at a {loss:C} loss on {sell.Date:MMM d}; {replacementShares:0.####} replacement shares bought within 30 days → {disallowed:C} of the loss is disallowed and added to the replacement shares' basis."
                 : windowOpen ? $"Sold at a {loss:C} loss on {sell.Date:MMM d}; buying this holding before {closes.AddDays(1):MMM d, yyyy} would disallow the loss (including DRIP reinvestments)."
                 : $"Sold at a {loss:C} loss on {sell.Date:MMM d}; window closed {closes:MMM d} with no repurchase, loss stands.";
             warnings.Add(new WashSaleWarning(sell.Id, sell.Date, loss, opens, closes, closes.AddDays(1), ids, disallowed, windowOpen && disallowed == 0, msg));
@@ -105,9 +145,11 @@ public static class Portfolio
             }
         }
         var finalRealized = realized.Where(g => g.Gain >= 0).Concat(adjusted).OrderBy(g => g.SellDate).ThenBy(g => g.Acquired).ToList();
-        var openLots = lots.Where(l => l.Remaining > 0).Select(l => new Lot(l.TradeId, l.Acquired, l.Shares, R4(l.CostPerShare), l.Remaining, l.FromReinvest, R(l.DisallowedAdded))).ToList();
-        return new Result(openLots, finalRealized, warnings);
+        return (adjustments, warnings, finalRealized);
     }
+
+    private static bool SameAdjustments(Dictionary<int, List<Slice>> a, Dictionary<int, List<Slice>> b)
+        => a.Count == b.Count && a.All(kv => b.TryGetValue(kv.Key, out var other) && kv.Value.SequenceEqual(other));
 
     public static PositionSummary Summarize(Result r, decimal? price, DateOnly? priceDate)
     {

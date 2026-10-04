@@ -2,10 +2,17 @@ using MyBudget.Domain;
 
 namespace MyBudget.Engines.Investments;
 
-/// <summary>One holding's trades and its price history, oldest price first.</summary>
-public sealed record HoldingHistory(string Ticker, IReadOnlyList<Trade> Trades, IReadOnlyList<(DateOnly Date, decimal Price)> Prices);
+/// <summary>
+/// One holding's trades and its price history, oldest price first, with the account it sits in and the
+/// dividends it paid out as cash (pay date and amount; reinvested ones are already trades).
+/// </summary>
+public sealed record HoldingHistory(string Ticker, IReadOnlyList<Trade> Trades, IReadOnlyList<(DateOnly Date, decimal Price)> Prices,
+    int AccountId = 0, IReadOnlyList<(DateOnly Date, decimal Amount)>? Dividends = null)
+{
+    public IReadOnlyList<(DateOnly Date, decimal Amount)> CashDividends => Dividends ?? [];
+}
 
-public sealed record PortfolioPoint(DateOnly Date, decimal Value, decimal Cost);
+public sealed record PortfolioPoint(DateOnly Date, decimal Value, decimal Cost, decimal Contributed);
 
 /// <summary>
 /// What the portfolio was worth on past dates, rebuilt from trades and stored prices rather than
@@ -33,12 +40,14 @@ public static class PortfolioHistory
     }
 
     /// <summary>
-    /// Market value and cost basis of every holding on <paramref name="date"/>. A holding with shares
+    /// Market value, cost basis and net contributions (<see cref="Contributions.On"/>) of every
+    /// holding on <paramref name="date"/>. A holding with shares
     /// but no close yet on or before the date (a statement-priced fund before its first statement) is
     /// valued at its earliest known price instead, so the line doesn't drop to zero for want of a quote;
     /// one with no price at all counts its cost but no value, as the tile does.
     /// </summary>
-    public static PortfolioPoint ValueOn(IEnumerable<HoldingHistory> holdings, DateOnly date)
+    public static PortfolioPoint ValueOn(IEnumerable<HoldingHistory> holdings, DateOnly date, IEnumerable<RecordedContribution>? recorded = null,
+        IReadOnlyDictionary<int, DateOnly>? coverFrom = null)
     {
         decimal value = 0, cost = 0;
         foreach (var h in holdings)
@@ -49,7 +58,7 @@ public static class PortfolioHistory
             value += s.MarketValue ?? 0;
             cost += s.CostBasis;
         }
-        return new PortfolioPoint(date, value, cost);
+        return new PortfolioPoint(date, value, cost, Contributions.On(holdings, recorded ?? [], date, coverFrom));
     }
 
     private static decimal? PriceOn(IReadOnlyList<(DateOnly Date, decimal Price)> prices, DateOnly date)

@@ -72,7 +72,7 @@ public sealed record GainsTaxDto(decimal ShortTermGain, decimal LongTermGain, de
 public sealed record PortfolioDto(DateOnly AsOf, int Year, IReadOnlyList<PositionDto> Positions, decimal TotalValue, decimal TotalCost, decimal TotalUnrealized, decimal DividendsThisYear,
     decimal RealizedShortTerm, decimal RealizedLongTerm, GainsTaxDto? Tax, IReadOnlyList<string> Warnings);
 
-public sealed record PortfolioPointDto(DateOnly Date, decimal Value, decimal Cost);
+public sealed record PortfolioPointDto(DateOnly Date, decimal Value, decimal Cost, decimal Contributed);
 
 /// <summary>Market value and cost basis over a trailing window, ending at <see cref="To"/>.</summary>
 public sealed record PortfolioHistoryDto(DateOnly From, DateOnly To, int Months, IReadOnlyList<PortfolioPointDto> Points, string Formula);
@@ -90,7 +90,32 @@ public sealed record LotImportResultDto(string AccountName, int HoldingsCreated,
     /// <summary>Prices and dividends fetched straight after the import, so the figures are populated without a second click.</summary>
     int PricesFetched = 0, int DividendsFetched = 0, IReadOnlyList<string>? FetchErrors = null,
     /// <summary>Charges the statement listed, recorded against their holdings.</summary>
-    int FeesRecorded = 0);
+    int FeesRecorded = 0,
+    /// <summary>Deposits, withdrawals and payroll contributions the statement listed.</summary>
+    int ContributionsRecorded = 0);
+
+/// <summary>Money into or out of an investment account. Amount is positive; Kind says the direction.</summary>
+public sealed class ContributionDto
+{
+    public int Id { get; set; }
+    public int AccountId { get; set; }
+    public DateOnly Date { get; set; }
+    [Range(0.01, 100_000_000)] public decimal Amount { get; set; }
+    public ContributionKind Kind { get; set; }
+    [StringLength(200)] public string? Description { get; set; }
+    public DataSource Source { get; set; }
+}
+
+/// <summary>
+/// An account's contributions: the recorded rows, and the estimate covering the time before the first
+/// of them (all of it, when nothing is recorded). <c>Total</c> is what the account adds to the chart.
+/// </summary>
+public sealed record AccountContributionsDto(int AccountId, string AccountName, IReadOnlyList<ContributionDto> Recorded,
+    decimal Estimated, DateOnly? RecordedFrom, decimal Total, string Formula,
+    /// <summary>The date statements cover the account from, as stored; null when only entries say.</summary>
+    DateOnly? CoverFrom = null);
+
+public sealed record ContributionsCoverDto(DateOnly? From);
 
 // ---- Assets (ACC-4a) --------------------------------------------------------------------------
 
