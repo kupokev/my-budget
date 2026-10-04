@@ -41,9 +41,10 @@ public static class ReceivableEndpoints
             var p = await Query(db).FirstOrDefaultAsync(x => x.Id == id);
             return p is null ? Results.NotFound() : Results.Ok(Ledger(p, DateOnly.FromDateTime(clock.GetLocalNow().DateTime)));
         });
-        g.MapGet("/ledgers", async (BudgetDbContext db, TimeProvider clock) =>
+        // asOf lets a test (or a look back) read the ledger as it stood on a day; "Due" becomes "Missed" once a month passes.
+        g.MapGet("/ledgers", async (DateOnly? asOf, BudgetDbContext db, TimeProvider clock) =>
         {
-            var today = DateOnly.FromDateTime(clock.GetLocalNow().DateTime);
+            var today = asOf ?? DateOnly.FromDateTime(clock.GetLocalNow().DateTime);
             return (await Query(db).Where(p => p.IsActive).OrderBy(p => p.Name).ToListAsync()).Select(p => Ledger(p, today));
         });
         return api;

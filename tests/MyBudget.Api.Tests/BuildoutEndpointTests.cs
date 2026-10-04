@@ -81,7 +81,9 @@ public class BuildoutEndpointTests : IClassFixture<ApiFixture>
     [Fact]
     public async Task Receivable_ledger_shows_prepaid_missed_and_one_off_balances()
     {
-        var ledgers = await _api.Get<List<PersonLedgerDto>>("api/people/ledgers");
+        // Read as of mid-September: September is then the month in progress, so it's Due, not yet Missed.
+        // Against the real clock this test started failing on Oct 1 and blocked the release build.
+        var ledgers = await _api.Get<List<PersonLedgerDto>>("api/people/ledgers?asOf=2026-09-15");
         var robin = ledgers.Single(l => l.Person.Name == "Robin");
         Assert.Equal("Paid", robin.Periods.Single(r => r.Period == new DateOnly(2026, 3, 1)).Status);   // prepaid in January
         Assert.Equal("Missed", robin.Periods.Single(r => r.Period == new DateOnly(2026, 5, 1)).Status);
