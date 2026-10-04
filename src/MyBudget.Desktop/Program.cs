@@ -75,8 +75,8 @@ app.MainWindow
 // alone leaves the default in place, which is why this looked like it was being ignored.
 //
 // So do both: tell the window, and make sure a .desktop entry exists that claims this window. The
-// installed package ships one, but a dev build runs from bin/ and matches nothing, so it registers
-// one for itself pointing at the icon beside the binary.
+// installed package ships one; a dev build or an AppImage registers its own, named so it can't be
+// mistaken for the installed app.
 var icon = Path.Combine(AppContext.BaseDirectory, "wwwroot", "icons", "mybudget-linux.png");
 if (File.Exists(icon))
 {
@@ -99,9 +99,13 @@ if (localApi is not null) await localApi.DisposeAsync();
 return 0;
 
 /// <summary>
-/// Writes a per-user .desktop entry whose StartupWMClass matches this process, so the desktop can
-/// tie the running window to an icon. Harmless when the packaged entry already covers it: this one
-/// is named after the executable, so an installed run and a dev run do not fight over the same file.
+/// Gives a build that runs outside the package a launcher of its own, so the desktop can put an icon on
+/// its window. The installed package ships /usr/share/applications/mybudget.desktop and needs nothing.
+///
+/// Every build runs as "MyBudget.Desktop", so earlier versions wrote the same per-user file from the
+/// installed app and from a dev build alike — whichever ran last owned it, and because a per-user entry
+/// overrides the system one, the menu's "MyBudget" could open the dev build from the repo. Now a dev
+/// build or an AppImage writes its own, distinctly named entry, and the shared old file is removed.
 /// </summary>
 static void RegisterDesktopEntry(string iconPath)
 {
@@ -111,24 +115,31 @@ static void RegisterDesktopEntry(string iconPath)
         var exe = Environment.ProcessPath;
         if (string.IsNullOrWhiteSpace(home) || string.IsNullOrWhiteSpace(exe)) return;
 
-        var processName = Path.GetFileName(exe);
-        if (string.IsNullOrWhiteSpace(processName)) return;
-
         var dir = Path.Combine(home, ".local", "share", "applications");
-        Directory.CreateDirectory(dir);
+        File.Delete(Path.Combine(dir, "MyBudget.Desktop.desktop"));   // the shared entry older versions wrote
 
-        File.WriteAllText(Path.Combine(dir, processName + ".desktop"), $"""
+        // Installed from a package: the packaged entry already claims the window.
+        if (AppContext.BaseDirectory.StartsWith("/usr/", StringComparison.Ordinal)) return;
+
+        // An AppImage runs from a temporary mount; launch the image file itself, not the mount.
+        var appImage = Environment.GetEnvironmentVariable("APPIMAGE");
+        var (file, name, command) = string.IsNullOrWhiteSpace(appImage)
+            ? ("mybudget-dev.desktop", "MyBudget (dev build)", exe)
+            : ("mybudget-appimage.desktop", "MyBudget (AppImage)", appImage);
+
+        Directory.CreateDirectory(dir);
+        File.WriteAllText(Path.Combine(dir, file), $"""
             [Desktop Entry]
             Version=1.0
             Type=Application
-            Name=MyBudget
+            Name={name}
             Comment=Personal budget
-            Exec="{exe.Replace("\"", "\\\"")}"
+            Exec="{command.Replace("\"", "\\\"")}"
             Icon={iconPath}
             Terminal=false
             Categories=Office;Finance;
             StartupNotify=true
-            StartupWMClass={processName}
+            StartupWMClass={Path.GetFileName(exe)}
             """);
     }
     catch

@@ -7,7 +7,16 @@ to upgrade.
 Changes that haven't shipped yet go under the next version, marked *unreleased*. When you tag it,
 replace *unreleased* with the date.
 
-## [1.0.1] — unreleased
+## [1.0.2] — unreleased
+
+### Fixed
+
+- Opening MyBudget from the applications menu or taskbar could start a developer build instead of the
+  installed app. Every build wrote the same per-user launcher, and whichever ran last owned it. The
+  installed app now uses only its packaged launcher and removes the old shared one; a developer build
+  or an AppImage gets its own launcher, named "MyBudget (dev build)" or "MyBudget (AppImage)".
+
+## [1.0.1] — 2026-10-03
 
 ### Added
 
@@ -114,5 +123,6 @@ First release: Linux desktop packages (AppImage, deb, rpm and Arch) for the budg
 paycheck estimator, HSA planner, rewards optimizer, investments and wealth dashboard, with
 optional local-AI summaries.
 
+[1.0.2]: https://github.com/kupokev/my-budget/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/kupokev/my-budget/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/kupokev/my-budget/releases/tag/v1.0.0
