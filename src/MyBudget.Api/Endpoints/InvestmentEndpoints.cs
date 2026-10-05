@@ -17,10 +17,13 @@ public static class InvestmentEndpoints
             return await svc.PortfolioAsync(today, year ?? today.Year);
         });
 
-        g.MapGet("/history", async (int? months, DateOnly? asOf, InvestmentService svc, TimeProvider clock) =>
+        // accounts: comma-separated account ids to chart; omitted for every account.
+        g.MapGet("/history", async (int? months, DateOnly? asOf, string? accounts, InvestmentService svc, TimeProvider clock) =>
         {
             var today = asOf ?? DateOnly.FromDateTime(clock.GetLocalNow().DateTime);
-            return await svc.HistoryAsync(today, Math.Clamp(months ?? 12, 1, 60));
+            var ids = (accounts ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(x => int.TryParse(x, out var id) ? id : (int?)null).OfType<int>().ToList();
+            return await svc.HistoryAsync(today, Math.Clamp(months ?? 12, 1, 60), ids);
         });
 
         g.MapGet("/holdings", async (BudgetDbContext db) => (await db.Holdings.Include(h => h.Account).OrderBy(h => h.Ticker).ToListAsync()).Select(InvestmentService.ToDto));

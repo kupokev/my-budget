@@ -86,15 +86,19 @@ public sealed class InvestmentService(BudgetDbContext db, IMarketDataProvider ma
     /// Value, cost and net contributions over the last <paramref name="months"/> months, from the same active holdings
     /// and the same lot math as <see cref="PortfolioAsync"/>, so the last point matches its totals.
     /// </summary>
-    public async Task<PortfolioHistoryDto> HistoryAsync(DateOnly asOf, int months, CancellationToken ct = default)
+    /// <param name="accountIds">Only these accounts; null or empty for all of them.</param>
+    public async Task<PortfolioHistoryDto> HistoryAsync(DateOnly asOf, int months, IReadOnlyCollection<int>? accountIds = null, CancellationToken ct = default)
     {
-        var holdings = await db.Holdings.Include(h => h.Trades).Include(h => h.Dividends).Where(h => h.IsActive).ToListAsync(ct);
+        var all = accountIds is null || accountIds.Count == 0;
+        var holdings = await db.Holdings.Include(h => h.Trades).Include(h => h.Dividends)
+            .Where(h => h.IsActive && (all || accountIds!.Contains(h.AccountId))).ToListAsync(ct);
         var tickers = holdings.Select(h => h.Ticker).Distinct().ToList();
         var prices = (await db.Prices.Where(p => tickers.Contains(p.Ticker)).Select(p => new { p.Ticker, p.Date, p.Price }).ToListAsync(ct))
             .ToLookup(p => p.Ticker);
         var inputs = holdings.Select(h => ToHistory(h, prices[h.Ticker].OrderBy(p => p.Date).Select(p => (p.Date, p.Price)).ToList())).ToList();
 
         var (recorded, coverFrom) = await RecordedContributionsAsync(ct);
+        if (!all) recorded = recorded.Where(r => accountIds!.Contains(r.AccountId)).ToList();
 
         var from = asOf.AddMonths(-months);
         var points = PortfolioHistory.SampleDates(from, asOf)

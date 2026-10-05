@@ -140,7 +140,9 @@ public sealed class ApiClient(HttpClient http)
 
     // Build-out (Phase 5)
     public Task<PortfolioDto> GetPortfolioAsync(int? year = null) => Get<PortfolioDto>(Q("api/investments/portfolio", ("year", year)));
-    public Task<PortfolioHistoryDto> GetPortfolioHistoryAsync(int months) => Get<PortfolioHistoryDto>(Q("api/investments/history", ("months", months)));
+    /// <param name="accountIds">Accounts to chart; null for all.</param>
+    public Task<PortfolioHistoryDto> GetPortfolioHistoryAsync(int months, IEnumerable<int>? accountIds = null) =>
+        Get<PortfolioHistoryDto>(Q("api/investments/history", ("months", months), ("accounts", accountIds is null ? null : string.Join(",", accountIds))));
     public Task<List<HoldingDto>> GetHoldingsAsync() => Get<List<HoldingDto>>("api/investments/holdings");
     public Task<HoldingDto> SaveHoldingAsync(HoldingDto h) => h.Id == 0 ? Post("api/investments/holdings", h) : Put($"api/investments/holdings/{h.Id}", h);
     public Task DeleteHoldingAsync(int id) => Delete($"api/investments/holdings/{id}");

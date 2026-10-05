@@ -66,6 +66,15 @@ else
                     and <Money Value="last.Contributed - first.Contributed" Signed="true" /> is new money you put in.
                     Value is <Money Value="last.Value - last.Contributed" Signed="true" /> against everything contributed
                 </span>
+            </div>
+            <div class="toolbar">
+                @foreach (var (id, name) in ChartAccounts)
+                {
+                    var shown = !hiddenAccounts.Contains(id);
+                    <label class="inline" title="@(shown && ChartAccounts.Count - hiddenAccounts.Count == 1 ? "At least one account stays on the chart" : "")">
+                        <input type="checkbox" checked="@shown" disabled="@(shown && ChartAccounts.Count - hiddenAccounts.Count == 1)" @onchange="() => ToggleChartAccount(id)" /> @name
+                    </label>
+                }
                 <span class="tabs">
                     @foreach (var (m, label) in Ranges)
                     {
@@ -75,7 +84,7 @@ else
             </div>
             <LineChart Series="@HistorySeries(hist)" XAxisLabels="@hist.Points.Select(p => p.Date.ToString(historyMonths > 12 ? "MMM yy" : "MMM d")).ToList()"
                        MaxXAxisLabels="10" SmoothLines="true" CrosshairTooltip="true" Responsive="true" Width="1600" Height="260" Theme="@Palette"
-                       Description="Market value of the portfolio against its cost basis and the net money contributed." />
+                       Description="Market value of the chosen accounts against their cost basis and the net money contributed." />
         </section>
     }
 
@@ -345,6 +354,23 @@ else
     private PortfolioDto? portfolio;
     private PortfolioHistoryDto? history;
     private int historyMonths = 12;
+
+    /// <summary>Accounts taken off the Value over time chart. Empty means every account is shown.</summary>
+    private readonly HashSet<int> hiddenAccounts = [];
+
+    /// <summary>Accounts with holdings, in the order the table lists them.</summary>
+    private List<(int Id, string Name)> ChartAccounts => portfolio?.Positions
+        .GroupBy(x => (x.Holding.AccountId, Name: x.Holding.AccountName ?? "Unassigned"))
+        .Select(g => g.Key).OrderBy(a => a.Name).ToList() ?? [];
+
+    private List<int>? ShownAccounts => hiddenAccounts.Count == 0 ? null : ChartAccounts.Select(a => a.Id).Where(id => !hiddenAccounts.Contains(id)).ToList();
+
+    private async Task ToggleChartAccount(int id)
+    {
+        if (!hiddenAccounts.Remove(id)) hiddenAccounts.Add(id);
+        try { history = await Api.GetPortfolioHistoryAsync(historyMonths, ShownAccounts); }
+        catch (Exception ex) { error = ex.Message; }
+    }
     private static readonly (int Months, string Label)[] Ranges = [(1, "1M"), (3, "3M"), (6, "6M"), (12, "1Y"), (36, "3Y")];
     private List<AccountDto>? accounts;
     private HoldingDto? editing;
@@ -414,7 +440,7 @@ else
         {
             accounts ??= await Api.GetAccountsAsync();
             portfolio = await Api.GetPortfolioAsync(year);
-            history = await Api.GetPortfolioHistoryAsync(historyMonths);
+            history = await Api.GetPortfolioHistoryAsync(historyMonths, ShownAccounts);
         }
         catch (Exception ex) { error = ex.Message; }
     }
@@ -424,7 +450,7 @@ else
     private async Task ChangeRange(int months)
     {
         historyMonths = months;
-        try { history = await Api.GetPortfolioHistoryAsync(months); }
+        try { history = await Api.GetPortfolioHistoryAsync(months, ShownAccounts); }
         catch (Exception ex) { error = ex.Message; }
     }
 

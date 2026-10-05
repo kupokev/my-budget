@@ -48,6 +48,9 @@ from purchases: money from the account's own sales and cash dividends pays for b
 what it can't cover counts as new money. A tax-lot import has no lots you already sold, so the
 estimate can run high. Importing statements, or adding an entry by hand, replaces it.
 
+A checkbox for each account above the chart takes it off or puts it back. The lines and the summary
+line above the chart cover only the accounts that are ticked. At least one account stays on.
+
 The gap between value and net contributions is what the money has earned. The line under the
 heading splits the change across the window into growth and new money.
 

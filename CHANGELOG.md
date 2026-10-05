@@ -13,6 +13,10 @@ replace *unreleased* with the date.
 
 - **Net contributions on the Investments value chart.** A third line shows the money put into your
   accounts, next to market value and cost basis.
+- **Choose the accounts on the value chart.** A checkbox for each account above the Investments
+  value chart takes it off or puts it back, so you can see how one or two accounts are doing on their
+  own. The value, cost basis, contributions and the summary line above the chart all follow the
+  accounts you choose.
 - **Contributions per account.** The ＄ button on an account row lists the money put into and taken
   out of that account: your own deposits and payroll deferrals, employer money, rollovers and
   withdrawals. Importing an investment OFX/QFX records them: a 401(k) purchase is listed under the
