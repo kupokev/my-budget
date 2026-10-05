@@ -141,6 +141,47 @@ public class DividendEstimateTests
 /// </summary>
 public class ChatEndpointTests
 {
+    [Fact]
+    public void A_streamed_openai_reply_is_stitched_back_into_one_message()
+    {
+        // Open WebUI streams for some models even when asked not to.
+        var sse = """
+            data: {"choices":[{"delta":{"reasoning_content":"thinking","role":"assistant"}}]}
+
+            data: {"choices":[{"delta":{"content":"Rent is "}}]}
+
+            data: {"choices":[{"delta":{"content":"covered."}}]}
+
+            data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_a","function":{"name":"spend_by_category","arguments":"{\"mon"}}]}}]}
+
+            data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"th\":9}"}}]}}]}
+
+            data: [DONE]
+            """;
+
+        using var doc = System.Text.Json.JsonDocument.Parse(AiService.Unstream(sse, openAi: true));
+        var msg = doc.RootElement.GetProperty("choices")[0].GetProperty("message");
+        Assert.Equal("Rent is covered.", msg.GetProperty("content").GetString());
+        var call = msg.GetProperty("tool_calls")[0];
+        Assert.Equal("call_a", call.GetProperty("id").GetString());
+        Assert.Equal("spend_by_category", call.GetProperty("function").GetProperty("name").GetString());
+        Assert.Equal("{\"month\":9}", call.GetProperty("function").GetProperty("arguments").GetString());
+    }
+
+    [Fact]
+    public void A_streamed_ollama_reply_is_stitched_back_into_one_message()
+    {
+        var ndjson = "{\"message\":{\"role\":\"assistant\",\"content\":\"All \"}}\n{\"message\":{\"content\":\"good.\"},\"done\":true}\n";
+
+        using var doc = System.Text.Json.JsonDocument.Parse(AiService.Unstream(ndjson, openAi: false));
+        Assert.Equal("All good.", doc.RootElement.GetProperty("message").GetProperty("content").GetString());
+        Assert.False(doc.RootElement.GetProperty("message").TryGetProperty("tool_calls", out var tc) && tc.ValueKind == System.Text.Json.JsonValueKind.Array);
+    }
+
+    [Fact]
+    public void A_plain_reply_is_left_alone()
+        => Assert.Equal("{\"message\":{\"content\":\"hi\"}}", AiService.Unstream("{\"message\":{\"content\":\"hi\"}}", openAi: false));
+
     private static List<string> Urls(string baseUrl, AiApiStyle style)
         => AiService.ChatEndpoints(new AiOptions { BaseUrl = baseUrl, Style = style }).Select(e => e.Url).ToList();
 

@@ -30,6 +30,10 @@ replace *unreleased* with the date.
 
 ### Fixed
 
+- **Ask the AI what matters most** failed with "'d' is an invalid start of a value" when the model
+  server streamed its answer anyway, which Open WebUI does for some models even though the app asks it
+  not to. Streamed replies are now put back together, for the summary and the Assistant chat alike.
+
 - **Wash sales.** Three corrections to how a disallowed loss is handled:
   - Shares sold in the same losing sale no longer count as their own replacement.
   - When a replacement lot is sold later, its gain or loss now includes the added basis.

@@ -175,6 +175,75 @@ public sealed class AiService(HttpClient http, AiOptionsProvider optionsProvider
         ? new { role = "tool", tool_call_id = id, content = result }
         : new { role = "tool", content = result };
 
+    /// <summary>
+    /// Some servers stream whatever the request says — Open WebUI does for a model set to stream — so a
+    /// reply can arrive as Server-Sent Events ("data: {...}" chunks, OpenAI) or one JSON object per line
+    /// (Ollama). Stitches the pieces back into the single reply a non-streamed request returns: text
+    /// concatenated, tool calls merged by index with their argument fragments joined. A plain JSON body
+    /// comes back unchanged.
+    /// </summary>
+    public static string Unstream(string payload, bool openAi)
+    {
+        var body = payload.Trim();
+        var lines = body.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var sse = body.StartsWith("data:", StringComparison.Ordinal);
+        if (!sse && lines.Length <= 1) return payload;
+
+        var chunks = sse
+            ? lines.Where(l => l.StartsWith("data:", StringComparison.Ordinal)).Select(l => l[5..].Trim()).Where(l => l != "[DONE]")
+            : lines;
+
+        var content = new System.Text.StringBuilder();
+        // Keyed by the chunk's index; a server that sends none sends each call whole, so number them in arrival order.
+        var calls = new SortedDictionary<int, (string? Id, string Name, System.Text.StringBuilder Args, JsonElement? ArgObject)>();
+        foreach (var chunk in chunks)
+        {
+            using var d = JsonDocument.Parse(chunk);
+            var root = d.RootElement;
+            if (root.TryGetProperty("error", out var err))
+                throw new InvalidOperationException($"The model server reported an error: {(err.ValueKind == JsonValueKind.Object && err.TryGetProperty("message", out var m) ? m.GetString() : err.ToString())}");
+
+            JsonElement part;
+            if (openAi)
+            {
+                if (!root.TryGetProperty("choices", out var choices) || choices.GetArrayLength() == 0) continue;
+                var choice = choices[0];
+                if (!choice.TryGetProperty("delta", out part) && !choice.TryGetProperty("message", out part)) continue;
+            }
+            else if (!root.TryGetProperty("message", out part)) continue;
+
+            if (part.TryGetProperty("content", out var c) && c.ValueKind == JsonValueKind.String) content.Append(c.GetString());
+            if (!part.TryGetProperty("tool_calls", out var tc) || tc.ValueKind != JsonValueKind.Array) continue;
+            foreach (var call in tc.EnumerateArray())
+            {
+                var index = call.TryGetProperty("index", out var i) && i.ValueKind == JsonValueKind.Number ? i.GetInt32() : calls.Count;
+                var entry = calls.TryGetValue(index, out var e) ? e : (null, "", new System.Text.StringBuilder(), (JsonElement?)null);
+                if (call.TryGetProperty("id", out var id) && id.ValueKind == JsonValueKind.String) entry.Id = id.GetString();
+                if (call.TryGetProperty("function", out var fn))
+                {
+                    if (fn.TryGetProperty("name", out var n) && n.ValueKind == JsonValueKind.String) entry.Name += n.GetString();
+                    if (fn.TryGetProperty("arguments", out var a))
+                    {
+                        if (a.ValueKind == JsonValueKind.String) entry.Args.Append(a.GetString());
+                        else entry.ArgObject = a.Clone();
+                    }
+                }
+                calls[index] = entry;
+            }
+        }
+
+        var toolCalls = calls.Values.Select(t => (object)new
+        {
+            id = t.Id,
+            type = "function",
+            function = new { name = t.Name, arguments = t.ArgObject is { } obj ? (object)obj : t.Args.ToString() },
+        }).ToList();
+        var message = new { role = "assistant", content = content.ToString(), tool_calls = toolCalls.Count == 0 ? null : toolCalls };
+        return openAi
+            ? JsonSerializer.Serialize(new { choices = new[] { new { message } } })
+            : JsonSerializer.Serialize(new { message });
+    }
+
     private static string Snippet(string body)
     {
         var t = body.Trim().ReplaceLineEndings(" ");
@@ -276,7 +345,7 @@ public sealed class AiService(HttpClient http, AiOptionsProvider optionsProvider
             }
 
             var openAi = endpoint!.Value.OpenAi;
-            using var doc = JsonDocument.Parse(payload);
+            using var doc = JsonDocument.Parse(Unstream(payload, openAi));
             // Ollama returns one "message"; an OpenAI-compatible server wraps it in "choices[0]".
             var msg = openAi
                 ? doc.RootElement.GetProperty("choices")[0].GetProperty("message")
