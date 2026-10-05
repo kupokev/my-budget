@@ -311,5 +311,50 @@ public sealed class BudgetDbContext(DbContextOptions<BudgetDbContext> options) :
             e.HasIndex(x => new { x.BudgetLineId, x.Period }).IsUnique();
             e.Property(x => x.ConfirmationNumber).HasMaxLength(60);
         });
+
+        // Every table records when each row was created and last changed (ADR-0012). Shadow properties,
+        // added here for all entity types, so a new table gets them without anyone remembering to.
+        // Nullable: rows from before this existed have no honest value to give.
+        foreach (var type in mb.Model.GetEntityTypes().Where(t => !t.IsOwned()))
+        {
+            mb.Entity(type.ClrType).Property<DateTime?>(CreatedAt);
+            mb.Entity(type.ClrType).Property<DateTime?>(UpdatedAt);
+        }
+    }
+
+    /// <summary>Shadow column names, for reading them: <c>EF.Property&lt;DateTime?&gt;(row, BudgetDbContext.CreatedAt)</c>.</summary>
+    public const string CreatedAt = nameof(CreatedAt), UpdatedAt = nameof(UpdatedAt);
+
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
+    {
+        Stamp();
+        return base.SaveChanges(acceptAllChangesOnSuccess);
+    }
+
+    public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+    {
+        Stamp();
+        return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+    }
+
+    /// <summary>UTC, so a timestamp means the same thing after a time-zone or daylight-saving change.</summary>
+    private void Stamp()
+    {
+        var now = DateTime.UtcNow;
+        foreach (var entry in ChangeTracker.Entries())
+        {
+            if (entry.Metadata.FindProperty(CreatedAt) is null) continue;
+            if (entry.State == EntityState.Added)
+            {
+                entry.Property(CreatedAt).CurrentValue ??= now;
+                entry.Property(UpdatedAt).CurrentValue = now;
+            }
+            else if (entry.State == EntityState.Modified)
+            {
+                // A created time is never rewritten, even by a caller that attached a detached copy.
+                entry.Property(CreatedAt).IsModified = false;
+                entry.Property(UpdatedAt).CurrentValue = now;
+            }
+        }
     }
 }

@@ -11,6 +11,10 @@ replace *unreleased* with the date.
 
 ### Added
 
+- **Every record now notes when it was created and last changed.** All tables gain created and
+  last-changed times, filled in automatically from now on. Records that already exist have neither,
+  because no true date is known for them. The database is upgraded the first time this version starts.
+
 - **Net contributions on the Investments value chart.** A third line shows the money put into your
   accounts, next to market value and cost basis.
 - **Choose the accounts on the value chart.** A checkbox for each account above the Investments

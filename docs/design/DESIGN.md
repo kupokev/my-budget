@@ -31,5 +31,6 @@ works. Add a row and a DD when a new subsystem gets its own design.
 | [ADR-0009](./decisions/ADR-0009-market-data-from-yahoo-chart-endpoint.md) | Market data from Yahoo's free chart endpoint behind a provider interface |
 | [ADR-0010](./decisions/ADR-0010-sqlite-in-process-desktop-first.md) | SQLite file, API hosted in-process by the desktop app, no server |
 | [ADR-0011](./decisions/ADR-0011-api-is-a-library-not-a-service.md) | `MyBudget.Api` is a library, not a runnable service (narrows ADR-0010) |
+| [ADR-0012](./decisions/ADR-0012-every-row-records-created-and-updated.md) | Every row records when it was created and last changed |
 
 Files are named `DD-NNNN-name.md` and `ADR-NNNN-name.md` so the number in prose maps straight to a file.
