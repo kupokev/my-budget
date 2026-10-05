@@ -30,6 +30,11 @@ replace *unreleased* with the date.
 
 ### Fixed
 
+- **Paid this month vs last** moved bills from day to day. A bill marked paid with no paid-on date was
+  put on today, so it slid a day along every morning. Marking a bill paid for this month or a later
+  one now fills in today as its paid-on date when you leave it blank. You can still change or clear
+  it. Past months and Variable lines are left as you enter them.
+
 - **Ask the AI what matters most** failed with "'d' is an invalid start of a value" when the model
   server streamed its answer anyway, which Open WebUI does for some models even though the app asks it
   not to. Streamed replies are now put back together, for the summary and the Assistant chat alike.

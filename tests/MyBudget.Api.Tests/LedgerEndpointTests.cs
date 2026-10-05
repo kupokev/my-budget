@@ -42,6 +42,25 @@ public class LedgerEndpointTests : IClassFixture<ApiFixture>
     }
 
     [Fact]
+    public async Task A_bill_first_marked_paid_without_a_date_is_dated_today_unless_its_month_is_past()
+    {
+        // Undated, the paid-so-far chart could only put it on "today", so it moved along a day each morning.
+        var electric = (await _api.Get<List<BudgetLineDto>>("api/budget")).Single(b => b.Name == "Electric");
+        var today = DateOnly.FromDateTime(DateTime.Now);
+
+        var ahead = await _api.Put<BudgetPeriodDto>($"api/budget/{electric.Id}/periods/2099-01-01", new BudgetPeriodDto { ActualAmount = 150m });
+        Assert.Equal(today, ahead.PaidOn);
+
+        // Clearing the date afterwards is respected: it is only filled in when the bill is first marked paid.
+        var cleared = await _api.Put<BudgetPeriodDto>($"api/budget/{electric.Id}/periods/2099-01-01", new BudgetPeriodDto { ActualAmount = 151m });
+        Assert.Null(cleared.PaidOn);
+
+        // An old month entered after the fact keeps no date rather than a wrong one.
+        var past = await _api.Put<BudgetPeriodDto>($"api/budget/{electric.Id}/periods/2020-01-01", new BudgetPeriodDto { ActualAmount = 140m });
+        Assert.Null(past.PaidOn);
+    }
+
+    [Fact]
     public async Task Budget_month_upsert_shows_variance_in_history()
     {
         var lines = await _api.Get<List<BudgetLineDto>>("api/budget");

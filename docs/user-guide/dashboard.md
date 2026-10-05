@@ -33,7 +33,10 @@ day. Being below the previous line means you are paying out more slowly than las
 you have paid less overall.
 
 Each amount lands on its **Paid on** date; without one, on the day the line was due that month; a
-Variable line with neither (Fuel, Clothing) lands on today, or on the last day of a past month.
+Variable line with neither (Fuel, Clothing) lands on today, or on the last day of a past month. A
+bill paid ahead of its due date with no Paid on date also lands on today, so it moves a day each
+morning. To prevent that, marking a bill paid for this month or a later one fills in today's date
+when you leave Paid on blank.
 Imported transactions don't feed it — only what is entered on the grid.
 
 ## Due in the next 14 days

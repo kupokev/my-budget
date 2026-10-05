@@ -179,9 +179,9 @@ public static class BudgetEndpoints
             return new BudgetLabelBreakdownDto(id, y, byLabel.OrderByDescending(r => r.Total).ToList());
         });
 
-        g.MapPut("/{id:int}/periods/{period}", async (int id, DateOnly period, BudgetPeriodDto dto, BudgetDbContext db) =>
+        g.MapPut("/{id:int}/periods/{period}", async (int id, DateOnly period, BudgetPeriodDto dto, BudgetDbContext db, TimeProvider clock) =>
         {
-            if (await db.BudgetLines.FindAsync(id) is null) return Results.NotFound();
+            if (await db.BudgetLines.FindAsync(id) is not { } line) return Results.NotFound();
             var p = new DateOnly(period.Year, period.Month, 1);
             var row = await db.BudgetPeriods.FirstOrDefaultAsync(x => x.BudgetLineId == id && x.Period == p);
             var empty = dto.DueDate is null && dto.ProjectedAmount is null && dto.ActualAmount is null && dto.PaidOn is null
@@ -191,9 +191,18 @@ public static class BudgetEndpoints
                 if (row is not null) { db.BudgetPeriods.Remove(row); await db.SaveChangesAsync(); }
                 return Results.Ok(new BudgetPeriodDto { BudgetLineId = id, Period = p });
             }
+            var wasPaid = row?.ActualAmount is not null;
             row ??= db.BudgetPeriods.Add(new BudgetPeriod { BudgetLineId = id, Period = p }).Entity;
             row.DueDate = dto.DueDate; row.ProjectedAmount = dto.ProjectedAmount; row.ActualAmount = dto.ActualAmount;
             row.PaidOn = dto.PaidOn;
+            // A bill first marked paid this month or ahead of it, with no date, was paid today. Without a
+            // date the dashboard's paid-so-far chart can only put it on "today", so it moved a day along
+            // every morning. Past months and Variable lines (spending that accrues, no single payment day)
+            // are left as entered; clearing the date afterwards is respected.
+            var today = DateOnly.FromDateTime(clock.GetLocalNow().DateTime);
+            if (!wasPaid && dto.ActualAmount is not null && dto.PaidOn is null
+                && line.Frequency != BudgetFrequency.Variable && p >= new DateOnly(today.Year, today.Month, 1))
+                row.PaidOn = today;
             row.ConfirmationNumber = string.IsNullOrWhiteSpace(dto.ConfirmationNumber) ? null : dto.ConfirmationNumber.Trim();
             row.Notes = string.IsNullOrWhiteSpace(dto.Notes) ? null : dto.Notes.Trim();
             await db.SaveChangesAsync();
