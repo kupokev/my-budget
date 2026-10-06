@@ -11,6 +11,15 @@ of spending lives on.
 By year and month, account or card, category, or free text. **Uncategorised** is the useful one after
 an import: it shows only what still needs a decision.
 
+## Running balance
+
+Pick a single account under **Source** and a **Balance** column shows the account's balance just
+after each line. It is worked out the same way as the balance on Accounts, so the newest line matches
+it. A statement balance includes everything dated on or before its day. Lines after a statement run
+forward from it, and lines on or before it run backwards from it. Hover a balance to see which
+statement it starts from. A hand entry reconciled with a bank line shows "—", because the bank line
+is the one that counts. Filters hide lines but don't change the balances.
+
 ## Categorising
 
 Set the budget line and the category and label follow, because a budget line already knows both. Where

@@ -23,7 +23,15 @@ public static class TransactionEndpoints
             if (cardId is { } cd) q = q.Where(t => t.CardId == cd);
             if (lineId is { } b) q = q.Where(t => t.BudgetLineId == b);
             if (!string.IsNullOrWhiteSpace(search)) q = q.Where(t => t.Description.Contains(search) || (t.Merchant != null && t.Merchant.Contains(search)));
-            return (await q.OrderByDescending(t => t.Date).ThenByDescending(t => t.Id).Take(limit ?? 500).ToListAsync()).Select(ToDto);
+            var list = (await q.OrderByDescending(t => t.Date).ThenByDescending(t => t.Id).Take(limit ?? 500).ToListAsync()).Select(ToDto).ToList();
+            if (accountId is not { } acct) return list;
+
+            // One account: each row also carries the balance just after it, worked out from the whole
+            // account rather than the filtered rows, so it matches the Accounts page.
+            var running = BalanceMath.Running(
+                await db.AccountBalances.Where(b => b.AccountId == acct).ToListAsync(),
+                await db.Transactions.Where(t => t.AccountId == acct).ToListAsync());
+            return list.Select(t => running.TryGetValue(t.Id, out var r) ? t with { Balance = r.Balance, BalanceDetail = r.Detail } : t).ToList();
         });
 
         // Entering a transaction by hand. This is the only place transactions are created outside an
@@ -139,8 +147,9 @@ public static class TransactionEndpoints
             var lo = t.Date.AddDays(-45); var hi = t.Date.AddDays(45);
             var tolerance = Math.Max(10m, Math.Abs(t.Amount) * 0.2m);
             var otherOrigin = t.Origin == TransactionOrigin.Manual ? TransactionOrigin.Imported : TransactionOrigin.Manual;
-            var list = await Query(db).Where(c => c.Origin == otherOrigin && c.ReconciledWithId == null && c.AccountId == t.AccountId && c.CardId == t.CardId && c.Date >= lo && c.Date <= hi && Math.Sign(c.Amount) == Math.Sign(t.Amount)).ToListAsync();
-            return Results.Ok(list.Select(c => new ReconcileCandidateDto(ToDto(c), Math.Abs(c.Date.DayNumber - t.Date.DayNumber), Math.Round(Math.Abs(c.Amount - t.Amount), 2)))
+            var list = await Query(db).Where(c => c.Origin == otherOrigin && c.ReconciledWithId == null && c.AccountId == t.AccountId && c.CardId == t.CardId && c.Date >= lo && c.Date <= hi).ToListAsync();
+            // Same direction of money, checked here: SQLite can't translate Math.Sign on a decimal.
+            return Results.Ok(list.Where(c => Math.Sign(c.Amount) == Math.Sign(t.Amount)).Select(c => new ReconcileCandidateDto(ToDto(c), Math.Abs(c.Date.DayNumber - t.Date.DayNumber), Math.Round(Math.Abs(c.Amount - t.Amount), 2)))
                 .Where(c => all == true || c.AmountDifference <= tolerance)
                 .OrderBy(c => c.AmountDifference).ThenBy(c => c.DaysApart).Take(25));
         });

@@ -51,7 +51,11 @@ public sealed record ImportBatchDto(int Id, string FileName, ImportFormat Format
 public sealed record TransactionDto(int Id, int? AccountId, int? CardId, string SourceName, DateOnly Date, DateOnly? PostedDate, decimal Amount,
     string Description, string? Merchant, int? CategoryId, string? CategoryName, int? BudgetLineId, string? LineName, bool IsTransfer, string? Notes, bool IsManuallyCategorized,
     TransactionOrigin Origin, string? CounterpartyName, int? ReconciledWithId, string? ReconciledWithSummary, int? RepaymentFromPersonId, string? RepaymentFromPersonName,
-    int? LabelId, string? LabelName, int? IncomeSourceId = null, string? IncomeSourceName = null);
+    int? LabelId, string? LabelName, int? IncomeSourceId = null, string? IncomeSourceName = null,
+    decimal? Balance = null, string? BalanceDetail = null)
+{
+    // Balance: the account's balance just after this row, filled in only when the list is for one account.
+}
 
 public sealed record ReconcileCandidateDto(TransactionDto Transaction, int DaysApart, decimal AmountDifference);
 

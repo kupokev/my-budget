@@ -59,8 +59,8 @@ else
     else
     {
         <table class="tx">
-            <colgroup><col class="c-date" /><col class="c-src" /><col class="c-desc" /><col class="c-amt" /><col class="c-cat" /><col class="c-label" /><col class="c-line" /><col class="c-xfer" /><col class="c-rec" /><col class="c-act" /></colgroup>
-            <thead><tr><th>Date</th><th>Source</th><th>Description</th><th class="money">Amount</th><th>Category</th><th>Label</th><th>Budget line</th><th>Transfer</th><th>Rec.</th><th></th></tr></thead>
+            <colgroup><col class="c-date" /><col class="c-src" /><col class="c-desc" /><col class="c-amt" />@if (ShowBalance) { <col class="c-amt" /> }<col class="c-cat" /><col class="c-label" /><col class="c-line" /><col class="c-xfer" /><col class="c-rec" /><col class="c-act" /></colgroup>
+            <thead><tr><th>Date</th><th>Source</th><th>Description</th><th class="money">Amount</th>@if (ShowBalance) { <th class="money" title="The account balance just after each line">Balance</th> }<th>Category</th><th>Label</th><th>Budget line</th><th>Transfer</th><th>Rec.</th><th></th></tr></thead>
             <tbody>
             @foreach (var t in rows)
             {
@@ -69,6 +69,11 @@ else
                     <td class="muted ellipsis" title="@t.SourceName">@t.SourceName</td>
                     <td class="ellipsis" title="@t.Description">@(t.Merchant ?? t.Description) @if (t.Origin == MyBudget.Domain.TransactionOrigin.Manual) { <span class="chip small">manual</span> }</td>
                     <td class="money"><Money Value="t.Amount" Signed="true" /></td>
+                    @if (ShowBalance)
+                    {
+                        @* A reconciled hand entry counts through its bank line, so it has no balance of its own. *@
+                        <td class="money" title="@(t.BalanceDetail ?? "Counted through the bank line it is reconciled with")">@if (t.Balance is { } bal) { <Money Value="bal" /> } else { <span class="muted">—</span> }</td>
+                    }
                     <td class="ellipsis">@(t.IncomeSourceName is { } job ? $"Pay · {job}" : t.RepaymentFromPersonName is { } who ? $"Repayment · {who}" : t.CategoryName ?? (t.IsTransfer ? "" : "—"))</td>
                     <td class="ellipsis muted">@t.LabelName</td>
                     <td class="ellipsis">@t.LineName</td>
@@ -191,6 +196,8 @@ else
     private bool showAllCandidates;
     private List<ReconcileCandidateDto>? candidates;
     private string sourceFilter = "", search = "";
+    /// <summary>A running balance only means something for one account.</summary>
+    private bool ShowBalance => sourceFilter.StartsWith("account:");
     private List<TransactionDto>? rows;
     private List<CategoryDto>? categories;
     private List<BudgetLineDto>? lines;

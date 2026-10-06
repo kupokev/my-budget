@@ -11,6 +11,10 @@ replace *unreleased* with the date.
 
 ### Added
 
+- **Running balance on Transactions.** Pick one account under Source and a Balance column shows the
+  account's balance after each line, matching the balance on Accounts. Hover it to see the statement
+  balance it is worked out from.
+
 - **Every record now notes when it was created and last changed.** All tables gain created and
   last-changed times, filled in automatically from now on. Records that already exist have neither,
   because no true date is known for them. The database is upgraded the first time this version starts.
@@ -33,6 +37,9 @@ replace *unreleased* with the date.
   own sales and cash dividends couldn't pay for.
 
 ### Fixed
+
+- **Reconciling a transaction** failed with "The LINQ expression … could not be translated" before
+  showing any matches. The list of possible matches now loads.
 
 - **Paid this month vs last** moved bills from day to day. A bill marked paid with no paid-on date was
   put on today, so it slid a day along every morning. Marking a bill paid for this month or a later
