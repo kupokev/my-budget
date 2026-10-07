@@ -57,7 +57,10 @@ month only. That is an override, not a price change, and it beats the schedule. 
 dot so you can see it was set by hand.
 
 The same editor records what you **actually** paid and when. A statement import fills this in for
-you — see [Import](import.md).
+you — see [Import](import.md). On a month not yet paid, **Paid on** starts at today, since opening the
+month usually means you're paying it now. The date is saved only once you enter **Amount paid**.
+Changing a note or the expected amount doesn't mark the month paid. Variable lines such as Fuel start
+with no date, because they add up over the month.
 
 ## Sorting and filtering
 

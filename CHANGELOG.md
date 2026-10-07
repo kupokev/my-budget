@@ -11,6 +11,10 @@ replace *unreleased* with the date.
 
 ### Added
 
+- **Paid on starts at today.** Opening a month that isn't paid yet on the Budget grid now fills in
+  today's date, so you don't have to click Set a date. It's saved once you enter the amount paid,
+  so changing only a note or the expected amount doesn't mark the bill paid.
+
 - **Running balance on Transactions.** Pick one account under Source and a Balance column shows the
   account's balance after each line, matching the balance on Accounts. Hover it to see the statement
   balance it is worked out from.

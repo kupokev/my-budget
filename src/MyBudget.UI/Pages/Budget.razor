@@ -61,7 +61,8 @@ else
                     <legend>What actually happened</legend>
                     <div class="field"><label>Amount paid</label>
                         <input type="number" step="0.01" @bind="monthEdit.ActualAmount" @bind:event="oninput" @onkeydown="OnMonthKey" @ref="actualInput" placeholder="0.00" /></div>
-                    <div class="field"><label>Paid on</label><OptionalDate @bind-Value="monthEdit.PaidOn" Suggested="monthEdit.DefaultDueDate ?? monthEdit.Period" Empty="not paid yet" @onkeydown="OnMonthKey" /></div>
+                    <div class="field"><label>Paid on</label><OptionalDate Value="monthEdit.PaidOn" ValueChanged="SetPaidOn" Suggested="Today" Empty="not paid yet" @onkeydown="OnMonthKey" />
+                        @if (monthEdit.PaidOnIsSuggested && monthEdit.ActualAmount is null) { <span class="hint">saved once an amount is entered</span> }</div>
                     <div class="field"><label>Confirmation #</label>
                         <input type="text" maxlength="60" @bind="monthEdit.ConfirmationNumber" @bind:event="oninput" @onkeydown="OnMonthKey" placeholder="if the biller gave one" /></div>
                 </fieldset>
@@ -426,7 +427,13 @@ else
         public int BudgetLineId; public string LineName = ""; public DateOnly Period;
         public decimal DefaultProjected; public DateOnly? DefaultDueDate;
         public decimal? ActualAmount; public decimal? ProjectedAmount; public DateOnly? DueDate; public DateOnly? PaidOn; public string? ConfirmationNumber; public string? Notes;
+        /// <summary>Paid on holds today because the editor filled it in, not because it was chosen.</summary>
+        public bool PaidOnIsSuggested;
     }
+
+    private static DateOnly Today => DateOnly.FromDateTime(DateTime.Today);
+
+    private void SetPaidOn(DateOnly? d) { monthEdit!.PaidOn = d; monthEdit.PaidOnIsSuggested = false; }
 
     protected override Task OnInitializedAsync() => Load();
 
@@ -547,6 +554,13 @@ else
             ActualAmount = m.Actual, ProjectedAmount = m.ProjectedIsOverride ? m.Projected : null,
             DueDate = m.DueDateIsOverride ? m.DueDate : null, PaidOn = m.PaidOn, ConfirmationNumber = m.ConfirmationNumber, Notes = m.Notes,
         };
+        // Opening an unpaid month usually means paying it now, so Paid on starts at today. A Variable
+        // line (Fuel) adds up over the month and has no single payment day, so it is left empty.
+        if (m.Actual is null && m.PaidOn is null && b.Frequency != MyBudget.Domain.BudgetFrequency.Variable)
+        {
+            monthEdit.PaidOn = Today;
+            monthEdit.PaidOnIsSuggested = true;
+        }
         await Task.Yield();
         try { await actualInput.FocusAsync(); } catch { }
     }
@@ -565,7 +579,10 @@ else
             await Api.SaveBudgetPeriodAsync(monthEdit.BudgetLineId, monthEdit.Period, new BudgetPeriodDto
             {
                 BudgetLineId = monthEdit.BudgetLineId, Period = monthEdit.Period, ActualAmount = monthEdit.ActualAmount,
-                ProjectedAmount = monthEdit.ProjectedAmount, DueDate = monthEdit.DueDate, PaidOn = monthEdit.PaidOn, ConfirmationNumber = monthEdit.ConfirmationNumber, Notes = monthEdit.Notes,
+                ProjectedAmount = monthEdit.ProjectedAmount, DueDate = monthEdit.DueDate,
+                // A filled-in date with no amount would mark the month paid at its usual amount just for
+                // changing a note or next month's expected amount. It takes an amount to make it a payment.
+                PaidOn = monthEdit.PaidOnIsSuggested && monthEdit.ActualAmount is null ? null : monthEdit.PaidOn, ConfirmationNumber = monthEdit.ConfirmationNumber, Notes = monthEdit.Notes,
             });
             monthEdit = null;
             history = await Api.GetBudgetHistoryAsync(year);
