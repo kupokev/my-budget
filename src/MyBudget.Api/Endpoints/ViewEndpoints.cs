@@ -77,7 +77,7 @@ public static class ViewEndpoints
                 return new FundingAccountMonthDto(g.Key, name, budgeted, paid, Math.Max(0m, Math.Round(budgeted - paid, 2)), steady.GetValueOrDefault(g.Key),
                     string.Join(" + ", items.Select(l => $"{l.LineName} {l.Budgeted:C}")) + $" = {budgeted:C}", items);
             })
-            .OrderByDescending(a => a.Budgeted).ThenBy(a => a.AccountName)
+            .OrderBy(a => a.AccountName) // fixed order so rows stay put when stepping months
             .ToList();
 
         return new FundingMonthDto(start, Math.Round(byAccount.Sum(a => a.Budgeted), 2), Math.Round(byAccount.Sum(a => a.Paid), 2), byAccount);
