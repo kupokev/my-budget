@@ -239,6 +239,16 @@ details.heads-up > summary { cursor: pointer; }
 .tiles .tile h3 a { color: inherit; text-decoration: none; border-bottom: 1px dotted var(--fg-muted); }
 .tiles .tile h3 a:hover { color: var(--accent); }
 
+/* "Needed in each account": month arrows in the heading, a bar that fills as lines are marked paid */
+.funding { margin-bottom: 12px; }
+.funding-head { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 6px; }
+.funding-head h2 { margin: 0; }
+.funding-head h2 a { color: inherit; text-decoration: none; }
+.funding-head h2 a:hover { color: var(--accent); }
+.funding-head .year-nav strong.month { min-width: 130px; }
+.funding-table .bar.wide { width: 220px; }
+.compact-panel .funding-table .bar.wide { width: 220px; }
+
 /* density: least scrolling on first view */
 .two-up > .panel { flex: 1 1 calc(50% - 8px); min-width: 360px; }
 .compact-panel { padding: 10px 14px; }

@@ -11,6 +11,12 @@ replace *unreleased* with the date.
 
 ### Added
 
+- **Needed in each account, on the Dashboard.** A new panel under the tiles totals the month's budget
+  lines by their **Funded from** account, so you can see how much each account must hold to pay its
+  bills. A bar fills as the lines are marked paid, with Paid and Still to pay beside it, and an Even
+  pace column gives the sinking-fund amount for comparison. Arrows step a month either way, so you can
+  check what next month will ask of each account; hover a row for the lines behind it.
+
 - **Paid on starts at today.** Opening a month that isn't paid yet on the Budget grid now fills in
   today's date, so you don't have to click Set a date. It's saved once you enter the amount paid,
   so changing only a note or the expected amount doesn't mark the bill paid.

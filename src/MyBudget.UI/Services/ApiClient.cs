@@ -231,6 +231,7 @@ public sealed class ApiClient(HttpClient http)
     // Views
     public Task<TransferNeedsDto> GetTransferNeedsAsync(DateOnly? asOf = null)
         => Get<TransferNeedsDto>(asOf is { } d ? $"api/transfer-needs?asOf={d:yyyy-MM-dd}" : "api/transfer-needs");
+    public Task<FundingMonthDto> GetFundingMonthAsync(DateOnly month) => Get<FundingMonthDto>($"api/funding-needs?year={month.Year}&month={month.Month}");
     public Task<HomeDto> GetHomeAsync() => Get<HomeDto>("api/home");
 
     /// <summary>Builds a query string, leaving out null values (an empty "cardId=" fails nullable binding on the API).</summary>

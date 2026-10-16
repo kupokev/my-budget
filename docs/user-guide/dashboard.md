@@ -26,6 +26,19 @@ Expand it to see each one with a link to the screen that fixes it.
 - **Rainy-day fund** — how many months of expenses the accounts you marked would cover. Mark an
   account on [Accounts](accounts.md).
 
+## Needed in each account
+
+One row per **Funded from** account, totalling every budget line the Budget grid plans for the month
+in that account, whether the line is paid from it directly or charged to a card that it then
+covers. This is what the account must hold that month. The bar fills as the month's lines are
+marked paid; **Paid** and **Still to pay** are the same numbers in words. **Even pace** is the
+sinking-fund figure: every line on the account spread evenly across its cycle, which is what to
+move in each month if you would rather not see an annual bill land all at once.
+
+The ‹ and › arrows step a month either way, so you can see what next month will ask of each account
+before the paycheck that funds it arrives; **today** returns to the current month. Hover a row for
+the lines behind it, with their due dates and what pays each one.
+
 ## Paid this month vs last
 
 A cumulative line of what the Budget grid records as paid: this month against last month, day by

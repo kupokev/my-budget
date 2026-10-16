@@ -15,6 +15,19 @@ public sealed record AccountNeedDto(
 
 public sealed record TransferNeedsDto(DateOnly AsOf, int PaychecksPerYear, string PaychecksSource, IReadOnlyList<AccountNeedDto> Accounts);
 
+/// <summary>One budget line's share of a funding account's month: what the Budget grid plans for it and what it records as paid.</summary>
+public sealed record FundingLineDto(int BudgetLineId, string LineName, DateOnly? DueDate, decimal Budgeted, decimal? Paid, string PaidVia);
+
+/// <summary>
+/// What one "Funded from" account has to hold for a month: the sum of its lines' budgeted amounts for
+/// that month (the Budget grid's numbers, overrides included), how much of it is already marked paid,
+/// and the even sinking-fund pace for comparison. A card-paid line counts toward the account that
+/// funds it, never the card's paying account.
+/// </summary>
+public sealed record FundingAccountMonthDto(int AccountId, string AccountName, decimal Budgeted, decimal Paid, decimal StillToPay, decimal SteadyMonthly, string Formula, IReadOnlyList<FundingLineDto> Lines);
+
+public sealed record FundingMonthDto(DateOnly Month, decimal Budgeted, decimal Paid, IReadOnlyList<FundingAccountMonthDto> Accounts);
+
 public sealed record PayDateDto(DateOnly Date, string IncomeSource, bool ThirdCheckOfMonth);
 
 public sealed record PayCalendarDto(int Year, IReadOnlyList<PayDateDto> PayDates, IReadOnlyList<string> ThreePaycheckMonths);

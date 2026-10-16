@@ -55,6 +55,41 @@ else
         <section class="panel tile rainy @d.RainyDay.Status.ToLowerInvariant()"><h3>Rainy-day fund</h3><p class="big">@d.RainyDay.MonthsCovered.ToString("0.#") months</p><p class="muted" title="@d.RainyDay.ExpensesFormula"><Money Value="d.RainyDay.Balance" /> vs @Fmt.Money(d.RainyDay.LowTarget)–@Fmt.Money(d.RainyDay.HighTarget) · @d.RainyDay.Verdict</p></section>
     </div>
 
+    @* What each "Funded from" account has to hold for the month: the Budget grid's numbers for that
+       month, grouped by the account the money really comes from. The bar fills as lines are marked paid. *@
+    <section class="panel compact-panel funding">
+        <div class="funding-head">
+            <h2><a href="accounts">Needed in each account</a></h2>
+            <span class="year-nav">
+                <button class="secondary" type="button" title="Previous month" @onclick="() => ChangeFundingMonth(-1)">‹</button>
+                <strong class="month">@fundingMonth.ToString("MMMM yyyy")</strong>
+                <button class="secondary" type="button" title="Next month" @onclick="() => ChangeFundingMonth(1)">›</button>
+                @if (fundingMonth != new DateOnly(d.AsOf.Year, d.AsOf.Month, 1)) { <button class="link" type="button" @onclick="() => ChangeFundingMonth(0)">today</button> }
+            </span>
+        </div>
+        @if (funding is null) { <p class="muted">Loading…</p> }
+        else if (funding.Accounts.Count == 0) { <p class="muted">Nothing budgeted this month.</p> }
+        else
+        {
+            <table class="compact funding-table">
+                <thead><tr><th>Funded from</th><th>Paid so far</th><th class="money">Budgeted</th><th class="money">Paid</th><th class="money">Still to pay</th><th class="money">Even pace</th></tr></thead>
+                <tbody>@foreach (var a in funding.Accounts)
+                {
+                    <tr title="@FundingTitle(a)">
+                        <td>@a.AccountName</td>
+                        <td><div class="bar wide"><div class="bar-fill" style="width:@BarWidth(a)%"></div></div></td>
+                        <td><Money Value="a.Budgeted" /></td>
+                        <td class="@(a.Paid > 0 ? "pos" : "")"><Money Value="a.Paid" /></td>
+                        <td><Money Value="a.StillToPay" /></td>
+                        <td class="muted" title="Sinking-fund pace: every line on this account spread evenly over its cycle."><Money Value="a.SteadyMonthly" /></td>
+                    </tr>
+                }</tbody>
+                <tfoot><tr><th>Total</th><th></th><th><Money Value="funding.Budgeted" /></th><th><Money Value="funding.Paid" /></th><th><Money Value="funding.Accounts.Sum(a => a.StillToPay)" /></th><th><Money Value="funding.Accounts.Sum(a => a.SteadyMonthly)" /></th></tr></tfoot>
+            </table>
+            <p class="muted">Each line counts toward the account it is funded from, even when a card pays it. Hover a row for the lines behind it; <a href="budget">Budget</a> has the grid.</p>
+        }
+    </section>
+
     <div class="row two-up">
     @if (cumulative is { } cs && cs.ThisMonth.Count > 0)
     {
@@ -136,12 +171,39 @@ else
     private AiSummaryDto? summary;
     private bool summarizing;
     private string? error;
+    private FundingMonthDto? funding;
+    private DateOnly fundingMonth;
 
     protected override async Task OnInitializedAsync()
     {
-        try { d = await Api.GetDashboardAsync(); cumulative = await Api.GetCumulativeSpendAsync(); }
+        try
+        {
+            d = await Api.GetDashboardAsync();
+            fundingMonth = new DateOnly(d.AsOf.Year, d.AsOf.Month, 1);
+            cumulative = await Api.GetCumulativeSpendAsync();
+            await LoadFunding();
+        }
         catch (Exception ex) { error = "Could not reach the API: " + ex.Message; }
     }
+
+    /// <summary>Steps the funding panel a month either way; 0 returns it to the current month.</summary>
+    private async Task ChangeFundingMonth(int months)
+    {
+        fundingMonth = months == 0 ? new DateOnly(d!.AsOf.Year, d.AsOf.Month, 1) : fundingMonth.AddMonths(months);
+        await LoadFunding();
+    }
+
+    private async Task LoadFunding()
+    {
+        funding = null;
+        try { funding = await Api.GetFundingMonthAsync(fundingMonth); }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private static int BarWidth(FundingAccountMonthDto a) => a.Budgeted <= 0 ? 0 : (int)Math.Min(100, Math.Round(a.Paid / a.Budgeted * 100));
+
+    private static string FundingTitle(FundingAccountMonthDto a) => string.Join("\n", a.Lines.Select(l =>
+        $"{(l.DueDate is { } due ? due.ToString("MMM d") : "—"),-7} {l.LineName}  {Fmt.Money(l.Budgeted)}{(l.Paid is { } p ? $"  paid {Fmt.Money(p)}" : "")}  via {l.PaidVia}"));
 
     private static string IncomeTitle(MonthIncomeDto income) => income.Items.Count == 0
         ? "No paychecks or 1099 payments dated this month."
